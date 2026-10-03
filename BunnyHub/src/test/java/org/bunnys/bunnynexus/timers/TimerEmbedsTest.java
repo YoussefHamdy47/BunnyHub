@@ -23,7 +23,7 @@ class TimerEmbedsTest {
         when(user.getEffectiveName()).thenReturn("Student");
         var pages = new TimerEmbeds(timer, account, user).gpa();
         assertEquals(2, pages.size());
-        assertEquals("Page 1 of 2", pages.getFirst().getFooter().getText());
+        assertTrue(pages.getFirst().getFooter().getText().startsWith("Page 1 of 2"));
         assertTrue(pages.getFirst().getDescription().contains("CS5"));
         assertFalse(pages.getFirst().getDescription().contains("CS0"));
         assertTrue(pages.getLast().getDescription().contains("CS0"));

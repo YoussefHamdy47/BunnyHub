@@ -1,10 +1,11 @@
 package org.bunnys.bunnynexus.freebies;
 
+import net.dv8tion.jda.api.components.selections.SelectOption;
+import net.dv8tion.jda.api.components.selections.StringSelectMenu;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.exceptions.ErrorResponseException;
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException;
 import net.dv8tion.jda.api.requests.ErrorResponse;
-import org.bunnys.bunnynexus.alerts.adapters.providers.GamerPowerIntake;
 import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.SocketTimeoutException;
@@ -23,7 +24,7 @@ class FreebieUnitTest {
         return new FreebieOffer("gamerpower:1", "1", store, "PC, Epic Games Store", title, "A **great** game @everyone",
                 "1. Click", Optional.of("$19.99"), Optional.empty(), URI.create("https://www.gamerpower.com/open/x"),
                 URI.create("https://www.gamerpower.com/x"), Optional.of(Instant.parse("2026-10-01T00:00:00Z")),
-                Instant.parse("2026-09-25T00:00:00Z"), FreebieOffer.State.APPROVED, Optional.empty(), Optional.empty(), true, false, 1);
+                Instant.parse("2026-09-25T00:00:00Z"), FreebieOffer.State.APPROVED, Optional.empty(), Optional.empty(), Optional.empty(), true, false, 1);
     }
 
     @Test void mapsGamerPowerPlatformsToLaunchers() {
@@ -115,22 +116,62 @@ class FreebieUnitTest {
             assertTrue(noRole.getContent().isEmpty());
             assertTrue(noRole.getMentionedRoles().isEmpty());
             var embed = withRole.getEmbeds().getFirst();
-            assertEquals("Mechabellum (Epic Games)", embed.getTitle());
+            assertEquals("🎁 Mechabellum (Epic Games)", embed.getTitle());
             assertTrue(embed.getDescription().contains("\\*\\*great\\*\\*"), embed.getDescription());
             assertEquals("Source: GamerPower • ref abc", embed.getFooter().getText());
+            var sent = mock(Message.class);
+            when(sent.getEmbeds()).thenReturn(withRole.getEmbeds());
+            assertTrue(FreebieMessages.carriesReference(sent, "abc"));
+            assertFalse(FreebieMessages.carriesReference(sent, "different"));
         }
+    }
+
+    @Test void publicLiveListIsBoundedAndNeverPings() {
+        var empty = FreebieMessages.liveList(List.of(), Optional.of(FreebieStore.GOG));
+        assertTrue(empty.getEmbeds().getFirst().getDescription().contains("Nothing is free on GOG"));
+        assertTrue(empty.getComponents().isEmpty());
+
+        List<FreebieOffer> many = new ArrayList<>();
+        for (int i = 0; i < FreebieMessages.MAX_LIVE_LISTED; i++)
+            many.add(offer("Game " + i + " " + "x".repeat(300) + " (Epic Games) Giveaway", FreebieStore.EPIC));
+        var list = FreebieMessages.liveList(many, Optional.empty());
+        var embed = list.getEmbeds().getFirst();
+        assertTrue(embed.isSendable());
+        assertTrue(embed.getDescription().contains("~~$19.99~~"));
+        assertTrue(embed.getDescription().contains("<t:1790812800:R>"));
+        var buttons = list.getComponents().getFirst().asActionRow().getComponents();
+        assertEquals(5, buttons.size());
+        buttons.forEach(b -> assertTrue(b.asButton().getLabel().length() <= 80));
+        assertTrue(list.getMentionedUsers().isEmpty() && list.getMentionedRoles().isEmpty());
+    }
+
+    @Test void launcherChecklistFitsDiscordLimitsAndTicksCurrentSet() {
+        String snowflake = "12345678901234567890";
+        var rows = FreebieMessages.launcherPicker(snowflake, snowflake, Optional.of(snowflake), EnumSet.of(FreebieStore.EPIC, FreebieStore.GOG));
+        var menu = rows.getFirst().getComponents().getFirst().asStringSelectMenu();
+        assertTrue(menu.getCustomId().length() <= 100);
+        assertEquals(List.of(FreebieMessages.LAUNCHERS_PREFIX, snowflake, snowflake, snowflake), List.of(menu.getCustomId().split(":")));
+        assertEquals(1, menu.getMinValues());
+        assertEquals(FreebieStore.values().length, menu.getMaxValues());
+        assertEquals(Set.of("epic", "gog"), new HashSet<>(menu.getOptions().stream().filter(SelectOption::isDefault).map(SelectOption::getValue).toList()));
+        var noRole = FreebieMessages
+                .launcherPicker(snowflake, snowflake, Optional.empty(), Set.of()).getFirst().getComponents().getFirst().asStringSelectMenu();
+        assertTrue(noRole.getCustomId().endsWith(":-"));
+        var all = FreebieMessages.catchUpAllControls(snowflake, snowflake, 4)
+                .getFirst().getComponents().getFirst().asButton();
+        assertTrue(all.getCustomId().endsWith(":" + FreebieMessages.CATCH_UP_ALL));
     }
 
     @Test void reviewAndCatchUpControlsFitDiscordLimits() {
         var rows = FreebieMessages.reviewControls(offer("X", FreebieStore.STEAM));
         assertEquals(2, rows.size());
         var menu = rows.get(1).getComponents().getFirst();
-        assertInstanceOf(net.dv8tion.jda.api.components.selections.StringSelectMenu.class, menu);
-        var select = (net.dv8tion.jda.api.components.selections.StringSelectMenu) menu;
+        assertInstanceOf(StringSelectMenu.class, menu);
+        var select = menu.asStringSelectMenu();
         assertEquals(FreebieStore.values().length, select.getOptions().size());
-        assertEquals(List.of("steam"), select.getOptions().stream().filter(o -> o.isDefault()).map(o -> o.getValue()).toList());
+        assertEquals(List.of("steam"), select.getOptions().stream().filter(SelectOption::isDefault).map(SelectOption::getValue).toList());
         var catchUp = FreebieMessages.catchUpControls("12345678901234567890", "12345678901234567890", FreebieStore.PLAYSTATION, 3);
-        var button = (net.dv8tion.jda.api.components.buttons.Button) catchUp.getFirst().getComponents().getFirst();
+        var button = catchUp.getFirst().getComponents().getFirst().asButton();
         assertTrue(button.getCustomId().length() <= 100);
         assertEquals(4, button.getCustomId().split(":").length);
     }

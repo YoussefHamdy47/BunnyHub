@@ -2,11 +2,11 @@ package org.bunnys.bunnynexus.timers.engine;
 
 import org.bunnys.utils.AppDesign.Emojis;
 
+import java.util.List;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.function.IntToLongFunction;
 
-@SuppressWarnings("unused")
 public class LevelEngine {
 
     public static final int MAX_RANK = 5000;
@@ -43,6 +43,28 @@ public class LevelEngine {
         if (!Double.isFinite(timeInMinutes) || timeInMinutes < 0 || timeInMinutes / 5.0 > Long.MAX_VALUE / 180L)
             throw new IllegalArgumentException("Study duration must be finite and non-negative.");
         return Math.multiplyExact((long) (timeInMinutes / 5.0), 180L);
+    }
+
+    /**
+     * Focus tiers for one unbroken study stretch: {upper bound in hours, share of XP/RP earned}. Long grinds still
+     * pay, just less per hour, and a real break (see the session service) starts a fresh stretch at full rate.
+     */
+    private static final double[][] FOCUS_TIERS = {{2, 1.0}, {4, 0.8}, {6, 0.6}, {10, 0.4}, {Double.POSITIVE_INFINITY, 0.2}};
+
+    /** Minutes of study to reward for these unbroken stretches (seconds each) after the focus tiers. */
+    public static double rewardedMinutes(List<Double> stretchSeconds) {
+        double minutes = 0;
+        for (double stretch : stretchSeconds) {
+            if (!Double.isFinite(stretch) || stretch < 0)
+                throw new IllegalArgumentException("Study stretches must be finite and non-negative.");
+            double hours = stretch / 3600, lower = 0;
+            for (double[] tier : FOCUS_TIERS) {
+                if (hours <= lower) break;
+                minutes += (Math.min(hours, tier[0]) - lower) * 60 * tier[1];
+                lower = tier[0];
+            }
+        }
+        return minutes;
     }
 
     public record LevelResult(boolean hasLeveledUp, int addedLevels, long remainingXP) {

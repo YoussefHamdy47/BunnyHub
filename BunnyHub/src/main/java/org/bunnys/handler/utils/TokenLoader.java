@@ -3,6 +3,8 @@ package org.bunnys.handler.utils;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.github.cdimascio.dotenv.DotenvException;
 import org.bunnys.utils.BunnyLog;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public class TokenLoader {
     private static Dotenv dotenv;
@@ -10,8 +12,8 @@ public class TokenLoader {
     private static synchronized void init() {
         if (dotenv == null) {
             try {
-                var directory = java.nio.file.Files.exists(java.nio.file.Path.of(".env"))
-                        || !java.nio.file.Files.exists(java.nio.file.Path.of("src/main/resources/.env"))
+                var directory = Files.exists(Path.of(".env"))
+                        || !Files.exists(Path.of("src/main/resources/.env"))
                         ? "." : "src/main/resources";
                 dotenv = Dotenv.configure().directory(directory).ignoreIfMissing().load();
             } catch (DotenvException e) {

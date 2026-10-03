@@ -13,6 +13,11 @@ import net.dv8tion.jda.api.utils.FileUpload;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import net.dv8tion.jda.api.utils.messages.MessageCreateData;
+import org.bunnys.handler.CooldownStore;
+import org.bunnys.utils.Embeds;
 
 /**
  * One command invocation, however it arrived.
@@ -39,10 +44,10 @@ import java.util.List;
  */
 public abstract class CommandContext implements AccessContext {
 
-    private java.util.Map<String, org.bunnys.handler.CooldownStore.Reservation> cooldowns;
+    private Map<String, CooldownStore.Reservation> cooldowns;
 
-    public final synchronized void recordCooldown(String path, org.bunnys.handler.CooldownStore.Reservation reservation) {
-        if (cooldowns == null) cooldowns = new java.util.HashMap<>();
+    public final synchronized void recordCooldown(String path, CooldownStore.Reservation reservation) {
+        if (cooldowns == null) cooldowns = new HashMap<>();
         cooldowns.put(path, reservation);
     }
 
@@ -121,7 +126,7 @@ public abstract class CommandContext implements AccessContext {
         deferred = true;
     }
 
-    public abstract void replyMessage(net.dv8tion.jda.api.utils.messages.MessageCreateData message);
+    public abstract void replyMessage(MessageCreateData message);
 
     /**
      * The single reply primitive. Everything else here funnels into it.
@@ -171,7 +176,7 @@ public abstract class CommandContext implements AccessContext {
     public abstract void replyContent(String content, Collection<? extends ActionRow> rows);
 
     /** How long a reply that cannot be ephemeral is left on screen before it removes itself. */
-    public static final int TRANSIENT_SECONDS = 15;
+    public static final int TRANSIENT_SECONDS = Embeds.ERROR_SECONDS;
 
     /**
      * A reply that must not linger in the channel.

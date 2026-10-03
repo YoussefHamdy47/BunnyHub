@@ -5,7 +5,7 @@ import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.buttons.BunnyButton;
 import org.bunnys.bunnynexus.timers.buttons.GPAPaginator;
 
-@SuppressWarnings("unused")
+@SuppressWarnings("unused") // Discovered reflectively by ButtonRouter.
 public class GPAMenuButtons extends BunnyButton {
 
     @Override

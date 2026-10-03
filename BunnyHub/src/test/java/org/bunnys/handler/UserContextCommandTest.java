@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import net.dv8tion.jda.api.interactions.InteractionHook;
 
 class UserContextCommandTest {
     @Test void userMenuHasUserTypeAndNoSlashOptionsAndRegistersAlongsideSlash() {
@@ -61,9 +62,8 @@ class UserContextCommandTest {
         var hub = mock(BunnyHub.class);
         var registry = new CommandRegistry(hub, List.of(), List.of());
         AtomicReference<CommandContext> received = new AtomicReference<>();
-        var avatar = new Avatar(hub) {
-            @Override public void execute(BunnyHub client, CommandContext context) { received.set(context); }
-        };
+        var avatar = spy(new Avatar(hub));
+        doAnswer(call -> { received.set(call.getArgument(1)); return null; }).when(avatar).execute(any(), any());
         registry.registerCommand(avatar);
         when(hub.getCommandRegistry()).thenReturn(registry);
         var event = mock(UserContextInteractionEvent.class);
@@ -75,7 +75,7 @@ class UserContextCommandTest {
         when(event.deferReply(true)).thenReturn(acknowledgement);
         new InteractionListener(hub).onUserContextInteraction(event);
         verify(hub, never()).executeForUser(anyString(), any());
-        var callback = org.mockito.ArgumentCaptor.<Consumer<net.dv8tion.jda.api.interactions.InteractionHook>>captor();
+        var callback = org.mockito.ArgumentCaptor.<Consumer<InteractionHook>>captor();
         verify(acknowledgement).queue(callback.capture(), any());
         callback.getValue().accept(null);
         var work = org.mockito.ArgumentCaptor.forClass(Runnable.class);
@@ -84,7 +84,7 @@ class UserContextCommandTest {
         assertInstanceOf(UserContext.class, received.get());
     }
 
-    @Test void userMenuShowsBothSelectedUsersAvatarsWithServerFirst() {
+    @Test void userMenuLeadsWithTheServerAvatarAndLinksBoth() {
         var event = mock(UserContextInteractionEvent.class);
         var target = mock(User.class);
         when(target.getId()).thenReturn("123");
@@ -102,10 +102,11 @@ class UserContextCommandTest {
         new Avatar(null).execute(null, context);
         var message = org.mockito.ArgumentCaptor.forClass(MessageCreateData.class);
         verify(context).replyMessage(message.capture());
-        assertEquals(2, message.getValue().getEmbeds().size());
-        assertTrue(message.getValue().getEmbeds().getFirst().getTitle().contains("Selected User"));
-        assertTrue(message.getValue().getEmbeds().getFirst().getTitle().contains("Server avatar"));
-        assertTrue(message.getValue().getEmbeds().get(1).getImage().getUrl().contains("global.gif"));
+        var embed = message.getValue().getEmbeds().getFirst();
+        assertEquals(1, message.getValue().getEmbeds().size());
+        assertTrue(embed.getTitle().endsWith("Selected User's Avatar"));
+        assertTrue(embed.getImage().getUrl().contains("server.gif"), "the user menu leads with the server avatar");
+        assertTrue(embed.getDescription().contains("global.gif") && embed.getDescription().contains("server.gif"));
     }
 
     @Test void allSubcommandsAreNamedDomainClassesAndKeepTheirExistingNames() {

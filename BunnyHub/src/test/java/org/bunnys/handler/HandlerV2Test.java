@@ -7,14 +7,23 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.jupiter.api.Assertions.*;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.requests.restaction.interactions.ReplyCallbackAction;
+import org.bunnys.commands.Timer;
+import org.bunnys.events.InteractionListener;
+import org.bunnys.handler.events.BunnyEvent;
+import org.bunnys.handler.events.EventLoader;
+import net.dv8tion.jda.api.entities.MessageEmbed;
 
 class HandlerV2Test {
     @Test void eventCleanupPreservesExternalListeners() {
-        var jda = org.mockito.Mockito.mock(net.dv8tion.jda.api.JDA.class);
+        var jda = org.mockito.Mockito.mock(JDA.class);
         Object external = new Object();
-        var own = org.mockito.Mockito.mock(org.bunnys.handler.events.BunnyEvent.class);
+        var own = org.mockito.Mockito.mock(BunnyEvent.class);
         org.mockito.Mockito.when(jda.getRegisteredListeners()).thenReturn(List.of(external, own));
-        assertEquals(1, org.bunnys.handler.events.EventLoader.clearEvents(jda));
+        assertEquals(1, EventLoader.clearEvents(jda));
         org.mockito.Mockito.verify(jda).removeEventListener(own);
         org.mockito.Mockito.verify(jda, org.mockito.Mockito.never()).removeEventListener(external);
     }
@@ -22,17 +31,17 @@ class HandlerV2Test {
     @Test void obsoleteSubcommandNeverDispatchesParentCommand() {
         var hub = org.mockito.Mockito.mock(BunnyHub.class);
         var registry = new CommandRegistry(hub, List.of(), List.of());
-        registry.registerCommand(new org.bunnys.commands.Timer(null));
+        registry.registerCommand(new Timer(null));
         org.mockito.Mockito.when(hub.getCommandRegistry()).thenReturn(registry);
-        var event = org.mockito.Mockito.mock(net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent.class);
-        var user = org.mockito.Mockito.mock(net.dv8tion.jda.api.entities.User.class);
+        var event = org.mockito.Mockito.mock(SlashCommandInteractionEvent.class);
+        var user = org.mockito.Mockito.mock(User.class);
         org.mockito.Mockito.when(event.getUser()).thenReturn(user);
         org.mockito.Mockito.when(event.getName()).thenReturn("timer");
         org.mockito.Mockito.when(event.getSubcommandName()).thenReturn("obsolete");
-        var reply = org.mockito.Mockito.mock(net.dv8tion.jda.api.requests.restaction.interactions.ReplyCallbackAction.class,
+        var reply = org.mockito.Mockito.mock(ReplyCallbackAction.class,
                 org.mockito.Mockito.RETURNS_SELF);
-        org.mockito.Mockito.when(event.reply(org.mockito.ArgumentMatchers.anyString())).thenReturn(reply);
-        new org.bunnys.events.InteractionListener(hub).onSlashCommandInteraction(event);
+        org.mockito.Mockito.when(event.replyEmbeds(org.mockito.ArgumentMatchers.any(MessageEmbed.class))).thenReturn(reply);
+        new InteractionListener(hub).onSlashCommandInteraction(event);
         org.mockito.Mockito.verify(reply).setEphemeral(true);
         org.mockito.Mockito.verify(hub, org.mockito.Mockito.never()).executeForUser(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }

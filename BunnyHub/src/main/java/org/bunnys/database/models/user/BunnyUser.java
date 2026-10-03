@@ -8,8 +8,9 @@ import org.bunnys.database.models.timers.Subject;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.bunnys.handler.database.VersionedDocument;
 
-public class BunnyUser implements org.bunnys.handler.database.VersionedDocument {
+public class BunnyUser implements VersionedDocument {
     private Long revision;
     public Long getRevision() { return revision; }
     public void setRevision(Long revision) { this.revision = revision; }

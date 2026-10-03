@@ -8,6 +8,10 @@ import org.bunnys.utils.SystemEmbeds;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildChannel;
+import net.dv8tion.jda.api.interactions.commands.build.OptionData;
+import org.bunnys.handler.CooldownStore;
+import org.bunnys.handler.commands.context.AccessContext;
 
 /**
  * Every pre-execution check, in one place, for both entry points.
@@ -29,7 +33,7 @@ public final class CommandGate {
      * invocation and emergency-cleared past 5000 entries - an eviction strategy that
      * dropped live cooldowns for everyone. Caffeine expires entries individually.
      */
-    private static final org.bunnys.handler.CooldownStore COOLDOWNS = new org.bunnys.handler.CooldownStore("gate.cooldowns", 100_000);
+    private static final CooldownStore COOLDOWNS = new CooldownStore("gate.cooldowns", 100_000);
     private CommandGate() {}
 
     /**
@@ -47,7 +51,7 @@ public final class CommandGate {
     }
 
     /** Autocomplete must authorize reads without consuming the execution cooldown. */
-    public static MessageEmbed checkAccess(org.bunnys.handler.commands.context.AccessContext ctx,
+    public static MessageEmbed checkAccess(AccessContext ctx,
             CommandRegistry registry, BunnyCommand command, BunnySubcommand subcommand) {
 
         boolean isDeveloper = registry.getDeveloperIds().contains(ctx.getUser().getId());
@@ -80,7 +84,7 @@ public final class CommandGate {
 
             // 6. Caller permissions
             for (Permission permission : command.getUserPermissions())
-                if ((ctx.getMember() == null || !(ctx.getChannel() instanceof net.dv8tion.jda.api.entities.channel.middleman.GuildChannel channel) || !ctx.getMember().hasPermission(channel, permission)))
+                if ((ctx.getMember() == null || !(ctx.getChannel() instanceof GuildChannel channel) || !ctx.getMember().hasPermission(channel, permission)))
                     return SystemEmbeds.denied("Missing Permission",
                             "You need the `" + permission.getName() + "` permission to use this.");
 
@@ -89,7 +93,7 @@ public final class CommandGate {
                 // A detached guild (user-installed app, bot not a member) has no self member;
                 // asking for one throws, and the bot cannot act there anyway.
                 if (ctx.getGuild().isDetached()
-                        || !(ctx.getChannel() instanceof net.dv8tion.jda.api.entities.channel.middleman.GuildChannel channel)
+                        || !(ctx.getChannel() instanceof GuildChannel channel)
                         || !ctx.getGuild().getSelfMember().hasPermission(channel, permission))
                     return SystemEmbeds.error("Missing Bot Permission",
                             "I am missing the `" + permission.getName() + "` permission here.");
@@ -126,7 +130,7 @@ public final class CommandGate {
         ctx.releaseCooldown(command.pathOf(subcommand));
     }
     /** Resolves the options in play, which differ between a command and its subcommand. */
-    public static List<net.dv8tion.jda.api.interactions.commands.build.OptionData> optionsFor(
+    public static List<OptionData> optionsFor(
             BunnyCommand command, BunnySubcommand subcommand) {
         return subcommand != null ? subcommand.getOptions() : command.getOptions();
     }

@@ -8,6 +8,8 @@ import org.bunnys.bunnynexus.info.InfoEmbeds;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.commands.BunnySubcommand;
 import org.bunnys.handler.commands.context.CommandContext;
+import org.bunnys.utils.ErrorReporter;
+import org.bunnys.utils.SystemEmbeds;
 
 public final class UserInfo extends BunnySubcommand {
     public UserInfo() {
@@ -25,7 +27,7 @@ public final class UserInfo extends BunnySubcommand {
         // A raw value that resolved to nobody means the mention parser could not
         // find who was named. Silently answering about the caller would be worse.
         if (target == null && ctx.getString("user") != null) {
-            ctx.reply(InfoEmbeds.unknownUser(), true);
+            ctx.replyTransient(InfoEmbeds.unknownUser());
             return;
         }
 
@@ -39,7 +41,7 @@ public final class UserInfo extends BunnySubcommand {
 
         ctx.defer();
         User resolved = target;
-        if (member == null && ctx.isFromGuild()) {
+        if (member == null && ctx.isFromGuild() && !ctx.getGuild().isDetached()) {
             ctx.getGuild().retrieveMemberById(target.getId()).queue(
                     found -> replyUser(client, ctx, resolved, found),
                     failure -> replyUser(client, ctx, resolved, null));
@@ -53,8 +55,8 @@ public final class UserInfo extends BunnySubcommand {
                     client.getCommandRegistry().getDeveloperIds().stream().findFirst().orElse(null))
                     : InfoEmbeds.userInfo(target, member));
         } catch (RuntimeException error) {
-            String reference = org.bunnys.utils.ErrorReporter.report("info user", null, error);
-            ctx.replyTransient(org.bunnys.utils.SystemEmbeds.crashed(reference, ctx.transientRepliesVanish()));
+            String reference = ErrorReporter.report("info user", null, error);
+            ctx.replyTransient(SystemEmbeds.crashed(reference, ctx.transientRepliesVanish()));
         }
     }
 }

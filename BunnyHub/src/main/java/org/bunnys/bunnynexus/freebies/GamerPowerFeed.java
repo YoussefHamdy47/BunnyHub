@@ -1,7 +1,6 @@
 package org.bunnys.bunnynexus.freebies;
 
 import okhttp3.*;
-import org.bunnys.bunnynexus.alerts.adapters.providers.GamerPowerIntake;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Proxy;

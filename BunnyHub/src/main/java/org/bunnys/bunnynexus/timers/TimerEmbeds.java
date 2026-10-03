@@ -2,26 +2,26 @@ package org.bunnys.bunnynexus.timers;
 
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.User;
+import org.bunnys.database.models.timers.Session;
 import org.bunnys.database.models.timers.Subject;
 import org.bunnys.database.models.timers.TimerData;
 import org.bunnys.database.models.user.BunnyUser;
 import org.bunnys.bunnynexus.timers.engine.LevelEngine;
 import org.bunnys.utils.AppDesign;
-import org.bunnys.utils.Utils;
+import org.bunnys.utils.Durations;
+import org.bunnys.utils.Embeds;
 
-import java.awt.Color;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 /** Presentation-only view of a loaded timer/account snapshot; no persistence or interaction callbacks. */
 final class TimerEmbeds {
-    private static final Color MIAMI_PINK = AppDesign.ColorCodes.CYAN;
-    private static final Color MIAMI_CYAN = new Color(5, 217, 232);
     private final BunnyUser cachedUser;
     private final TimerData cachedTimerData;
-    private final net.dv8tion.jda.api.entities.User user;
-    TimerEmbeds(TimerData timer, BunnyUser account, net.dv8tion.jda.api.entities.User user) {
+    private final User user;
+    TimerEmbeds(TimerData timer, BunnyUser account, User user) {
         this.cachedTimerData = Objects.requireNonNull(timer);
         this.cachedUser = Objects.requireNonNull(account);
         this.user = Objects.requireNonNull(user);
@@ -29,7 +29,7 @@ final class TimerEmbeds {
     MessageEmbed activeSession(String cleanTopic, String objective, double additionalStudyMs,
             double additionalBreakMs, boolean isRefresh) {
         TimerStats stats = new TimerStats(cachedTimerData, cachedUser);
-        org.bunnys.database.models.timers.Session session = cachedTimerData.getSessionData();
+        Session session = cachedTimerData.getSessionData();
 
         double semesterMs = stats.getSemesterTime() + additionalStudyMs;
         double semesterBreakMs = stats.getBreakTime() + additionalBreakMs;
@@ -50,16 +50,9 @@ final class TimerEmbeds {
         }
 
         String userName = user.getEffectiveName();
-        EmbedBuilder eb = new EmbedBuilder();
-        eb.setColor(MIAMI_CYAN);
-        eb.setTimestamp(Instant.now());
-
-        if (!isRefresh) {
-            eb.setFooter("🌴 Session timer is live", user.getEffectiveAvatarUrl());
-        }
-
         String displayTopic = session.getSessionTopic() != null ? session.getSessionTopic() : cleanTopic;
-        eb.setTitle("🌴 " + TimerQuotes.getRandomGreeting(userName) + " | " + displayTopic);
+        EmbedBuilder eb = Embeds.of(AppDesign.Emojis.WHITE_HEART_SPIN, TimerQuotes.getRandomGreeting(userName) + " | " + displayTopic);
+        Embeds.footer(eb, isRefresh ? "Session timer • refreshed" : "Session timer is live", user.getEffectiveAvatarUrl());
 
         if (objective != null && !objective.trim().isEmpty()) {
             eb.setDescription("> **Mission Objective:** " + objective);
@@ -93,13 +86,8 @@ final class TimerEmbeds {
         String avatarUrl = user.getEffectiveAvatarUrl();
         String semName = cachedTimerData.getCurrentSemester().getSemesterName();
 
-        EmbedBuilder embed = new EmbedBuilder();
-        embed.setColor(MIAMI_CYAN);
-        embed.setTimestamp(Instant.now());
-        embed.setFooter(userName + "'s BunnyTimer Data", avatarUrl);
-
-        String greetingText = TimerQuotes.getRandomGreeting(userName);
-        embed.setTitle("🌴 " + greetingText + " — " + semName);
+        EmbedBuilder embed = Embeds.of(AppDesign.Emojis.WHITE_HEART_SPIN, TimerQuotes.getRandomGreeting(userName) + " — " + semName);
+        Embeds.footer(embed, userName + "'s study stats", avatarUrl);
 
         StringBuilder recordSb = new StringBuilder();
         double lifetimeMs = stats.getTotalStudyTime();
@@ -176,14 +164,14 @@ final class TimerEmbeds {
                     };
 
                     // Clean 2-line format for Top 5
-                    entry = prefix + " **" + sub.getSubjectCode().toUpperCase(java.util.Locale.ROOT) + "**" + creditStr + " — *"
+                    entry = prefix + " **" + sub.getSubjectCode().toUpperCase(Locale.ROOT) + "**" + creditStr + " — *"
                             + sub.getSubjectName() + "*\n" +
                             "  ↳ Instances: `" + sub.getTimesStudied() + "` | Accumulated: `" + formatMs(subMs) + "` *["
                             + String.format("%,.2f hours", hours) + "]*\n\n";
                 } else {
                     if (i == 5)
                         currentField.append("**Additional Modules**\n");
-                    entry = "• **" + sub.getSubjectCode().toUpperCase(java.util.Locale.ROOT) + "**" + creditStr + " — *"
+                    entry = "• **" + sub.getSubjectCode().toUpperCase(Locale.ROOT) + "**" + creditStr + " — *"
                             + sub.getSubjectName() + "* | `" + sub.getTimesStudied() + "` | `"
                             + String.format("%,.2f hours", hours) + "`\n";
                 }
@@ -264,13 +252,9 @@ final class TimerEmbeds {
         String avatarUrl = user.getEffectiveAvatarUrl();
 
         if (accountSubjects.isEmpty() && semesterSubjects.isEmpty()) {
-            EmbedBuilder emptyEmbed = new EmbedBuilder()
-                    .setColor(MIAMI_PINK)
-                    .setAuthor("Academic Record — " + userName, null, avatarUrl)
-                    .setDescription("> *No subjects found in your permanent record or current semester.*")
-                    .setFooter("Page 1 of 1");
-
-            pages.add(emptyEmbed.build());
+            var empty = Embeds.of(AppDesign.Emojis.VERIFY, userName + "'s Academic Record",
+                    "No courses yet. Add one with `/timer add-subject`.");
+            pages.add(Embeds.footer(empty, "Page 1 of 1", avatarUrl).build());
             return pages;
         }
 
@@ -284,16 +268,14 @@ final class TimerEmbeds {
                 int end = Math.min(start + itemsPerPage, semesterSubjects.size());
                 List<Subject> chunk = semesterSubjects.subList(start, end);
 
-                EmbedBuilder embed = new EmbedBuilder()
-                        .setColor(MIAMI_CYAN)
-                        .setAuthor("Current Semester — " + userName, null, avatarUrl);
+                EmbedBuilder embed = Embeds.of(AppDesign.Emojis.VERIFY, userName + "'s Current Semester");
 
                 StringBuilder sb = new StringBuilder();
                 sb.append(String.format(AppDesign.Emojis.VERIFY + " **Cumulative GPA:** `%.3f`\n\n", cumulativeGpa));
                 sb.append("**🌴 Active Courses (In Progress)**\n\n");
 
                 for (Subject sub : chunk) {
-                    sb.append("• **").append(sub.getSubjectCode().toUpperCase(java.util.Locale.ROOT)).append("** — *")
+                    sb.append("• **").append(sub.getSubjectCode().toUpperCase(Locale.ROOT)).append("** — *")
                             .append(sub.getSubjectName()).append("*\n")
                             .append("  ↳ Grade: **").append(sub.getGrade() == null ? "In Progress" : sub.getGrade()).append("** | Credits: `").append(sub.getCreditHours())
                             .append(" CH`\n\n");
@@ -311,9 +293,7 @@ final class TimerEmbeds {
                 int end = Math.min(start + itemsPerPage, accountSubjects.size());
                 List<Subject> chunk = accountSubjects.subList(start, end);
 
-                EmbedBuilder embed = new EmbedBuilder()
-                        .setColor(MIAMI_PINK)
-                        .setAuthor("Academic Record — " + userName, null, avatarUrl);
+                EmbedBuilder embed = Embeds.of(AppDesign.Emojis.VERIFY, userName + "'s Academic Record");
 
                 StringBuilder sb = new StringBuilder();
                 sb.append(String.format(AppDesign.Emojis.VERIFY + " **Cumulative GPA:** `%.3f`\n\n", cumulativeGpa));
@@ -321,7 +301,7 @@ final class TimerEmbeds {
 
                 for (Subject sub : chunk) {
                     String gradeStr = sub.getGrade() != null ? sub.getGrade() : "N/A";
-                    sb.append("• **").append(sub.getSubjectCode().toUpperCase(java.util.Locale.ROOT)).append("** — *")
+                    sb.append("• **").append(sub.getSubjectCode().toUpperCase(Locale.ROOT)).append("** — *")
                             .append(sub.getSubjectName()).append("*\n")
                             .append("  ↳ Grade: **").append(gradeStr).append("** | Credits: `")
                             .append(sub.getCreditHours()).append("`\n\n");
@@ -335,16 +315,14 @@ final class TimerEmbeds {
         int totalPages = pages.size();
         for (int i = 0; i < totalPages; i++) {
             MessageEmbed original = pages.get(i);
-            EmbedBuilder builder = new EmbedBuilder(original);
-            builder.setFooter(String.format("Page %d of %d", i + 1, totalPages));
-            pages.set(i, builder.build());
+            pages.set(i, Embeds.footer(new EmbedBuilder(original), "Page " + (i + 1) + " of " + totalPages, avatarUrl).build());
         }
 
         return pages;
     }
 
     private String formatMs(double ms) {
-        return ms > 0 ? Utils.msToTime((long) ms).orElse("0s") : "0s";
+        return ms > 0 ? Durations.format((long) ms) : "0s";
     }
 
     private String formatHoursAsNum(double ms) {

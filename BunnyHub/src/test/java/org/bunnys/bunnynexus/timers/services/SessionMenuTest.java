@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.timers.services;
 
+import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
@@ -36,14 +37,15 @@ class SessionMenuTest {
         when(user.getId()).thenReturn("123");
         when(event.getMessageId()).thenReturn("old");
         when(event.getHook()).thenReturn(hook);
-        when(hook.sendMessage(anyString())).thenReturn(response);
+        when(event.isAcknowledged()).thenReturn(true); // the router defers the edit before the handler runs
+        when(hook.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(response);
         var timer = new TimerData();
         timer.getSessionData().setMessageID("new");
         try (var service = mockStatic(TimerSessionService.class)) {
             service.when(() -> TimerSessionService.getTimerDataOrThrow("123")).thenReturn(timer);
             SessionMenuManager.handle(event, "end", "123");
             service.verify(() -> TimerSessionService.stopSession("123", event), never());
-            verify(hook).sendMessage(contains("expired"));
+            verify(hook).sendMessageEmbeds(argThat((MessageEmbed embed) -> embed.getDescription().contains("expired")));
         }
     }
 }

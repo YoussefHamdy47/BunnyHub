@@ -1,122 +1,83 @@
 package org.bunnys.bunnynexus.timers.services;
 
-import org.bunnys.handler.utils.InteractionErrors.StateFailure;
-
 import com.mongodb.client.model.Filters;
 import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
+import org.bunnys.bunnynexus.events.custom.AccountLevelUpEvent;
+import org.bunnys.bunnynexus.events.custom.RecordBrokenEvent;
+import org.bunnys.bunnynexus.events.custom.SemesterLevelUpEvent;
+import org.bunnys.bunnynexus.timers.engine.LevelEngine;
 import org.bunnys.database.models.timers.Session;
 import org.bunnys.database.models.timers.Subject;
 import org.bunnys.database.models.timers.TimerData;
 import org.bunnys.database.models.user.BunnyUser;
 import org.bunnys.handler.database.DB;
-import org.bunnys.bunnynexus.events.custom.AccountLevelUpEvent;
-import org.bunnys.bunnynexus.events.custom.RecordBrokenEvent;
-import org.bunnys.bunnynexus.events.custom.SemesterLevelUpEvent;
-import org.bunnys.bunnynexus.timers.engine.LevelEngine;
-import org.bunnys.utils.Utils;
+import org.bunnys.handler.utils.InteractionErrors.InputFailure;
+import org.bunnys.handler.utils.InteractionErrors.StateFailure;
+import org.bunnys.utils.Durations;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalDouble;
 
-import java.util.*;
-
-@SuppressWarnings("unused")
-public class TimerSessionService {
+/**
+ * Study-session state changes: start, switch subject, pause, resume and stop. Each loads the timer document, applies
+ * the change in memory and saves it with its optimistic revision, so a concurrent edit fails instead of being lost.
+ */
+public final class TimerSessionService {
+    private TimerSessionService() {}
 
     private static final String TIMER_COLLECTION = "TimerData";
     private static final String USER_COLLECTION = "BunnyUsers";
     private static final String TIMER_ID_FIELD = "account.userID";
     private static final String USER_ID_FIELD = "userID";
-    /** Longest study time a single session can convert into XP/RP. */
-    public static final double MAX_REWARDED_SESSION_SECS = 12 * 60 * 60;
+    /**
+     * A break at least this long ends the current study stretch, so the next one earns XP/RP at the full rate again
+     * (see {@link LevelEngine#rewardedMinutes}). Shorter pauses do not, so a quick pause cannot reset the curve.
+     */
+    public static final double STRETCH_RESET_BREAK_SECS = 15 * 60;
 
-    public static void startSession(String userId, String messageId, String channelId,
-            String guildId, String topic) {
+    public static void startSession(String userId, String messageId, String channelId, String guildId, String topic) {
         TimerData timerData = getTimerDataOrThrow(userId);
         Session session = timerData.getSessionData();
-
         if (session.getSessionStartTime() != null)
             throw new StateFailure("You already have an active session running.");
 
-        SubjectTopics.require(timerData.getCurrentSemester().getSemesterSubjects(), topic);
+        Subject subject = SubjectTopics.require(timerData.getCurrentSemester().getSemesterSubjects(), topic);
         long now = System.currentTimeMillis();
         timerData.getCurrentSemester().getSessionStartTimes().add(now);
         resetSessionFields(session, now, topic, messageId, channelId, guildId);
-
-        if (hasTopic(topic)) {
-            String code = extractSubjectCode(topic);
-            findSubject(timerData, code).ifPresent(subject -> {
-                safeListAdd(session.getSubjectsStudied(), subject.getSubjectCode());
-                subject.setTimesStudied(subject.getTimesStudied() + 1);
-            });
-        }
-
+        session.getSubjectsStudied().add(subject.getSubjectCode());
+        subject.setTimesStudied(subject.getTimesStudied() + 1);
         saveTimerData(userId, timerData);
     }
 
     public static void changeSubject(String userId, String newTopic) {
         TimerData timerData = getTimerDataOrThrow(userId);
-        org.bunnys.bunnynexus.timers.services.SubjectTopics.require(timerData.getCurrentSemester().getSemesterSubjects(), newTopic);
-        org.bunnys.database.models.timers.Session session = timerData.getSessionData();
-
+        Subject next = SubjectTopics.require(timerData.getCurrentSemester().getSemesterSubjects(), newTopic);
+        Session session = timerData.getSessionData();
         if (session.getSessionStartTime() == null)
             throw new StateFailure("You don't have an active session to modify.");
-
-        if (session.getSessionBreaks() != null && session.getSessionBreaks().getSessionBreakStart() != null)
+        if (session.getSessionBreaks().getSessionBreakStart() != null)
             throw new StateFailure("The timer is paused. Please unpause before changing subjects.");
-
-        if (session.getSessionTopic() != null
-                && SubjectTopics.code(session.getSessionTopic()).equals(SubjectTopics.code(newTopic)))
+        if (session.getSessionTopic() != null && SubjectTopics.code(session.getSessionTopic()).equals(SubjectTopics.code(newTopic)))
             throw new StateFailure("Your telemetry feed is already routed to this module.");
 
-        java.time.Instant now = java.time.Instant.now();
-        long startMs = session.getSessionStartTime().getTime();
-        double totalBreakSecs = session.getSessionBreaks() != null ? session.getSessionBreaks().getSessionBreakTime()
-                : 0.0;
-        double totalElapsedSecs = (now.toEpochMilli() - startMs) / 1000.0;
-        double totalActiveSecs = activeStudySeconds(session, totalElapsedSecs, totalBreakSecs);
-
-        double previouslyAllocatedSecs = session.getSessionTime();
-        double timeToCredit = Math.max(0, totalActiveSecs - previouslyAllocatedSecs);
-
-        String oldTopic = session.getSessionTopic();
-        if (oldTopic != null && !oldTopic.trim().isEmpty()) {
-            String oldCode = org.bunnys.bunnynexus.timers.services.SubjectTopics.code(oldTopic);
-            if (timerData.getCurrentSemester().getSemesterSubjects() != null) {
-                timerData.getCurrentSemester().getSemesterSubjects().stream()
-                        .filter(s -> s.getSubjectCode().equalsIgnoreCase(oldCode))
-                        .findFirst()
-                        .ifPresent(subject -> {
-                            double currentSubTime = subject.getTotalStudyTime() != null ? subject.getTotalStudyTime()
-                                    : 0.0;
-                            subject.setTotalStudyTime(currentSubTime + timeToCredit);
-                        });
-            }
-        }
-
-        session.setSessionTime(totalActiveSecs);
+        var clock = SessionClock.of(session, System.currentTimeMillis());
+        creditCurrentSubject(timerData, clock.activeStudy() - session.getSessionTime());
+        session.setSessionTime(clock.activeStudy());
         session.setSessionTopic(newTopic);
 
-        if (newTopic != null && !newTopic.trim().isEmpty()) {
-            String newCode = org.bunnys.bunnynexus.timers.services.SubjectTopics.code(newTopic);
-
-            if (!session.getSubjectsStudied().contains(newCode)) {
-                session.getSubjectsStudied().add(newCode);
-
-                if (timerData.getCurrentSemester().getSemesterSubjects() != null) {
-                    timerData.getCurrentSemester().getSemesterSubjects().stream()
-                            .filter(s -> s.getSubjectCode().equalsIgnoreCase(newCode))
-                            .findFirst()
-                            .ifPresent(subject -> subject.setTimesStudied(subject.getTimesStudied() + 1));
-                }
-            }
+        String code = SubjectTopics.code(newTopic);
+        if (!session.getSubjectsStudied().contains(code)) {
+            session.getSubjectsStudied().add(code);
+            next.setTimesStudied(next.getTimesStudied() + 1);
         }
-
-        DB.save(TimerData.class, "TimerData", Filters.eq("account.userID", userId), timerData);
-
+        saveTimerData(userId, timerData);
     }
 
     public static void pauseSession(String userId) {
         TimerData timerData = getTimerDataOrThrow(userId);
         Session session = timerData.getSessionData();
-
         requireActiveSession(session);
         if (session.getSessionBreaks().getSessionBreakStart() != null)
             throw new StateFailure("The timer is already paused.");
@@ -124,203 +85,199 @@ public class TimerSessionService {
         session.getSessionBreaks().setSessionBreakStart(new Date(System.currentTimeMillis()));
         session.setNumberOfBreaks(session.getNumberOfBreaks() + 1);
         timerData.getCurrentSemester().setBreakCount(timerData.getCurrentSemester().getBreakCount() + 1);
-
         saveTimerData(userId, timerData);
     }
 
+    /** @return how long the break that just ended lasted, in milliseconds */
     public static long unpauseSession(String userId) {
         TimerData timerData = getTimerDataOrThrow(userId);
         Session session = timerData.getSessionData();
-
         requireActiveSession(session);
         if (session.getSessionBreaks().getSessionBreakStart() == null)
             throw new StateFailure("The timer is not currently paused.");
 
-        long breakStartMs = session.getSessionBreaks().getSessionBreakStart().getTime();
-        long elapsedBreakMs = Math.max(0, System.currentTimeMillis() - breakStartMs);
-
-        session.getSessionBreaks().setSessionBreakTime(
-                session.getSessionBreaks().getSessionBreakTime() + (elapsedBreakMs / 1000.0));
-        session.getSessionBreaks().setSessionBreakStart(null);
-
-        saveTimerData(userId, timerData);
-        return elapsedBreakMs;
-    }
-
-    public static net.dv8tion.jda.api.entities.MessageEmbed getTelemetryEmbed(String userId) {
-        TimerData timerData = getTimerDataOrThrow(userId);
-        Session session = timerData.getSessionData();
-
-        net.dv8tion.jda.api.EmbedBuilder eb = new net.dv8tion.jda.api.EmbedBuilder();
-        eb.setColor(org.bunnys.utils.AppDesign.ColorCodes.CYAN);
-
-        if (session.getSessionStartTime() == null) {
-            eb.setTitle("💎 Live Telemetry");
-            eb.setDescription("> *No active telemetry feed.*");
-            return eb.build();
-        }
-
-        String topic = session.getSessionTopic();
-        String cleanTopic = topic != null ? org.bunnys.bunnynexus.timers.services.SubjectTopics.code(topic) : "UNKNOWN";
-        eb.setTitle("💎 Live Telemetry | " + cleanTopic);
-
         long now = System.currentTimeMillis();
-        long startMs = session.getSessionStartTime().getTime();
-
-        double storedBreakSecs = session.getSessionBreaks().getSessionBreakTime();
-        double activeBreakSecs = (session.getSessionBreaks().getSessionBreakStart() != null)
-                ? Math.max(0, now - session.getSessionBreaks().getSessionBreakStart().getTime()) / 1000.0
-                : 0.0;
-
-        double totalBreakSecs = storedBreakSecs + activeBreakSecs;
-        double totalElapsedSecs = (now - startMs) / 1000.0;
-        double activeStudySecs = activeStudySeconds(session, totalElapsedSecs, totalBreakSecs);
-
-        StringBuilder info = new StringBuilder();
-        info.append("✦ **Start Time:** <t:").append(startMs / 1000).append(":f>\n");
-        info.append("✦ **Current Uptime:** <t:").append(startMs / 1000).append(":R>\n\n");
-
-        info.append("✦ **Net Study Time:** `").append(formatSecs(activeStudySecs)).append("`\n");
-        info.append("✦ **Total Break Time:** `").append(formatSecs(totalBreakSecs)).append("`\n");
-        info.append("✦ **Break Count:** `").append(session.getNumberOfBreaks()).append("`\n");
-
-        if (session.getSessionBreaks().getSessionBreakStart() != null)
-            info.append("\n> ⏸ *Currently on a break. Duration: ").append(formatSecs(activeBreakSecs)).append(".*");
-        else
-            info.append("\n> ▶ *Telemetry feed active and recording.*");
-
-        eb.setDescription(info.toString());
-        eb.setTimestamp(java.time.Instant.now());
-        return eb.build();
+        // With the break still open, active study is exactly what was studied before the pause.
+        double studiedBeforeBreak = SessionClock.of(session, now).activeStudy();
+        long breakMs = closeOpenBreak(session, now);
+        if (breakMs >= STRETCH_RESET_BREAK_SECS * 1000) {
+            double closed = session.getStudyStretches().stream().mapToDouble(Double::doubleValue).sum();
+            session.getStudyStretches().add(Math.max(0, studiedBeforeBreak - closed));
+        }
+        saveTimerData(userId, timerData);
+        return breakMs;
     }
 
     /**
-     * Stops the current session, persists all stat updates, fires events, and
-     * returns a formatted recap string.
-     *
-     * <p>
-     * Key ordering:
-     * <ol>
-     * <li>Validate session state (before fetching BunnyUser to avoid wasted DB
-     * calls).</li>
-     * <li>Fetch BunnyUser with a null guard.</li>
-     * <li>Compute all derived values.</li>
-     * <li>Mutate both documents in memory.</li>
-     * <li>Persist both documents.</li>
-     * <li>Fire events (after persistence so handlers see fresh DB state).</li>
-     * </ol>
+     * Sessions at least this long are not ended until the user confirms the time or enters what they really studied:
+     * a forgotten timer and an all-nighter look the same, so neither is capped silently.
      */
+    public static final double CONFIRM_LONG_SESSION_SECS = 10 * 60 * 60;
+
+    /**
+     * A long session waiting for confirmation.
+     *
+     * @param sessionStart identifies the session, so a stale prompt can never end a later one
+     * @param tracked      net study time the timer measured (elapsed minus breaks)
+     * @param minimum      study time already logged to subjects at earlier switches; a correction cannot go below it
+     */
+    public record LongSession(long sessionStart, double tracked, double minimum) {}
+
+    /**
+     * How the user settled a long session: {@code reportedStudySecs} empty keeps the tracked time.
+     * {@link #NONE} is for sessions that need no confirmation.
+     */
+    public record Confirmation(long sessionStart, OptionalDouble reportedStudySecs) {
+        static final Confirmation NONE = new Confirmation(0, OptionalDouble.empty());
+    }
+
+    /** Empty when the running session can be ended straight away. */
+    public static Optional<LongSession> longSession(String userId) {
+        Session session = getTimerDataOrThrow(userId).getSessionData();
+        if (session.getSessionStartTime() == null) return Optional.empty();
+        var clock = SessionClock.of(session, System.currentTimeMillis());
+        if (clock.activeStudy() < CONFIRM_LONG_SESSION_SECS) return Optional.empty();
+        return Optional.of(new LongSession(session.getSessionStartTime().getTime(), clock.activeStudy(), session.getSessionTime()));
+    }
+
     public static String stopSession(String userId, IReplyCallback interaction) {
         return stopSession(userId, interaction, false);
     }
 
-    /**
-     * @param closeOpenBreak end a running break now instead of rejecting a paused session; used by
-     *                       the recovery command when the session menu is unavailable.
-     */
     public static String stopSession(String userId, IReplyCallback interaction, boolean closeOpenBreak) {
+        return stopSession(userId, interaction, closeOpenBreak, Confirmation.NONE);
+    }
+
+    /**
+     * Ends the session, credits time and rewards, saves the account and timer atomically, then announces level-ups
+     * and records (after the save, so listeners never see state that could still roll back).
+     *
+     * @param closeOpenBreak end a running break now instead of rejecting a paused session; used by the recovery
+     *                       command when the session menu is unavailable.
+     * @param confirmation   required for sessions of at least {@link #CONFIRM_LONG_SESSION_SECS}; may replace the
+     *                       tracked study time with what the user reports, between the already-logged minimum and
+     *                       the tracked time.
+     */
+    public static String stopSession(String userId, IReplyCallback interaction, boolean closeOpenBreak,
+                                     Confirmation confirmation) {
         TimerData timerData = getTimerDataOrThrow(userId);
         Session session = timerData.getSessionData();
-
         requireActiveSession(session);
+        long now = System.currentTimeMillis();
+        boolean confirmed = confirmation != Confirmation.NONE;
+        if (confirmed && confirmation.sessionStart() != session.getSessionStartTime().getTime())
+            throw new StateFailure("That confirmation belongs to a session that already ended.");
         if (session.getSessionBreaks().getSessionBreakStart() != null) {
             if (!closeOpenBreak)
-                throw new StateFailure(
-                        "You cannot end the session while the timer is paused. Please unpause first.");
-            long openBreakMs = System.currentTimeMillis() - session.getSessionBreaks().getSessionBreakStart().getTime();
-            session.getSessionBreaks().setSessionBreakTime(
-                    session.getSessionBreaks().getSessionBreakTime() + Math.max(0, openBreakMs) / 1000.0);
-            session.getSessionBreaks().setSessionBreakStart(null);
+                throw new StateFailure("You cannot end the session while the timer is paused. Please unpause first.");
+            closeOpenBreak(session, now);
         }
 
-        BunnyUser userData = DB.findOne(BunnyUser.class, USER_COLLECTION,
-                Filters.eq(USER_ID_FIELD, userId));
+        BunnyUser userData = DB.findOne(BunnyUser.class, USER_COLLECTION, Filters.eq(USER_ID_FIELD, userId));
         if (userData == null)
             throw new StateFailure("User account not found. Please register first.");
 
-        long now = System.currentTimeMillis();
         long startMs = session.getSessionStartTime().getTime();
-        double totalBreakSecs = session.getSessionBreaks().getSessionBreakTime();
-        double totalElapsedSecs = (now - startMs) / 1000.0;
-        double activeStudySecs = activeStudySeconds(session, totalElapsedSecs, totalBreakSecs);
+        var clock = SessionClock.of(session, now);
+        if (!confirmed && clock.activeStudy() >= CONFIRM_LONG_SESSION_SECS)
+            throw new StateFailure("This session ran for " + Durations.formatSeconds(clock.activeStudy())
+                    + ". Press **End Session** again to confirm how long you really studied.");
+        double study = studyTime(clock, session.getSessionTime(), confirmation.reportedStudySecs());
+        List<String> subjectsStudied = List.copyOf(session.getSubjectsStudied());
+        int breakCount = session.getNumberOfBreaks();
 
-        List<String> subjectsStudied = session.getSubjectsStudied();
-        int numberOfBreaks = session.getNumberOfBreaks();
-
-        double previouslyAllocatedSecs = session.getSessionTime();
-        double finalSubjectTime = Math.max(0, activeStudySecs - previouslyAllocatedSecs);
-
-        String currentTopic = session.getSessionTopic();
-        if (currentTopic != null && !currentTopic.trim().isEmpty()) {
-            String code = org.bunnys.bunnynexus.timers.services.SubjectTopics.code(currentTopic);
-            timerData.getCurrentSemester().getSemesterSubjects().stream()
-                    .filter(s -> s.getSubjectCode().equalsIgnoreCase(code))
-                    .findFirst()
-                    .ifPresent(subject -> {
-                        double current = subject.getTotalStudyTime() != null ? subject.getTotalStudyTime() : 0.0;
-                        subject.setTotalStudyTime(current + finalSubjectTime);
-                    });
-        }
-
-        updateSemesterStats(timerData, totalBreakSecs, activeStudySecs);
+        creditCurrentSubject(timerData, study - session.getSessionTime());
+        // Time the user said they did not study is dropped, not counted as a break.
+        SessionProgress.addToTotals(timerData, clock.breaks(), study);
 
         double previousLongest = timerData.getCurrentSemester().getLongestSession();
-        if (previousLongest < activeStudySecs)
-            timerData.getCurrentSemester().setLongestSession(activeStudySecs);
+        if (previousLongest < study)
+            timerData.getCurrentSemester().setLongestSession(study);
         // The first session of a semester sets the baseline; it is not announced as a record.
-        boolean brokeRecord = previousLongest > 0 && previousLongest < activeStudySecs;
+        boolean brokeRecord = previousLongest > 0 && previousLongest < study;
 
-        // Forgotten timers keep their recorded time but cannot mint unbounded progression.
-        boolean rewardCapped = activeStudySecs > MAX_REWARDED_SESSION_SECS;
-        long pointsEarned = LevelEngine.calculateXP(Math.min(activeStudySecs, MAX_REWARDED_SESSION_SECS) / 60.0);
+        // Long unbroken stretches earn less per hour instead of being capped; real breaks restore the full rate.
+        double rewardedMinutes = LevelEngine.rewardedMinutes(SessionProgress.stretches(session.getStudyStretches(), study));
+        long points = LevelEngine.calculateXP(rewardedMinutes);
+        var rank = SessionProgress.applyRank(userData, points);
+        var level = SessionProgress.applyLevel(timerData, points);
+        SessionProgress.updateStreak(timerData, now);
 
-        LevelEngine.RankResult rankResult = applyRankProgress(userData, pointsEarned);
-        LevelEngine.LevelResult levelResult = applyLevelProgress(timerData, pointsEarned);
-        updateStreak(timerData, now);
-
-        String recap = buildRecap(startMs, totalElapsedSecs, activeStudySecs,
-                totalBreakSecs, numberOfBreaks, subjectsStudied, pointsEarned, rewardCapped);
-
+        OptionalDouble adjustedFrom = confirmation.reportedStudySecs().isPresent() ? OptionalDouble.of(clock.activeStudy()) : OptionalDouble.empty();
+        String recap = SessionProgress.recap(startMs, clock, study, adjustedFrom, breakCount, subjectsStudied, points, rewardedMinutes);
         clearSessionFields(session);
+        TimerStore.saveProgress(userId, userData, timerData);
 
-        DB.saveProgress(userId, userData, timerData);
-
+        var jda = interaction.getJDA();
         if (brokeRecord)
-            interaction.getJDA().getEventManager().handle(new RecordBrokenEvent(
-                    interaction.getJDA(), interaction,
-                    RecordBrokenEvent.RecordType.SESSION, activeStudySecs, null));
-
-        if (rankResult.hasRankedUp())
-            interaction.getJDA().getEventManager().handle(new AccountLevelUpEvent(
-                    interaction.getJDA(), interaction,
-                    rankResult.addedLevels(), rankResult.remainingRP(), userData));
-
-        if (levelResult.hasLeveledUp())
-            interaction.getJDA().getEventManager().handle(new SemesterLevelUpEvent(
-                    interaction.getJDA(), interaction,
-                    levelResult.addedLevels(), levelResult.remainingXP(), timerData));
-
+            jda.getEventManager().handle(new RecordBrokenEvent(jda, interaction,
+                    RecordBrokenEvent.RecordType.SESSION, clock.activeStudy(), null));
+        if (rank.hasRankedUp())
+            jda.getEventManager().handle(new AccountLevelUpEvent(jda, interaction, rank.addedLevels(), rank.remainingRP(), userData));
+        if (level.hasLeveledUp())
+            jda.getEventManager().handle(new SemesterLevelUpEvent(jda, interaction, level.addedLevels(), level.remainingXP(), timerData));
         return recap;
     }
 
-    /** Preserve study time already credited before a backward wall-clock adjustment. */
-    private static double activeStudySeconds(Session session, double elapsedSeconds, double breakSeconds) {
-        // A backward wall-clock adjustment must not erase the allocation watermark. Otherwise
-        // later subject switches can credit the same seconds again when the clock catches up.
-        return Math.max(session.getSessionTime(), Math.max(0, elapsedSeconds - breakSeconds));
+    /** Loads the caller's timer and requires an active semester. */
+    public static TimerData getTimerDataOrThrow(String userId) {
+        TimerData timerData = DB.findOne(TimerData.class, TIMER_COLLECTION, Filters.eq(TIMER_ID_FIELD, userId));
+        if (timerData == null)
+            throw new StateFailure("Timer account not found. Please register first.");
+        if (timerData.getCurrentSemester() == null || timerData.getCurrentSemester().getSemesterName() == null)
+            throw new StateFailure("No active semester found. Start a semester first.");
+        return timerData;
     }
 
-    /** Throws if no session is currently active. */
+    // ------------------------------------------------------------------ helpers
+
+    /**
+     * The study time a session is credited with. A reported time must lie between what earlier subject switches
+     * already logged (that time is committed to subjects) and what the timer tracked (nobody studies more than the
+     * timer ran). Entries are in whole minutes, so a minute of slack is allowed at both ends and then clamped.
+     */
+    static double studyTime(SessionClock clock, double alreadyLogged, OptionalDouble reported) {
+        if (reported.isEmpty()) return clock.activeStudy();
+        double value = reported.getAsDouble();
+        if (Double.isNaN(value) || value < 0)
+            throw new InputFailure("Enter how long you studied, in hours and minutes.");
+        if (value >= clock.activeStudy() + 60)
+            throw new InputFailure("You can't have studied longer than the timer ran (" + Durations.formatSeconds(clock.activeStudy()) + ").");
+        if (value <= alreadyLogged - 60)
+            throw new InputFailure("At least " + Durations.formatSeconds(alreadyLogged)
+                    + " was already logged when you switched subjects; enter that much or more.");
+        return Math.max(alreadyLogged, Math.min(value, clock.activeStudy()));
+    }
+
     private static void requireActiveSession(Session session) {
         if (session.getSessionStartTime() == null)
             throw new StateFailure("You don't have an active session.");
     }
 
-    /**
-     * Initializes all session fields for a fresh start.
-     */
-    private static void resetSessionFields(Session session, long now, String topic,
-            String messageId, String channelId, String guildId) {
+    /** Folds the running break into the stored total; a backward clock jump counts as zero, never negative. */
+    private static long closeOpenBreak(Session session, long nowMillis) {
+        var breaks = session.getSessionBreaks();
+        long breakMs = Math.max(0, nowMillis - breaks.getSessionBreakStart().getTime());
+        breaks.setSessionBreakTime(breaks.getSessionBreakTime() + breakMs / 1000.0);
+        breaks.setSessionBreakStart(null);
+        return breakMs;
+    }
+
+    /** Credits study time not yet allocated to the subject currently being studied. */
+    private static void creditCurrentSubject(TimerData timerData, double seconds) {
+        String topic = timerData.getSessionData().getSessionTopic();
+        if (topic == null || topic.isBlank()) return;
+        double credit = Math.max(0, seconds);
+        findSubject(timerData, SubjectTopics.code(topic)).ifPresent(subject -> subject.setTotalStudyTime(
+                (subject.getTotalStudyTime() == null ? 0.0 : subject.getTotalStudyTime()) + credit));
+    }
+
+    private static Optional<Subject> findSubject(TimerData timerData, String code) {
+        return timerData.getCurrentSemester().getSemesterSubjects().stream()
+                .filter(s -> s.getSubjectCode().equalsIgnoreCase(code)).findFirst();
+    }
+
+    private static void resetSessionFields(Session session, long now, String topic, String messageId, String channelId, String guildId) {
         session.setSessionStartTime(new Date(now));
         session.setLastSessionDate(new Date(now));
         session.setSessionTopic(topic);
@@ -331,12 +288,10 @@ public class TimerSessionService {
         session.setSessionTime(0.0);
         session.getSessionBreaks().setSessionBreakStart(null);
         session.getSessionBreaks().setSessionBreakTime(0.0);
-        safeListClear(session.getSubjectsStudied());
+        session.getSubjectsStudied().clear();
+        session.getStudyStretches().clear();
     }
 
-    /**
-     * Wipes all transient session state after a session ends.
-     */
     private static void clearSessionFields(Session session) {
         session.setLastSessionTopic(session.getSessionTopic());
         session.setSessionStartTime(null);
@@ -348,147 +303,8 @@ public class TimerSessionService {
         session.setSessionTime(0.0);
         session.getSessionBreaks().setSessionBreakTime(0.0);
         session.getSessionBreaks().setSessionBreakStart(null);
-        safeListClear(session.getSubjectsStudied());
-    }
-
-    /**
-     * Adds this session's time to semester and lifetime accumulators.
-     */
-    private static void updateSemesterStats(TimerData timerData,
-            double totalBreakSecs,
-            double activeStudySecs) {
-        var semester = timerData.getCurrentSemester();
-        semester.setTotalBreakTime(semester.getTotalBreakTime() + totalBreakSecs);
-        semester.setSemesterTime(semester.getSemesterTime() + activeStudySecs);
-        timerData.getAccount().setLifetimeTime(timerData.getAccount().getLifetimeTime() + activeStudySecs);
-    }
-
-    /**
-     * Applies earned points to the account RP track and returns the result.
-     */
-    private static LevelEngine.RankResult applyRankProgress(BunnyUser userData, long pointsEarned) {
-        long currentRP = userData.getRp();
-        LevelEngine.RankResult result = LevelEngine.checkRank(userData.getRank(), currentRP, pointsEarned);
-
-        if (result.hasRankedUp()) {
-            userData.setRank(userData.getRank() + Math.max(1, result.addedLevels()));
-            userData.setRp(result.remainingRP());
-        } else {
-            userData.setRp(Math.addExact(currentRP, pointsEarned));
-        }
-        return result;
-    }
-
-    /**
-     * Applies earned points to the semester XP track and returns the result.
-     */
-    private static LevelEngine.LevelResult applyLevelProgress(TimerData timerData, long pointsEarned) {
-        var semester = timerData.getCurrentSemester();
-        long currentXP = (long) semester.getSemesterXP();
-        LevelEngine.LevelResult result = LevelEngine.checkLevel(
-                semester.getSemesterLevel(), currentXP, pointsEarned);
-
-        if (result.hasLeveledUp()) {
-            semester.setSemesterLevel(semester.getSemesterLevel() + Math.max(1, result.addedLevels()));
-            semester.setSemesterXP(result.remainingXP());
-        } else {
-            semester.setSemesterXP(currentXP + pointsEarned);
-        }
-        return result;
-    }
-
-    /** Streaks count calendar days in UTC, independent of server timezone and session hour. */
-    static void updateStreak(TimerData timerData, long now) {
-        var semester = timerData.getCurrentSemester();
-        var today = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC).toLocalDate();
-        Date lastUpdate = semester.getLastStreakUpdate();
-        long days = lastUpdate == null ? Long.MAX_VALUE : java.time.temporal.ChronoUnit.DAYS.between(
-                lastUpdate.toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate(), today);
-        if (days > 1) semester.setStreak(1);
-        else if (days == 1) semester.setStreak(semester.getStreak() + 1);
-        if (days > 0) semester.setLastStreakUpdate(new Date(now));
-        semester.setLongestStreak(Math.max(semester.getLongestStreak(), semester.getStreak()));
-    }
-    /**
-     * Builds the session end recap string.
-     */
-    private static String buildRecap(long startMs, double totalElapsedSecs,
-            double activeStudySecs, double totalBreakSecs,
-            int numberOfBreaks, List<String> subjectsStudied,
-            long pointsEarned, boolean rewardCapped) {
-        StringBuilder recap = new StringBuilder();
-
-        recap.append("• Start Time: <t:").append(startMs / 1000).append(":F>\n")
-                .append("• Total Time Elapsed: ").append(formatSecs(totalElapsedSecs)).append("\n")
-                .append("• Net Study Time:     ").append(formatSecs(activeStudySecs)).append("\n\n");
-
-        double avgBreakSecs = (totalBreakSecs > 0 && numberOfBreaks > 0)
-                ? totalBreakSecs / numberOfBreaks
-                : 0.0;
-
-        recap.append("• Total Break Time:   ")
-                .append(totalBreakSecs > 0 ? formatSecs(totalBreakSecs) : "No Breaks Taken").append("\n")
-                .append("• Average Break Time: ")
-                .append(avgBreakSecs > 0 ? formatSecs(avgBreakSecs) : "N/A").append("\n")
-                .append("• Number of Breaks:   ").append(numberOfBreaks).append("\n");
-
-        if (subjectsStudied != null && !subjectsStudied.isEmpty())
-            recap.append("\n• Studied Subjects: ").append(String.join(", ", subjectsStudied));
-        else
-            recap.append("\n• No subjects studied this session.");
-
-        recap.append("\n\n• XP & RP Earned: ").append(String.format("%,d", pointsEarned));
-        if (rewardCapped)
-            recap.append("\n• XP is capped at ").append(formatSecs(MAX_REWARDED_SESSION_SECS)).append(" per session.");
-
-        return recap.toString();
-    }
-
-    private static boolean hasTopic(String topic) {
-        return topic != null && !topic.trim().isEmpty();
-    }
-
-    private static String extractSubjectCode(String topic) {
-        return SubjectTopics.code(topic);
-    }
-
-    private static Optional<Subject> findSubject(TimerData timerData, String subjectCode) {
-        if (subjectCode.isEmpty())
-            return Optional.empty();
-        return timerData.getCurrentSemester().getSemesterSubjects().stream()
-                .filter(s -> s.getSubjectCode().equalsIgnoreCase(subjectCode))
-                .findFirst();
-    }
-
-    /** Null-safe list add. */
-    private static void safeListAdd(List<String> list, String value) {
-        if (list != null)
-            list.add(value);
-    }
-
-    /** Null-safe list clear. */
-    private static void safeListClear(List<String> list) {
-        if (list != null)
-            list.clear();
-    }
-
-    /** Formats a duration in seconds to a human-readable string. */
-    private static String formatSecs(double seconds) {
-        return Utils.msToTime((long) (seconds * 1000)).orElse("0s");
-    }
-
-    /**
-     * Loads and validates TimerData for a given user.
-     */
-    public static TimerData getTimerDataOrThrow(String userId) {
-        TimerData timerData = DB.findOne(TimerData.class, TIMER_COLLECTION,
-                Filters.eq(TIMER_ID_FIELD, userId));
-        if (timerData == null)
-            throw new StateFailure("Timer account not found. Please register first.");
-        if (timerData.getCurrentSemester() == null
-                || timerData.getCurrentSemester().getSemesterName() == null)
-            throw new StateFailure("No active semester found. Start a semester first.");
-        return timerData;
+        session.getSubjectsStudied().clear();
+        session.getStudyStretches().clear();
     }
 
     private static void saveTimerData(String userId, TimerData data) {

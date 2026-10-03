@@ -8,7 +8,7 @@ import org.bunnys.handler.router.selects.BunnySelect;
 import java.util.List;
 
 /** Launcher picker on a pending review message. Same owner + review-channel guard as the review buttons. */
-@SuppressWarnings("unused")
+@SuppressWarnings("unused") // Discovered reflectively by SelectRouter.
 public class FreebieStoreSelect extends BunnySelect {
     @Override public String getPrefix() { return FreebieMessages.STORE_MENU_PREFIX; }
     @Override public long cooldownMillis() { return WRITE_COOLDOWN; }
@@ -16,12 +16,18 @@ public class FreebieStoreSelect extends BunnySelect {
     @Override
     public void execute(BunnyHub client, StringSelectInteractionEvent event, String[] args) {
         var system = FreebieSystem.current().orElse(null);
-        String reply;
-        if (system == null) reply = "Free-game alerts are not running.";
-        else if (!system.config().isOwner(event.getUser().getId()) || !event.getChannelId().equals(system.config().reviewChannelId()))
-            reply = "Only the bot owner can review free-game alerts.";
-        else if (args.length != 2 || event.getValues().size() != 1) reply = "This control is malformed.";
-        else reply = system.changeStore(event.getUser().getId(), args[1], event.getValues().getFirst());
-        event.reply(reply).setEphemeral(true).setAllowedMentions(List.of()).queue();
+        String refusal = null;
+        if (system == null) refusal = "Free-game alerts are not running.";
+        else if (!system.config().isOwner(event.getUser().getId()) || !system.config().isReviewChannel(event.getChannelId()))
+            refusal = "Only the bot owner can review free-game alerts.";
+        else if (args.length != 2 || event.getValues().size() != 1) refusal = "This control is malformed.";
+        if (refusal != null) {
+            event.reply(refusal).setEphemeral(true).setAllowedMentions(List.of()).queue();
+            return;
+        }
+        // The change edits the review message and reads the audience; acknowledge before that work.
+        event.deferReply(true).complete();
+        String result = system.changeStore(event.getUser().getId(), args[1], event.getValues().getFirst());
+        event.getHook().sendMessage(result).setEphemeral(true).setAllowedMentions(List.of()).queue();
     }
 }

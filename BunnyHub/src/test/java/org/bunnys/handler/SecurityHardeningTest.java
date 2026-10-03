@@ -12,11 +12,13 @@ import java.util.UUID;
 import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import org.bunnys.bunnynexus.timers.Timers;
+import org.bunnys.handler.database.DB;
 
 class SecurityHardeningTest {
     @Test void openingConfirmationFormDoesNotReadDatabase() {
-        try (var database = mockStatic(org.bunnys.handler.database.DB.class)) {
-            var timers = new org.bunnys.bunnynexus.timers.Timers("123", null);
+        try (var database = mockStatic(DB.class)) {
+            var timers = new Timers("123", null);
             var modal = timers.buildEndSemesterModal("7");
             assertNotNull(modal.toData());
             assertTrue(modal.getId().startsWith("semester_end_modal:123:"));
@@ -43,7 +45,7 @@ class SecurityHardeningTest {
         new InteractionListener(hub).onCommandAutoCompleteInteraction(event);
         verify(command, never()).autocomplete(any(), any());
         verify(event).replyChoiceStrings(List.of());
-        verify(reply).queue();
+        verify(reply).queue(isNull(), any());
     }
 
     @Test void checkingReadAccessDoesNotConsumeExecutionCooldown() {

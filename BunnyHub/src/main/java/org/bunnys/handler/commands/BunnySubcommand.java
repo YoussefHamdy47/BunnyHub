@@ -124,7 +124,6 @@ public abstract class BunnySubcommand {
 
     public void execute(BunnyHub client, CommandContext ctx) {
         BunnyLog.error("CRITICAL: Subcommand '" + this.name + "' was triggered but has no execute() implementation");
-        ctx.reply(SystemEmbeds.missingImplementation(
-                this.name, client.getCommandRegistry().getDeveloperIds()), true);
+        ctx.reply(SystemEmbeds.missingImplementation(), true);
     }
 }

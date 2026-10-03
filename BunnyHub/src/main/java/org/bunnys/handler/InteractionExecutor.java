@@ -3,6 +3,7 @@ package org.bunnys.handler;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
+import org.bunnys.utils.BunnyLog;
 
 /** Bounded FIFO work per key, with round-robin scheduling between ready keys. */
 public final class InteractionExecutor extends AbstractExecutorService implements AutoCloseable {
@@ -108,7 +109,7 @@ public final class InteractionExecutor extends AbstractExecutorService implement
                 try { job.action().run(); }
                 catch (Throwable error) {
                     crashed = true;
-                    org.bunnys.utils.BunnyLog.error("Background action failed", error);
+                    BunnyLog.error("Background action failed", error);
                 } finally {
                     synchronized (monitor) {
                         active--;
@@ -181,7 +182,7 @@ public final class InteractionExecutor extends AbstractExecutorService implement
         try {
             if (!awaitTermination(Duration.ofSeconds(15).toMillis(), TimeUnit.MILLISECONDS)) {
                 int dropped = shutdownNow().size();
-                org.bunnys.utils.BunnyLog.warning("Worker shutdown timed out; cancelled " + dropped + " queued actions.");
+                BunnyLog.warning("Worker shutdown timed out; cancelled " + dropped + " queued actions.");
             }
         } catch (InterruptedException error) {
             shutdownNow();

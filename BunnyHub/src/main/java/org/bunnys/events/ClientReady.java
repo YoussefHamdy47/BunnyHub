@@ -11,7 +11,7 @@ import org.bunnys.utils.BunnyLog;
 import java.io.IOException;
 import java.util.Arrays;
 
-@SuppressWarnings("unused")
+@SuppressWarnings("unused") // Discovered reflectively by EventLoader.
 public class ClientReady extends BunnyEvent {
 
     public ClientReady(BunnyHub client) {

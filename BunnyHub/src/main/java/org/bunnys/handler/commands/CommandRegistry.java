@@ -10,6 +10,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
+import java.util.Objects;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.interactions.commands.Command;
 
 /**
  * The live command table.
@@ -44,11 +48,20 @@ public class CommandRegistry {
 
     public List<String> getTestServerIds() { return testServerIds; }
 
+    /** Slash command name to Discord's command ID, filled after a successful global deploy. */
+    private volatile Map<String, String> commandIds = Map.of();
+
+    /**
+     * Discord IDs of the deployed global slash commands, for clickable {@code </name:id>}
+     * mentions. Empty until the first deploy succeeds; read-only.
+     */
+    public Map<String, String> getCommandIds() { return commandIds; }
+
     public synchronized void registerCommand(BunnyCommand command) {
-        java.util.Objects.requireNonNull(command, "Command");
+        Objects.requireNonNull(command, "Command");
         if (command.getName() == null || command.getName().isBlank())
             throw new IllegalArgumentException("Command name is required.");
-        String name = command.getName().toLowerCase(java.util.Locale.ROOT);
+        String name = command.getName().toLowerCase(Locale.ROOT);
         Routes before = routes;
         Map<String, BunnyCommand> commands = new HashMap<>(before.commands());
         Map<String, BunnyCommand> aliases = new HashMap<>(before.aliases());
@@ -100,7 +113,7 @@ public class CommandRegistry {
         if (name == null || name.isEmpty())
             return null;
 
-        String key = name.toLowerCase(java.util.Locale.ROOT);
+        String key = name.toLowerCase(Locale.ROOT);
         Routes current = routes;
         BunnyCommand direct = current.commands().get(key);
 
@@ -109,7 +122,7 @@ public class CommandRegistry {
 
     public void deployCommands() { deployCommands(client.getJDA()); }
 
-    public void deployCommands(net.dv8tion.jda.api.JDA jda) {
+    public void deployCommands(JDA jda) {
         List<CommandData> global = new ArrayList<>();
         Map<String, List<CommandData>> perGuild = new HashMap<>();
 
@@ -123,7 +136,14 @@ public class CommandRegistry {
         }
 
         jda.updateCommands().addCommands(global).queue(
-                ok -> BunnyLog.success("[CommandRegistry] Registered " + global.size() + " global commands."),
+                ok -> {
+                    Map<String, String> ids = new HashMap<>();
+                    for (Command deployed : ok)
+                        if (deployed.getType() == Command.Type.SLASH)
+                            ids.put(deployed.getName(), deployed.getId());
+                    commandIds = Map.copyOf(ids);
+                    BunnyLog.success("[CommandRegistry] Registered " + global.size() + " global commands.");
+                },
                 err -> BunnyLog.error("[CommandRegistry] Global deploy failed", err));
 
         perGuild.forEach((guildId, list) -> {
@@ -132,11 +152,16 @@ public class CommandRegistry {
                 BunnyLog.warning("[CommandRegistry] Test guild " + guildId + " is not reachable; skipped.");
                 return;
             }
+            // Still pushed when empty so removed test commands disappear from the guild;
+            // only the log line is skipped.
             guild.updateCommands().addCommands(list).queue(
-                    ok -> BunnyLog.success("[CommandRegistry] Registered " + list.size()
-                            + " test commands to guild " + guildId + "."),
-                    err -> BunnyLog.error("[CommandRegistry] Guild deploy failed for "
-                            + guildId, err));
+                    ok -> {
+                        if (!list.isEmpty())
+                            BunnyLog.success("[CommandRegistry] Registered " + list.size()
+                                    + " test commands to " + guild.getName() + ".");
+                    },
+                    err -> BunnyLog.error("[CommandRegistry] Test command deploy failed for "
+                            + guild.getName(), err));
         });
     }
 

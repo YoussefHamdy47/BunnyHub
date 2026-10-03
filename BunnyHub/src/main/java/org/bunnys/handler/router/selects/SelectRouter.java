@@ -2,6 +2,7 @@ package org.bunnys.handler.router.selects;
 
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import org.bunnys.handler.BunnyHub;
+import org.bunnys.handler.ClassScanner;
 import org.bunnys.handler.router.ComponentCooldowns;
 import org.bunnys.utils.BunnyLog;
 import org.bunnys.utils.ErrorReporter;
@@ -10,6 +11,7 @@ import org.bunnys.utils.SystemEmbeds;
 import java.util.Map;
 
 import java.util.concurrent.RejectedExecutionException;
+import org.bunnys.handler.router.ComponentLoader;
 
 /**
  * Routes string select-menu choices to their handler.
@@ -24,8 +26,10 @@ public final class SelectRouter {
 
     private SelectRouter() {}
 
-    public static void loadSelects(String packageName) {
-        HANDLERS = org.bunnys.handler.router.ComponentLoader.load(packageName, BunnySelect.class, handler -> handler.getPrefix());
+    public static void loadSelects(String packageName) { loadSelects(ClassScanner.of(packageName), packageName); }
+
+    public static void loadSelects(ClassScanner scanner, String packageName) {
+        HANDLERS = ComponentLoader.load(scanner, packageName, BunnySelect.class, BunnySelect::getPrefix);
         BunnyLog.info("Loaded " + HANDLERS.size() + " BunnySelect handlers.");
     }
 

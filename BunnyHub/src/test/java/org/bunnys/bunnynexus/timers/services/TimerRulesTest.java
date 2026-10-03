@@ -23,12 +23,12 @@ class TimerRulesTest {
 
     @Test void streakCountsCalendarDaysInsteadOfElapsed24HourWindows() {
         TimerData timer = new TimerData();
-        TimerSessionService.updateStreak(timer, Instant.parse("2026-01-01T23:50:00Z").toEpochMilli());
-        TimerSessionService.updateStreak(timer, Instant.parse("2026-01-02T00:10:00Z").toEpochMilli());
+        SessionProgress.updateStreak(timer, Instant.parse("2026-01-01T23:50:00Z").toEpochMilli());
+        SessionProgress.updateStreak(timer, Instant.parse("2026-01-02T00:10:00Z").toEpochMilli());
         assertEquals(2, timer.getCurrentSemester().getStreak());
-        TimerSessionService.updateStreak(timer, Instant.parse("2026-01-02T23:00:00Z").toEpochMilli());
+        SessionProgress.updateStreak(timer, Instant.parse("2026-01-02T23:00:00Z").toEpochMilli());
         assertEquals(2, timer.getCurrentSemester().getStreak());
-        TimerSessionService.updateStreak(timer, Instant.parse("2026-01-04T01:00:00Z").toEpochMilli());
+        SessionProgress.updateStreak(timer, Instant.parse("2026-01-04T01:00:00Z").toEpochMilli());
         assertEquals(1, timer.getCurrentSemester().getStreak());
         assertEquals(2, timer.getCurrentSemester().getLongestStreak());
     }
@@ -77,8 +77,8 @@ class TimerRulesTest {
 
     @Test void lapsedStreakIsReportedAsBrokenWithoutWaitingForNextSession() {
         TimerData timer = new TimerData();
-        TimerSessionService.updateStreak(timer, Instant.parse("2026-01-01T12:00:00Z").toEpochMilli());
-        TimerSessionService.updateStreak(timer, Instant.parse("2026-01-02T12:00:00Z").toEpochMilli());
+        SessionProgress.updateStreak(timer, Instant.parse("2026-01-01T12:00:00Z").toEpochMilli());
+        SessionProgress.updateStreak(timer, Instant.parse("2026-01-02T12:00:00Z").toEpochMilli());
         var stats = new TimerStats(timer, new BunnyUser());
         assertEquals(2, stats.currentStreak(Instant.parse("2026-01-03T20:00:00Z").toEpochMilli()));
         assertEquals(0, stats.currentStreak(Instant.parse("2026-01-04T00:30:00Z").toEpochMilli()));

@@ -44,6 +44,3 @@ build/
 !.env.example
 .tools/
 target-upgrade/
-
-### Local editor settings ###
-.idea/

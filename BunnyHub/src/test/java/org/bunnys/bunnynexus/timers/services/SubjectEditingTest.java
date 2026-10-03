@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
+import org.bunnys.bunnynexus.timers.Timers;
 
 class SubjectEditingTest {
     private Subject course(String code) {
@@ -27,7 +29,7 @@ class SubjectEditingTest {
         user.getSubjects().add(course(" cs-101 "));
         TimerData timer = new TimerData();
         timer.getCurrentSemester().getSemesterSubjects().add(course("MATH-2"));
-        var event = mock(net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent.class, RETURNS_DEEP_STUBS);
+        var event = mock(CommandAutoCompleteInteractionEvent.class, RETURNS_DEEP_STUBS);
         when(event.getUser().getId()).thenReturn("123");
         when(event.getOption("destination").getAsString()).thenReturn("ACCOUNT");
         try (var db = mockStatic(DB.class)) {
@@ -77,8 +79,8 @@ class SubjectEditingTest {
         user.getSubjects().add(course("CS-101"));
         try (var db = mockStatic(DB.class)) {
             db.when(() -> DB.findOne(eq(BunnyUser.class), eq("BunnyUsers"), any(Bson.class))).thenReturn(user);
-            var result = new org.bunnys.bunnynexus.timers.Timers("123", null)
-                    .removeSubject(org.bunnys.bunnynexus.timers.Timers.RecordDestination.ACCOUNT, "cs-101");
+            var result = new Timers("123", null)
+                    .removeSubject(Timers.RecordDestination.ACCOUNT, "cs-101");
             assertNotNull(result);
             assertTrue(user.getSubjects().isEmpty());
             db.verify(() -> DB.findOne(eq(TimerData.class), anyString(), any(Bson.class)), never());

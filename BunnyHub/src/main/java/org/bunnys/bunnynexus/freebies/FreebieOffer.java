@@ -1,7 +1,6 @@
 package org.bunnys.bunnynexus.freebies;
 
 import org.bson.Document;
-import org.bunnys.bunnynexus.alerts.adapters.providers.GamerPowerIntake;
 import java.net.URI;
 import java.time.*;
 import java.util.*;
@@ -19,7 +18,7 @@ import java.util.*;
 public record FreebieOffer(String id, String sourceId, FreebieStore store, String platforms, String title,
                            String description, String instructions, Optional<String> worth, Optional<URI> image,
                            URI claimUrl, URI pageUrl, Optional<Instant> endsAt, Instant discoveredAt,
-                           State state, Optional<String> reviewMessageId, Optional<String> decidedBy,
+                           State state, Optional<String> reviewMessageId, Optional<String> reviewChannelId, Optional<String> decidedBy,
                            boolean fanoutDone, boolean gone, long revision) {
     public enum State { PENDING, APPROVED, REJECTED, EXPIRED, STOPPED, COMPLETED;
         public boolean open() { return this == PENDING || this == APPROVED; }
@@ -29,7 +28,7 @@ public record FreebieOffer(String id, String sourceId, FreebieStore store, Strin
         Objects.requireNonNull(id); Objects.requireNonNull(store); Objects.requireNonNull(state);
         Objects.requireNonNull(claimUrl); Objects.requireNonNull(pageUrl); Objects.requireNonNull(endsAt);
         Objects.requireNonNull(worth); Objects.requireNonNull(image);
-        Objects.requireNonNull(reviewMessageId); Objects.requireNonNull(decidedBy);
+        Objects.requireNonNull(reviewMessageId); Objects.requireNonNull(reviewChannelId); Objects.requireNonNull(decidedBy);
     }
 
     public static String idFor(String sourceItemId) { return "gamerpower:" + sourceItemId; }
@@ -68,6 +67,7 @@ public record FreebieOffer(String id, String sourceId, FreebieStore store, Strin
                 URI.create(d.getString("claimUrl")), URI.create(d.getString("pageUrl")),
                 Optional.ofNullable(d.getDate("endsAt")).map(Date::toInstant), d.getDate("discoveredAt").toInstant(),
                 State.valueOf(d.getString("state")), Optional.ofNullable(d.getString("reviewMessageId")),
+                Optional.ofNullable(d.getString("reviewChannelId")),
                 Optional.ofNullable(d.getString("decidedBy")), d.getBoolean("fanoutDone", false), d.getBoolean("gone", false),
                 ((Number) d.get("revision")).longValue());
     }

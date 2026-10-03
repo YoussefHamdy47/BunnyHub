@@ -1,11 +1,12 @@
 package org.bunnys.bunnynexus.timers.services;
 
-import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import org.bunnys.bunnynexus.timers.buttons.SessionMenuManager;
-import org.bunnys.utils.AppDesign;
+import org.bunnys.bunnynexus.timers.SessionEmbeds;
+import org.bunnys.utils.Embeds;
 
-import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -34,37 +35,28 @@ public final class PendingSessionManager {
 
         session.reminderTask = SCHEDULER.schedule(() -> {
             if (PENDING_SESSIONS.get(userId) != session) return;
-            hook.sendMessage("<@" + userId + ">, your terminal for **" + org.bunnys.bunnynexus.timers.services.SubjectTopics.code(topic)
-                    + "** is standing by! Click 'Start Session' when ready.")
+            // The ping lives in the message content; mentions inside embeds never notify.
+            hook.sendMessage("<@" + userId + ">").addEmbeds(Embeds.of("⏰", "Still waiting for you", "Your session for **"
+                            + SubjectTopics.code(topic) + "** is ready. Click **Start** when you are, or it closes in 5 minutes.").build())
                     .queue(msg -> {
                         synchronized (PendingSessionManager.class) {
                             if (PENDING_SESSIONS.get(userId) == session) session.reminderMessageId = msg.getId();
                             else msg.delete().queue(null, ignored -> {});
                         }
-                    }, err -> {
-                    });
+                    }, ignored -> {});
         }, 5, TimeUnit.MINUTES);
 
         session.timeoutTask = SCHEDULER.schedule(() -> {
             if (!PENDING_SESSIONS.remove(userId, session)) return;
 
             if (session.reminderMessageId != null) {
-                session.hook.deleteMessageById(session.reminderMessageId).queue(null, err -> {
-                });
+                session.hook.deleteMessageById(session.reminderMessageId).queue(null, ignored -> {});
             }
 
-            EmbedBuilder eb = new EmbedBuilder()
-                    .setColor(AppDesign.ColorCodes.ERROR_RED)
-                    .setTitle("🛑 Initialization Aborted")
-                    .setDescription("> *The session for **" + org.bunnys.bunnynexus.timers.services.SubjectTopics.code(topic)
-                            + "** timed out due to inactivity.*")
-                    .setTimestamp(Instant.now());
-
-            hook.editOriginalEmbeds(eb.build())
-                    .setComponents(net.dv8tion.jda.api.components.actionrow.ActionRow.of(
+            hook.editOriginalEmbeds(SessionEmbeds.timedOut(topic))
+                    .setComponents(ActionRow.of(
                             SessionMenuManager.buildButtons(userId, SessionMenuManager.SessionState.ENDED)))
-                    .queue(null, err -> {
-                    });
+                    .queue(null, ignored -> {});
 
         }, 10, TimeUnit.MINUTES);
         return true;
@@ -78,8 +70,7 @@ public final class PendingSessionManager {
             if (session.timeoutTask != null)
                 session.timeoutTask.cancel(false);
             if (session.reminderMessageId != null && session.hook != null)
-                session.hook.deleteMessageById(session.reminderMessageId).queue(null, err -> {
-                });
+                session.hook.deleteMessageById(session.reminderMessageId).queue(null, ignored -> {});
         }
         return session;
     }
@@ -101,7 +92,7 @@ public final class PendingSessionManager {
     }
 
     public static synchronized void shutdown() {
-        for (String userId : java.util.List.copyOf(PENDING_SESSIONS.keySet())) getAndRemove(userId);
+        for (String userId : List.copyOf(PENDING_SESSIONS.keySet())) getAndRemove(userId);
         SCHEDULER.shutdownNow();
     }
 

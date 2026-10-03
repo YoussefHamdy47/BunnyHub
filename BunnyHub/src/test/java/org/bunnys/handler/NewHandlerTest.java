@@ -20,8 +20,10 @@ import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import net.dv8tion.jda.api.interactions.InteractionHook;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import java.util.ArrayList;
 
 class NewHandlerTest {
     private static BunnyCommand command(String name) {
@@ -78,7 +80,7 @@ class NewHandlerTest {
         AtomicInteger accepted = new AtomicInteger();
         CountDownLatch start = new CountDownLatch(1);
         try (var pool = Executors.newFixedThreadPool(8)) {
-            var jobs = new java.util.ArrayList<Future<?>>();
+            var jobs = new ArrayList<Future<?>>();
             for (int i = 0; i < 50; i++) jobs.add(pool.submit(() -> {
                 start.await();
                 if (CommandGate.check(ctx, registry, command, null) == null) accepted.incrementAndGet();
@@ -142,7 +144,7 @@ class NewHandlerTest {
         when(event.deferReply(true)).thenReturn(action);
         new InteractionListener(hub).onSlashCommandInteraction(event);
         verify(hub, never()).executeForUser(anyString(), any());
-        var success = org.mockito.ArgumentCaptor.forClass(Consumer.class);
+        org.mockito.ArgumentCaptor<Consumer<InteractionHook>> success = org.mockito.ArgumentCaptor.captor();
         verify(action).queue(success.capture(), any());
         success.getValue().accept(null);
         verify(hub).executeForUser(eq("123"), any());

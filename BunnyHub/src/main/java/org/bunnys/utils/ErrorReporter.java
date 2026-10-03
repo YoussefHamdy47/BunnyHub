@@ -14,8 +14,6 @@ public final class ErrorReporter {
         return reference;
     }
     public static void reportAndReply(String action, Throwable error, IReplyCallback event) {
-        var embed = SystemEmbeds.crashed(report(action, null, error), false);
-        if (event.isAcknowledged()) event.getHook().sendMessageEmbeds(embed).setEphemeral(true).queue();
-        else event.replyEmbeds(embed).setEphemeral(true).queue();
+        Replies.privately(event, SystemEmbeds.crashed(report(action, null, error), false));
     }
 }

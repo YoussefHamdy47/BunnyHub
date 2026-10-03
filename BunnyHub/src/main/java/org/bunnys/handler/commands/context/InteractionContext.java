@@ -19,24 +19,26 @@ import org.bunnys.utils.BunnyLog;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import net.dv8tion.jda.api.events.interaction.command.GenericCommandInteractionEvent;
+import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 
 /** Shared acknowledgements and replies for slash commands and context menus. */
 public abstract class InteractionContext extends CommandContext {
     @Override public boolean isEphemeralCapable() { return true; }
 
-    protected final net.dv8tion.jda.api.events.interaction.command.GenericCommandInteractionEvent event;
+    protected final GenericCommandInteractionEvent event;
 
-    protected InteractionContext(net.dv8tion.jda.api.events.interaction.command.GenericCommandInteractionEvent event) {
+    protected InteractionContext(GenericCommandInteractionEvent event) {
         this.event = event;
     }
 
-    @Override public void replyMessage(net.dv8tion.jda.api.utils.messages.MessageCreateData message) {
+    @Override public void replyMessage(MessageCreateData message) {
         if (event.isAcknowledged()) event.getHook().sendMessage(message).setEphemeral(isDeferredEphemeral())
                 .queue(null, e -> replyFailed("message", e));
         else event.reply(message).queue(null, e -> replyFailed("message", e));
     }
 
-    public net.dv8tion.jda.api.events.interaction.command.GenericCommandInteractionEvent event() {
+    public GenericCommandInteractionEvent event() {
         return event;
     }
 

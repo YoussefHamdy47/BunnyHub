@@ -6,11 +6,14 @@ import net.dv8tion.jda.api.interactions.DiscordLocale;
 import org.bunnys.commands.info.Info;
 import org.bunnys.handler.commands.context.CommandContext;
 import org.bunnys.bunnynexus.info.InfoEmbeds;
+import org.bunnys.bunnynexus.info.ServerInfoEmbeds;
 import org.junit.jupiter.api.Test;
 import java.time.OffsetDateTime;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import java.util.function.Consumer;
+import net.dv8tion.jda.api.Permission;
 
 class InfoTest {
     private User user() {
@@ -45,7 +48,7 @@ class InfoTest {
     @Test void largeRoleListsAreTruncatedAndAdministratorIsShownAlone() {
         var member = mock(Member.class);
         when(member.getEffectiveName()).thenReturn("Member");
-        when(member.hasPermission(net.dv8tion.jda.api.Permission.ADMINISTRATOR)).thenReturn(true);
+        when(member.hasPermission(Permission.ADMINISTRATOR)).thenReturn(true);
         var roles = new ArrayList<Role>();
         for (int i = 0; i < 200; i++) {
             var role = mock(Role.class);
@@ -73,7 +76,7 @@ class InfoTest {
         when(guild.getLocale()).thenReturn(DiscordLocale.ENGLISH_US);
         when(guild.getFeatures()).thenReturn(Set.of("FEATURE_".repeat(200)));
         when(guild.getDescription()).thenReturn("x".repeat(1024));
-        var embed = InfoEmbeds.serverInfo(guild);
+        var embed = ServerInfoEmbeds.serverInfo(guild);
         assertTrue(embed.isSendable());
         assertTrue(embed.getFields().stream().allMatch(f -> f.getValue().length() <= MessageEmbed.VALUE_MAX_LENGTH));
         assertTrue(embed.getFields().stream().anyMatch(f -> f.getName().equals("Owner") && f.getValue().contains(guild.getOwnerId())));
@@ -83,7 +86,7 @@ class InfoTest {
     @Test void serverBranchInDmRepliesWithAnExplanation() {
         var ctx = mock(CommandContext.class);
         new Info(null).resolveSubcommand("server").execute(null, ctx);
-        verify(ctx).reply(argThat(e -> "Server Only".equals(e.getTitle())), eq(true));
+        verify(ctx).replyTransient(argThat(e -> e.getTitle().endsWith("Server Only")));
         verify(ctx, never()).getGuild();
     }
 
@@ -101,7 +104,7 @@ class InfoTest {
         when(member.getEffectiveName()).thenReturn("Resolved Member");
         var request = guild.retrieveMemberById(user.getId());
         doAnswer(invocation -> {
-            java.util.function.Consumer<Member> success = invocation.getArgument(0);
+            Consumer<Member> success = invocation.getArgument(0);
             success.accept(member);
             return null;
         }).when(request).queue(any(), any());
@@ -109,7 +112,7 @@ class InfoTest {
         var order = inOrder(ctx, request);
         order.verify(ctx).defer();
         order.verify(request).queue(any(), any());
-        verify(ctx).reply(argThat(e -> "Resolved Member".equals(e.getAuthor().getName())));
+        verify(ctx).reply(argThat(e -> e.getTitle().endsWith("Resolved Member")));
     }
 
     @Test void omittedUserDefaultsToCallerAndUnknownExplicitUserDoesNot() {
@@ -126,6 +129,6 @@ class InfoTest {
         verify(ctx).reply(argThat(e -> e.getDescription().contains(user.getAsMention())));
         when(ctx.getString("user")).thenReturn("invalid");
         branch.execute(null, ctx);
-        verify(ctx).reply(argThat(e -> "User Not Found".equals(e.getTitle())), eq(true));
+        verify(ctx).replyTransient(argThat(e -> e.getTitle().endsWith("User Not Found")));
     }
 }

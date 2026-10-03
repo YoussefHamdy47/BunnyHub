@@ -18,6 +18,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 
 /**
  * A command, invokable as either {@code /name} or {@code @BotName name}.
@@ -33,16 +35,16 @@ public abstract class BunnyCommand {
     /** Optional user-menu entry which delegates to this command's implementation. */
     public void setUserContextName(String name) { userContextName = name; }
     public String getUserContextName() { return userContextName; }
-    public net.dv8tion.jda.api.interactions.commands.build.CommandData buildUserContextCommandData() {
+    public CommandData buildUserContextCommandData() {
         if (userContextName == null) throw new IllegalStateException("No user context menu configured.");
         var data = Commands.user(userContextName)
-                .setContexts(dmEnabled ? InteractionContextType.ALL : java.util.Set.of(InteractionContextType.GUILD))
+                .setContexts(dmEnabled ? InteractionContextType.ALL : Set.of(InteractionContextType.GUILD))
                 .setNSFW(nsfw);
         if (!userPermissions.isEmpty()) data.setDefaultPermissions(DefaultMemberPermissions.enabledFor(userPermissions));
         return data;
     }
 
-    public List<net.dv8tion.jda.api.interactions.commands.build.CommandData> buildCommandDefinitions() {
+    public List<CommandData> buildCommandDefinitions() {
         return userContextName == null ? List.of(buildCommandData())
                 : List.of(buildCommandData(), buildUserContextCommandData());
     }
@@ -369,7 +371,6 @@ public abstract class BunnyCommand {
 
     public void execute(BunnyHub client, CommandContext ctx) {
         BunnyLog.error("CRITICAL: Command '" + this.name + "' was triggered but has no execute() implementation");
-        ctx.reply(SystemEmbeds.missingImplementation(
-                this.name, client.getCommandRegistry().getDeveloperIds()), true);
+        ctx.reply(SystemEmbeds.missingImplementation(), true);
     }
 }

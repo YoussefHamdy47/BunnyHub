@@ -7,10 +7,12 @@ import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.events.BunnyEvent;
 import org.bunnys.bunnynexus.events.custom.RecordBrokenEvent;
 import org.bunnys.utils.AppDesign;
-import org.bunnys.utils.Utils;
+import org.bunnys.utils.Durations;
+import org.bunnys.utils.Embeds;
 
 import java.time.Instant;
 
+@SuppressWarnings("unused") // Discovered reflectively by EventLoader.
 public class RecordBroken extends BunnyEvent {
 
     public RecordBroken(BunnyHub client) {
@@ -33,23 +35,23 @@ public class RecordBroken extends BunnyEvent {
 
             recordEmbed
                     .setTitle("👑 Semester Record Broken!")
-                    .setColor(AppDesign.ColorCodes.CYAN)
+                    .setColor(AppDesign.ColorCodes.DEFAULT)
                     .setDescription(
                             "✦ **Semester Name:** `" + event.getSemester().getSemesterName() + "`\n" +
-                                    "✦ **Total Focus Time:** `" + Utils.msToTime(timeMs).orElse("0s") + "`\n\n" +
+                                    "✦ **Total Focus Time:** `" + Durations.format(timeMs) + "`\n\n" +
                                     "> *You have surpassed your limits and set a new all-time semester record!*")
-                    .setFooter("Outstanding Dedication");
+                    .setFooter("Outstanding Dedication • " + Embeds.FOOTER);
 
         } else if (event.getType() == RecordBrokenEvent.RecordType.SESSION && event.getSessionTime() != null) {
             long timeMs = (long) (event.getSessionTime() * 1000);
 
             recordEmbed
                     .setTitle("💎 Session Record Broken!")
-                    .setColor(AppDesign.ColorCodes.CYAN)
+                    .setColor(AppDesign.ColorCodes.DEFAULT)
                     .setDescription(
-                            "✦ **Session Time:** `" + Utils.msToTime(timeMs).orElse("0s") + "`\n\n" +
+                            "✦ **Session Time:** `" + Durations.format(timeMs) + "`\n\n" +
                                     "> *An incredible display of focus. You just set a new personal best for a single session!*")
-                    .setFooter("Focus & Consistency");
+                    .setFooter("Focus & Consistency • " + Embeds.FOOTER);
         } else
             return;
 

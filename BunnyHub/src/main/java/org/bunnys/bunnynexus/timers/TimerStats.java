@@ -11,6 +11,9 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 
 public record TimerStats(TimerData timerData, BunnyUser userData) {
 
@@ -94,19 +97,6 @@ public record TimerStats(TimerData timerData, BunnyUser userData) {
                 .collect(Collectors.toList());
     }
 
-    public int getTotalTimesStudied() {
-        if (getSubjectCount() == 0)
-            return 0;
-        return timerData.getCurrentSemester().getSemesterSubjects().stream()
-                .mapToInt(Subject::getTimesStudied)
-                .sum();
-    }
-
-    public double getAverageStudyTimePerSubject() {
-        int totalTimes = getSubjectCount();
-        return totalTimes > 0 ? getSemesterTime() / totalTimes : 0;
-    }
-
     public int getSemesterLevel() {
         return timerData.getCurrentSemester() != null ? timerData.getCurrentSemester().getSemesterLevel() : 0;
     }
@@ -165,9 +155,9 @@ public record TimerStats(TimerData timerData, BunnyUser userData) {
         Semester semester = timerData.getCurrentSemester();
         if (semester == null || semester.getLastStreakUpdate() == null)
             return 0;
-        var today = java.time.Instant.ofEpochMilli(now).atZone(java.time.ZoneOffset.UTC).toLocalDate();
-        var last = semester.getLastStreakUpdate().toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate();
-        return java.time.temporal.ChronoUnit.DAYS.between(last, today) > 1 ? 0 : semester.getStreak();
+        var today = Instant.ofEpochMilli(now).atZone(ZoneOffset.UTC).toLocalDate();
+        var last = semester.getLastStreakUpdate().toInstant().atZone(ZoneOffset.UTC).toLocalDate();
+        return ChronoUnit.DAYS.between(last, today) > 1 ? 0 : semester.getStreak();
     }
 
     /**

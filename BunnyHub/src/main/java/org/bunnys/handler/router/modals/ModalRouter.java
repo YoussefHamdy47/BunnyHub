@@ -2,6 +2,7 @@ package org.bunnys.handler.router.modals;
 
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import org.bunnys.handler.BunnyHub;
+import org.bunnys.handler.ClassScanner;
 import org.bunnys.utils.BunnyLog;
 import org.bunnys.utils.ErrorReporter;
 import org.bunnys.utils.SystemEmbeds;
@@ -9,16 +10,19 @@ import org.bunnys.utils.SystemEmbeds;
 import java.util.Map;
 
 import java.util.concurrent.RejectedExecutionException;
+import java.util.Locale;
+import org.bunnys.handler.router.ComponentLoader;
 
-@SuppressWarnings("unused")
 public class ModalRouter {
     // Complete immutable table, replaced only after successful discovery.
     private static volatile Map<String, BunnyModal> MODALS = Map.of();
 
     private ModalRouter() {}
 
-    public static void loadModals(String packageName) {
-        MODALS = org.bunnys.handler.router.ComponentLoader.load(packageName, BunnyModal.class, handler -> handler.getPrefix().toLowerCase(java.util.Locale.ROOT));
+    public static void loadModals(String packageName) { loadModals(ClassScanner.of(packageName), packageName); }
+
+    public static void loadModals(ClassScanner scanner, String packageName) {
+        MODALS = ComponentLoader.load(scanner, packageName, BunnyModal.class, handler -> handler.getPrefix().toLowerCase(Locale.ROOT));
         BunnyLog.info("Loaded " + MODALS.size() + " BunnyModal handlers.");
     }
 
@@ -32,7 +36,7 @@ public class ModalRouter {
 
         try {
             String[] args = event.getModalId().split(":", -1);
-            String targetModal = args[0].toLowerCase(java.util.Locale.ROOT);
+            String targetModal = args[0].toLowerCase(Locale.ROOT);
             BunnyModal modal = MODALS.get(targetModal);
 
             if (modal != null) {

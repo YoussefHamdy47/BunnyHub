@@ -2,6 +2,7 @@ package org.bunnys.handler.router.buttons;
 
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import org.bunnys.handler.BunnyHub;
+import org.bunnys.handler.ClassScanner;
 import org.bunnys.handler.router.ComponentCooldowns;
 import org.bunnys.utils.BunnyLog;
 import org.bunnys.utils.ErrorReporter;
@@ -10,6 +11,8 @@ import org.bunnys.utils.SystemEmbeds;
 import java.util.Map;
 
 import java.util.concurrent.RejectedExecutionException;
+import org.bunnys.handler.CooldownStore;
+import org.bunnys.handler.router.ComponentLoader;
 
 /**
  * Routes button clicks to their handler, and enforces whatever cooldown that handler declares.
@@ -32,8 +35,10 @@ public final class ButtonRouter {
 
     private ButtonRouter() {}
 
-    public static void loadButtons(String packageName) {
-        HANDLERS = org.bunnys.handler.router.ComponentLoader.load(packageName, BunnyButton.class, handler -> handler.getPrefix());
+    public static void loadButtons(String packageName) { loadButtons(ClassScanner.of(packageName), packageName); }
+
+    public static void loadButtons(ClassScanner scanner, String packageName) {
+        HANDLERS = ComponentLoader.load(scanner, packageName, BunnyButton.class, BunnyButton::getPrefix);
         BunnyLog.info("Loaded " + HANDLERS.size() + " BunnyButton handlers.");
     }
 
@@ -71,7 +76,7 @@ public final class ButtonRouter {
         else dispatch(client, event, handler, parts, reservation);
     }
 
-    private static void dispatch(BunnyHub client, ButtonInteractionEvent event, BunnyButton handler, String[] parts, org.bunnys.handler.CooldownStore.Reservation reservation) {
+    private static void dispatch(BunnyHub client, ButtonInteractionEvent event, BunnyButton handler, String[] parts, CooldownStore.Reservation reservation) {
         String componentId = event.getComponentId();
         try {
             client.executeForUser(event.getUser().getId(), () -> {

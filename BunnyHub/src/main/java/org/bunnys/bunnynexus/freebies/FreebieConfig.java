@@ -9,22 +9,40 @@ import java.util.function.Function;
  * from Discord, so a server admin (or a compromised command) cannot redirect reviews or approve alerts.
  *
  * <ul>
- *   <li>FREEBIE_REVIEW_CHANNEL_ID - private channel where discovered games wait for approval (required)</li>
+ *   <li>FREEBIE_REVIEW_CHANNEL_ID - private channel where discovered games wait for approval (required);
+ *       major PC launchers are reviewed here with an owner ping</li>
+ *   <li>FREEBIE_OTHER_REVIEW_CHANNEL_ID - optional private channel for the other sections (indie PC, console,
+ *       mobile), reviewed without a ping; defaults to the main review channel</li>
  *   <li>FREEBIE_OWNER_IDS - comma-separated user IDs allowed to approve/reject/stop (required)</li>
  *   <li>FREEBIE_POLL_MINUTES - GamerPower poll interval, 5-120, default 10</li>
  *   <li>FREEBIE_ENABLED - set to false to keep the whole system off without removing the other keys</li>
  * </ul>
  */
-public record FreebieConfig(String reviewChannelId, Set<String> ownerIds, int pollMinutes) {
+public record FreebieConfig(String reviewChannelId, String otherReviewChannelId, Set<String> ownerIds, int pollMinutes) {
     public FreebieConfig {
         reviewChannelId = snowflake(reviewChannelId);
+        otherReviewChannelId = snowflake(otherReviewChannelId);
         ownerIds = Set.copyOf(ownerIds);
         if (ownerIds.isEmpty()) throw new IllegalArgumentException("At least one freebie owner ID is required.");
         ownerIds.forEach(FreebieConfig::snowflake);
         if (pollMinutes < 5 || pollMinutes > 120) throw new IllegalArgumentException("Poll interval must be 5-120 minutes.");
     }
 
+    /** Every section reviewed in one channel. */
+    public FreebieConfig(String reviewChannelId, Set<String> ownerIds, int pollMinutes) {
+        this(reviewChannelId, reviewChannelId, ownerIds, pollMinutes);
+    }
+
     public boolean isOwner(String userId) { return ownerIds.contains(userId); }
+
+    /** Where a giveaway for {@code store} is reviewed. */
+    public String reviewChannelFor(FreebieStore store) {
+        return store.section().priority() ? reviewChannelId : otherReviewChannelId;
+    }
+
+    public boolean isReviewChannel(String channelId) {
+        return reviewChannelId.equals(channelId) || otherReviewChannelId.equals(channelId);
+    }
 
     /** Empty when the system is disabled or not configured; the reason is written to {@code problems}. */
     public static Optional<FreebieConfig> load(Function<String, String> env, List<String> problems) {
@@ -42,7 +60,9 @@ public record FreebieConfig(String reviewChannelId, Set<String> ownerIds, int po
             for (String part : owners.split(",")) if (!part.isBlank()) ids.add(part.strip());
             String minutes = env.apply("FREEBIE_POLL_MINUTES");
             int poll = minutes == null || minutes.isBlank() ? 10 : Integer.parseInt(minutes.strip());
-            return Optional.of(new FreebieConfig(channel.strip(), ids, poll));
+            String other = env.apply("FREEBIE_OTHER_REVIEW_CHANNEL_ID");
+            String otherChannel = other == null || other.isBlank() ? channel.strip() : other.strip();
+            return Optional.of(new FreebieConfig(channel.strip(), otherChannel, ids, poll));
         } catch (IllegalArgumentException invalid) {
             problems.add("invalid freebie settings: " + invalid.getMessage());
             return Optional.empty();

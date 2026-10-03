@@ -5,20 +5,23 @@ import org.bunnys.handler.utils.InteractionErrors.StateFailure;
 
 import com.mongodb.client.model.Filters;
 import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
-import org.bunnys.database.models.timers.Account;
 import org.bunnys.database.models.timers.Semester;
+import org.bunnys.database.models.timers.Subject;
 import org.bunnys.database.models.timers.TimerData;
 import org.bunnys.database.models.user.BunnyUser;
 import org.bunnys.handler.database.DB;
 import org.bunnys.bunnynexus.events.custom.AccountLevelUpEvent;
 import org.bunnys.bunnynexus.events.custom.RecordBrokenEvent;
 import org.bunnys.bunnynexus.timers.engine.LevelEngine;
-import org.bunnys.utils.Utils;
+import org.bunnys.utils.Durations;
+import java.util.Comparator;
+import java.util.Objects;
 
-public class TimerAccountService {
+public final class TimerAccountService {
+    private TimerAccountService() {}
 
     public static void registerAccount(String userId) {
-        DB.ensureAccount(userId);
+        TimerStore.ensureAccount(userId);
     }
 
     public static void registerSemester(String userId, String semesterName) {
@@ -49,7 +52,7 @@ public class TimerAccountService {
                 || timerData.getCurrentSemester().getSemesterName() == null)
             throw new StateFailure("No active semester found to end.");
 
-        if (!java.util.Objects.equals(confirmedRevision, timerData.getRevision()))
+        if (!Objects.equals(confirmedRevision, timerData.getRevision()))
             throw new StateFailure("Your semester changed during confirmation. Please try again.");
 
         if (userData == null)
@@ -67,15 +70,9 @@ public class TimerAccountService {
         long convertedXP = LevelEngine.convertSeasonLevel(currentSemester.getSemesterLevel())
                 + (long) currentSemester.getSemesterXP();
 
-        String totalTimeStr = currentSemester.getSemesterTime() > 0
-                ? Utils.msToTime((long) (currentSemester.getSemesterTime() * 1000)).orElse("0s")
-                : "0s";
-        String longestSessionStr = currentSemester.getLongestSession() > 0
-                ? Utils.msToTime((long) (currentSemester.getLongestSession() * 1000)).orElse("0s")
-                : "0s";
-        String totalBreakTimeStr = currentSemester.getTotalBreakTime() > 0
-                ? Utils.msToTime((long) (currentSemester.getTotalBreakTime() * 1000)).orElse("0s")
-                : "0s";
+        String totalTimeStr = Durations.formatSeconds(currentSemester.getSemesterTime());
+        String longestSessionStr = Durations.formatSeconds(currentSemester.getLongestSession());
+        String totalBreakTimeStr = Durations.formatSeconds(currentSemester.getTotalBreakTime());
 
         long semesterXP = (long) currentSemester.getSemesterXP();
         long totalSemesterXP = LevelEngine.calculateTotalSeasonXP(currentSemester.getSemesterLevel()) + semesterXP;
@@ -90,14 +87,13 @@ public class TimerAccountService {
                 .append("**• Account XP Converted:** ").append(String.format("%,d", convertedXP));
         int sessionCount = currentSemester.getSessionStartTimes().size();
         if (sessionCount > 0)
-            recap.append("\n**• Average Session:** ").append(Utils.msToTime(
-                    (long) (currentSemester.getSemesterTime() * 1000 / sessionCount)).orElse("0s"));
+            recap.append("\n**• Average Session:** ").append(Durations.formatSeconds(currentSemester.getSemesterTime() / sessionCount));
         recap.append("\n**• Subjects Tracked:** ").append(currentSemester.getSemesterSubjects().size());
         currentSemester.getSemesterSubjects().stream()
                 .filter(subject -> subject.getTotalStudyTime() != null && subject.getTotalStudyTime() > 0)
-                .max(java.util.Comparator.comparingDouble(org.bunnys.database.models.timers.Subject::getTotalStudyTime))
+                .max(Comparator.comparingDouble(Subject::getTotalStudyTime))
                 .ifPresent(subject -> recap.append("\n**• Top Subject:** ").append(subject.getSubjectCode())
-                        .append(" — ").append(Utils.msToTime((long) (subject.getTotalStudyTime() * 1000)).orElse("0s")));
+                        .append(" — ").append(Durations.formatSeconds(subject.getTotalStudyTime())));
         LevelEngine.RankResult rankCheck = LevelEngine.checkRank(userData.getRank(), userData.getRp(), convertedXP);
         if (rankCheck.hasRankedUp()) {
             userData.setRank(userData.getRank() + rankCheck.addedLevels());
@@ -109,7 +105,7 @@ public class TimerAccountService {
 
         timerData.setCurrentSemester(new Semester());
 
-        DB.saveProgress(userId, userData, timerData, currentSemester);
+        TimerStore.saveProgress(userId, userData, timerData, currentSemester);
         PendingSessionManager.cancelPendingSession(userId);
         if (brokeRecord)
             interaction.getJDA().getEventManager().handle(new RecordBrokenEvent(

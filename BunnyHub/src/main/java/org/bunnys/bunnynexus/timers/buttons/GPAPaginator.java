@@ -4,13 +4,15 @@ import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.components.buttons.Button;
-import org.bunnys.utils.AppDesign;
+import org.bunnys.utils.Replies;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import org.bunnys.handler.utils.InteractionErrors;
 
 public final class GPAPaginator {
 
@@ -61,10 +63,10 @@ public final class GPAPaginator {
     public static synchronized String createSession(String userId, List<MessageEmbed> pages) {
         if (pages.isEmpty()) throw new IllegalArgumentException("At least one GPA page is required.");
         if (pages.size() > MAX_PAGES)
-            throw new org.bunnys.handler.utils.InteractionErrors.StateFailure("This academic record is too large to open.");
+            throw new InteractionErrors.StateFailure("This academic record is too large to open.");
         if (SCHEDULER.isShutdown() || SESSIONS.size() >= MAX_SESSIONS
                 || SESSIONS.values().stream().filter(s -> s.userId.equals(userId)).count() >= MAX_SESSIONS_PER_USER)
-            throw new org.bunnys.handler.utils.InteractionErrors.StateFailure("Please close an existing GPA menu or try again shortly.");
+            throw new InteractionErrors.StateFailure("Please close an existing GPA menu or try again shortly.");
         String sessionId = UUID.randomUUID().toString();
         var session = new SessionState(sessionId, userId, List.copyOf(pages));
         SESSIONS.put(sessionId, session);
@@ -113,16 +115,13 @@ public final class GPAPaginator {
         }
 
         if (!event.getUser().getId().equals(session.userId)) {
-            event.reply(
-                    "> " + AppDesign.Emojis.ERROR + " **Access Denied:** This academic record belongs to someone else.")
-                    .setEphemeral(true).queue();
+            Replies.error(event, "Access denied", "This academic record belongs to someone else.");
             return;
         }
 
         MenuAction action = MenuAction.fromString(actionId);
         if (action == null) {
-            event.reply("> " + AppDesign.Emojis.ERROR + " **Error:** Unknown menu action.")
-                    .setEphemeral(true).queue();
+            Replies.error(event, "Unknown action", "Reopen the menu with `/timer gpa`.");
             return;
         }
 
@@ -143,7 +142,7 @@ public final class GPAPaginator {
 
         session.resetTimeout();
         event.editMessageEmbeds(session.getCurrentEmbed())
-                .setComponents(net.dv8tion.jda.api.components.actionrow.ActionRow.of(buildButtons(sessionId, session.currentPage, session.pages.size())))
+                .setComponents(ActionRow.of(buildButtons(sessionId, session.currentPage, session.pages.size())))
                 .queue();
     }
 

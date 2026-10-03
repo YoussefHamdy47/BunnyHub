@@ -13,6 +13,15 @@ import org.bunnys.handler.utils.TokenLoader;
 import org.bunnys.utils.BunnyLog;
 
 import java.util.Scanner;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.utils.messages.MessageRequest;
+import org.bunnys.handler.router.selects.SelectRouter;
 
 public class BunnyHub implements AutoCloseable {
     private volatile JDA jda;
@@ -24,6 +33,8 @@ public class BunnyHub implements AutoCloseable {
     private final InteractionExecutor interactionExecutor;
     private final InteractionExecutor autocompleteExecutor;
     private Thread shutdownHook;
+    private final BunnyServices services = new BunnyServices();
+    private ClassScanner scanner;
 
     BunnyHub(BunnyHubConfig config) {
         this.config = config;
@@ -52,12 +63,25 @@ public class BunnyHub implements AutoCloseable {
         if (config.getTestServerIds().isEmpty())
             BunnyLog.warning("No Test Server IDs provided.");
 
+        // One classpath scan serves every loader; it is released once login has used it.
+        scanner = new ClassScanner(Arrays.asList(config.getCommandPackage(), config.getEventPackage(),
+                config.getButtonPackage(), config.getModalPackage(), config.getSelectPackage(), config.getServicePackage()));
         registerShutdownHook();
+        // Discover before login so a broken service class fails startup instead of half-starting the bot.
+        List<BunnyService> discovered;
+        try {
+            discovered = config.getServicePackage() == null ? List.of()
+                    : BunnyServices.discover(scanner, config.getServicePackage());
+        } catch (RuntimeException failure) {
+            performShutdown(false);
+            throw failure;
+        }
 
         if (config.isAutoLogin()) {
             login();
             startConsoleListener();
         }
+        services.start(this, discovered);
     }
 
     public synchronized void login() {
@@ -67,28 +91,23 @@ public class BunnyHub implements AutoCloseable {
 
         try {
             String token = TokenLoader.getToken(config.getTokenKey());
-            net.dv8tion.jda.api.utils.messages.MessageRequest.setDefaultMentions(
-                    java.util.EnumSet.of(net.dv8tion.jda.api.entities.Message.MentionType.USER));
+            MessageRequest.setDefaultMentions(
+                    EnumSet.of(Message.MentionType.USER));
             JDABuilder jdaBuilder = JDABuilder.createLight(token, config.getIntents());
 
             if (config.getButtonPackage() != null)
-                ButtonRouter.loadButtons(config.getButtonPackage());
-
+                ButtonRouter.loadButtons(scanner, config.getButtonPackage());
             if (config.getSelectPackage() != null)
-                org.bunnys.handler.router.selects.SelectRouter.loadSelects(config.getSelectPackage());
-
+                SelectRouter.loadSelects(scanner, config.getSelectPackage());
             if (config.getModalPackage() != null)
-                ModalRouter.loadModals(config.getModalPackage());
-
+                ModalRouter.loadModals(scanner, config.getModalPackage());
             if (config.getEventPackage() != null)
-                EventLoader.loadEvents(this, jdaBuilder, config.getEventPackage());
-
-            if (config.getCommandPackage() != null) {
-                CommandLoader.loadCommands(this, this.commandRegistry, config.getCommandPackage());
-
-            }
+                EventLoader.loadEvents(this, jdaBuilder, scanner, config.getEventPackage());
+            if (config.getCommandPackage() != null)
+                CommandLoader.loadCommands(this, this.commandRegistry, scanner, config.getCommandPackage());
 
             this.jda = jdaBuilder.build();
+            scanner = null;
 
         } catch (Exception e) {
             performShutdown(false);
@@ -118,17 +137,18 @@ public class BunnyHub implements AutoCloseable {
         interactionExecutor.shutdown();
         new ShutdownAction("autocomplete workers", autocompleteExecutor::close).run();
         new ShutdownAction("command workers", interactionExecutor::close).run();
+        services.stopAll();
         for (ShutdownAction action : config.getShutdownActions()) action.run();
         new ShutdownAction("command registry", commandRegistry::clearCommands).run();
         ButtonRouter.clear();
         ModalRouter.clear();
-        org.bunnys.handler.router.selects.SelectRouter.clear();
+        SelectRouter.clear();
         new ShutdownAction("event listeners", () -> EventLoader.clearEvents(jda)).run();
         new ShutdownAction("Discord connection", () -> {
             if (jda == null) return;
             if (emergency) jda.shutdownNow(); else jda.shutdown();
             try {
-                if (!jda.awaitShutdown(java.time.Duration.ofSeconds(10))) jda.shutdownNow();
+                if (!jda.awaitShutdown(Duration.ofSeconds(10))) jda.shutdownNow();
             } catch (InterruptedException error) {
                 jda.shutdownNow();
                 Thread.currentThread().interrupt();
@@ -148,7 +168,7 @@ public class BunnyHub implements AutoCloseable {
         Thread consoleThread = new Thread(() -> {
             try (Scanner scanner = new Scanner(System.in)) {
                 while (isRunning && scanner.hasNextLine()) {
-                    String line = scanner.nextLine().trim().toLowerCase(java.util.Locale.ROOT);
+                    String line = scanner.nextLine().trim().toLowerCase(Locale.ROOT);
                     if (line.equals("stop") || line.equals("exit")) shutdown();
                 }
             }
@@ -183,7 +203,7 @@ public class BunnyHub implements AutoCloseable {
         return "4.0.0";
     }
 
-    public java.util.concurrent.ExecutorService getCommandExecutor() {
+    public ExecutorService getCommandExecutor() {
         return interactionExecutor.executor();
     }
 

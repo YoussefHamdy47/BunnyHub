@@ -16,6 +16,7 @@ public class Session {
     private String lastSessionTopic = null;
     private Date lastSessionDate = null;
     private List<String> subjectsStudied = new ArrayList<>();
+    private List<Double> studyStretches = new ArrayList<>();
 
     public Session() {
     }
@@ -107,5 +108,17 @@ public class Session {
 
     public void setSubjectsStudied(List<String> subjectsStudied) {
         this.subjectsStudied = subjectsStudied == null ? new ArrayList<>() : subjectsStudied;
+    }
+
+    /**
+     * Study time of each unbroken stretch that ended at a break of at least 15 minutes, in seconds. The stretch
+     * still running is not listed; it is whatever study time the list does not cover yet.
+     */
+    public List<Double> getStudyStretches() {
+        return studyStretches;
+    }
+
+    public void setStudyStretches(List<Double> studyStretches) {
+        this.studyStretches = studyStretches == null ? new ArrayList<>() : studyStretches;
     }
 }

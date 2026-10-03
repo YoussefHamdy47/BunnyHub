@@ -1,21 +1,9 @@
 # BunnyHub
 
-Context refresh — 2026-09-19: AUD-04 continued the audit with transport guards, safer exception diagnostics and bounded autocomplete formatting; 232 tests and packaged smoke passed. Read [current status](docs/PROJECT_STATUS.md), [progress report](docs/PROGRESS_REPORT.md) and [audit report](docs/AUDIT_REPORT.md). Phase 8 commands remain next; phase 6 remains deferred and required before activation. Earlier measurements below are historical.
+Java 21 Discord bot for study sessions, semesters, academic records and GPA tracking, plus owner-reviewed free-game alerts for servers.
 
-## BunnyHub handler 2.0.0
-
-The handler now has immutable startup settings and route snapshots, duplicate-route validation, ownership-safe monotonic cooldowns, shared component discovery, explicit stale-control replies, and configurable shutdown hooks. Bot version and artifact naming remain unchanged. See [the 2.0 migration notes](docs/BUNNYHUB_2.md) for API changes and limitations.
-
-
-Java 21 Discord bot for study sessions, semesters, academic records, and GPA tracking.
-
-The planned main product is automatic free-game alerts for approximately **1,000 Discord servers** at launch. Servers will choose stores (Epic Games, Steam, GOG, etc.), destination channels and roles. The engine, Mongo adapters, configuration backend, and ownership/scheduling foundation are implemented and locally tested, but inactive. **Next is phase 8: server setup commands**, with the current source audit recorded in the reports above. Review the new command integration again after that stage. Real database integration tests (phase 6) are deferred, not waived. Start with [current project status](docs/PROJECT_STATUS.md) and [the implementation checklist](docs/IMPLEMENTATION_TODO.md).
-
-## System design
-
-The [system architecture blueprint](docs/SYSTEM_ARCHITECTURE.md) defines module boundaries, identity, durability, security, capacity and recovery. Implemented backend foundations are documented separately; discovery, real transport and operational release work remain pending. No alert feature has been activated.
-
-Source/API research, optional deals digests, and manual-send workflows are in [the discovery and publishing design](docs/ALERT_SOURCES_AND_FEATURES.md).
+- **Free-game alerts** (`/freebie`, `/free-games`, `/freebie-admin`) are live: GamerPower discovery, owner review in a private channel, durable per-channel delivery with retries.
+- **Handler 2.0**: commands, routers, cooldowns and bounded executors.
 
 ## Build and run
 
@@ -44,7 +32,7 @@ Try `@BunnyNexus avatar`, `@BunnyNexus av`, or `@BunnyNexus pfp show_both:true s
 
 Buttons, modals, and string selects use the newer routers. Button/select handlers can declare their own cooldowns. Session buttons and semester submissions declare that they need an edit acknowledgement before work is scheduled; buttons opening modals do not defer. Timer and avatar slash commands acknowledge before entering the worker queue. Autocomplete retains the existing null, length, duplicate, and 25-choice safeguards.
 
-The worker pool is configurable through `setCommandPool(workers, queueCapacity)` (24 workers plus 100 additional admission slots in `Main`, at most 124 unfinished tasks). Per-user FIFO queues preserve timer safety without occupying workers waiting on user locks. Ready users take turns, and idle queues are removed. Autocomplete uses a separate bounded pool configured with `setAutocompletePool` (default 4 workers plus 32 slots). Workload snapshots expose activity, queue age, rejection, and completion metrics. See the backend review for the limits of this isolation.
+The worker pool is configurable through `setCommandPool(workers, queueCapacity)` (24 workers plus 100 additional admission slots in `Main`, at most 124 unfinished tasks). Per-user FIFO queues preserve timer safety without occupying workers waiting on user locks. Ready users take turns, and idle queues are removed. Autocomplete uses a separate bounded pool configured with `setAutocompletePool` (default 4 workers plus 32 slots). Workload snapshots expose activity, queue age, rejection, and completion metrics.
 
 Mongo's pool size includes command and autocomplete workers plus eight connections per server. `setDatabaseTimeout(Duration)` sets a finite driver operation budget (default 10 seconds), with bounded connection, selection, and checkout waits. These explicit budgets override corresponding URI timeouts; deployments with long-running index builds or higher latency should review the settings. `setDatabaseName` and `setMongoUriKey` preserve this deployment's existing `GBF` database and `MongoURI` key.
 
@@ -93,11 +81,12 @@ Use `/timer update-subject destination:ACCOUNT code:CS-101 grade:A credits:4` to
 `/avatar` supports `user`, `priority`, `show_both`, `size`, and `ephemeral`. Resolution defaults to 2048 and can be selected up to 4096. Both avatars are displayed at full size when requested, in the selected priority order. Download buttons provide animated originals (when present) and PNG images. Server-avatar requests fall back explicitly to the global avatar in DMs or when no server avatar is available. A missing member in the interaction payload is retrieved asynchronously after acknowledgment.
 
 - `handler`: application lifecycle, bounded background interaction execution, command discovery/routing, and persistence.
-- `commands`: thin registration classes for `Avatar`, `Timer`, and `Info`. They declare options and connect named implementation classes; Avatar registers both slash and USER command definitions.
+- `commands`: thin registration classes for `Avatar`, `Help`, `Timer`, `Info` and (in `commands/freebies`) `Freebie`, `FreebieAdmin` and `FreeGames`. They declare options and connect named implementation classes; Avatar registers both slash and USER command definitions.
 - `bunnynexus/commands/info`: `AvatarCommand`, `UserInfo`, and `ServerInfo` implementations.
-- `bunnynexus/commands/timer`: one named class per timer action: `Stats`, `Register`, `Gpa`, `AddSubject`, `RemoveSubject`, `UpdateSubject`, `Start`, `SwitchSubject`, and `EndSemester`.
+- `bunnynexus/commands/timer`: one named class per timer action (`Stats`, `Register`, `Gpa`, `AddSubject`, `RemoveSubject`, `UpdateSubject`, `Start`, `SwitchSubject`, `EndSession`, `EndSemester`), sharing `TimerSubcommand` for error handling.
+- `bunnynexus/freebies`: the free-game pipeline; `bunnynexus/help` and `bunnynexus/info`: help menu and info cards.
 - `buttons`, `modals`: Discord component entry points. Timer commands defer their responses before database work; session buttons and semester submissions defer edits.
-- `bunnynexus/timers/services`: timer, subject, and semester mutations. `Timers` builds the Discord presentation. The former `nexus` package was renamed to `bunnynexus`; database model packages and stored documents are unchanged.
+- `bunnynexus/timers/services`: timer, subject, and semester mutations (`TimerStore` holds the multi-document transactions; `SessionClock` computes live session timings). `Timers`, `TimerEmbeds` and `SessionEmbeds` build the Discord presentation. The former `nexus` package was renamed to `bunnynexus`; database model packages and stored documents are unchanged.
 - `database/models`: existing MongoDB documents and their optional revision fields.
 - `src/test`: regression tests for progression, legacy BSON decoding, persistence calls, JDA payloads, concurrent work, and menu ownership.
 
@@ -111,6 +100,4 @@ Pending sessions and GPA menus remain in memory and expire automatically. Pendin
 
 ## Validation limits
 
-Automated tests do not log in to Discord or connect to a real MongoDB database. They exercise actual JDA serialization and BSON codecs, plus mocked database/interaction boundaries. A deployment smoke test should cover registering, starting, pausing, resuming, switching courses, stopping, and archiving on the intended Discord server and MongoDB cluster.
-
-The source directory supplied for this update has no Git metadata. No commit or deployment was made.
+Automated tests do not log in to Discord. The default suite uses mocked database boundaries; `FreebieRepositoryIT` runs against a real, test-owned three-node MongoDB when given `-Dtest=FreebieRepositoryIT -Dbunny.test.mongod=<mongod executable>`. They exercise actual JDA serialization and BSON codecs, plus mocked database/interaction boundaries. A deployment smoke test should cover registering, starting, pausing, resuming, switching courses, stopping, and archiving on the intended Discord server and MongoDB cluster.

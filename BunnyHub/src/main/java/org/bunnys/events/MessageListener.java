@@ -11,14 +11,19 @@ import org.bunnys.handler.commands.CommandRegistry;
 import org.bunnys.handler.commands.context.MentionContext;
 import org.bunnys.handler.events.BunnyEvent;
 import org.bunnys.utils.BunnyLog;
+import org.bunnys.utils.Embeds;
 import org.bunnys.utils.ErrorReporter;
 import org.bunnys.utils.SystemEmbeds;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Locale;
+import net.dv8tion.jda.api.entities.Message;
+import org.bunnys.handler.CooldownStore;
 
 /**
  * The mention entry point: {@code @BotName command [subcommand] [args]}.
@@ -33,6 +38,7 @@ import java.util.regex.Pattern;
  * cannot be ephemeral, and modals cannot be opened at all - both handled explicitly
  * rather than silently.
  */
+@SuppressWarnings("unused") // Discovered reflectively by EventLoader.
 public class MessageListener extends BunnyEvent {
 
     /**
@@ -49,12 +55,18 @@ public class MessageListener extends BunnyEvent {
      * notices, option errors and denials. Without it, repeated pings make the bot post one
      * reply per message, which is an easy way to spam a channel through the bot.
      */
-    private static final org.bunnys.handler.CooldownStore NOTICES =
-            new org.bunnys.handler.CooldownStore("mention.notices", 20_000);
+    private static final CooldownStore NOTICES =
+            new CooldownStore("mention.notices", 20_000);
     static final long NOTICE_COOLDOWN_MILLIS = 5_000;
 
     static boolean mayNotify(String userId) {
         return NOTICES.reserve(userId, NOTICE_COOLDOWN_MILLIS).remainingMillis() == 0;
+    }
+
+    static {
+        // Reading content without MESSAGE_CONTENT is intentional: Discord still delivers it
+        // for messages that mention the bot, which is all this listener serves.
+        Message.suppressContentIntentWarning();
     }
 
     public MessageListener(BunnyHub client) {
@@ -86,14 +98,14 @@ public class MessageListener extends BunnyEvent {
         if (remainder.isEmpty()) {
             if (!mayNotify(event.getAuthor().getId())) return;
             event.getMessage().replyEmbeds(SystemEmbeds.notice("Hey there",
-                            "Use `/timer` to study, or `@" + event.getJDA().getSelfUser().getName()
-                                    + " avatar`, to view an avatar."))
+                            "Run `/help` or `@" + event.getJDA().getSelfUser().getName()
+                                    + " help` to see everything I can do."))
                     .mentionRepliedUser(false).queue(null, e -> {});
             return;
         }
 
         String[] parts = remainder.split("\\s+", 2);
-        String commandName = parts[0].toLowerCase(java.util.Locale.ROOT);
+        String commandName = parts[0].toLowerCase(Locale.ROOT);
         String tail = parts.length > 1 ? parts[1] : "";
 
         CommandRegistry registry = client.getCommandRegistry();
@@ -112,7 +124,7 @@ public class MessageListener extends BunnyEvent {
 
         if (command.hasBranches()) {
             String[] first = tail.split("\\s+", 2);
-            String branch = first[0].toLowerCase(java.util.Locale.ROOT);
+            String branch = first[0].toLowerCase(Locale.ROOT);
             tail = first.length > 1 ? first[1] : "";
 
             // Groups first: `/admin logging set` needs two tokens consumed, a plain
@@ -121,7 +133,7 @@ public class MessageListener extends BunnyEvent {
 
             if (group != null) {
                 String[] second = tail.split("\\s+", 2);
-                String action = second[0].toLowerCase(java.util.Locale.ROOT);
+                String action = second[0].toLowerCase(Locale.ROOT);
                 tail = second.length > 1 ? second[1] : "";
 
                 subcommand = group.resolve(action);
@@ -206,9 +218,11 @@ public class MessageListener extends BunnyEvent {
         }
     }
 
+    /** Guidance for a mistyped mention command; a channel message cannot be ephemeral, so it removes itself. */
     private static void replyEmbed(MessageReceivedEvent event, MessageEmbed embed) {
         if (!mayNotify(event.getAuthor().getId())) return;
-        event.getMessage().replyEmbeds(embed).mentionRepliedUser(false).queue(null, e -> {});
+        event.getMessage().replyEmbeds(embed).mentionRepliedUser(false).queue(
+                sent -> sent.delete().queueAfter(Embeds.ERROR_SECONDS, TimeUnit.SECONDS, null, ignored -> {}), e -> {});
     }
 
     /** Lists what can follow a partial command path, with a worked example. */

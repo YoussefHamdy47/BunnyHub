@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.timers.services;
 
+import org.bunnys.bunnynexus.timers.SessionEmbeds;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.hooks.IEventManager;
 import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
@@ -11,6 +12,9 @@ import org.junit.jupiter.api.Test;
 import java.util.Date;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import org.bunnys.bunnynexus.events.custom.RecordBrokenEvent;
+import org.bunnys.bunnynexus.timers.engine.LevelEngine;
+import org.bunnys.handler.utils.InteractionErrors;
 
 class TimerPersistenceTest {
     private TimerData timer() {
@@ -37,10 +41,10 @@ class TimerPersistenceTest {
         var events = mock(IEventManager.class);
         when(interaction.getJDA()).thenReturn(jda);
         when(jda.getEventManager()).thenReturn(events);
-        try (var db = mockStatic(DB.class)) {
+        try (var db = mockStatic(DB.class); var store = mockStatic(TimerStore.class)) {
             db.when(() -> DB.findOne(eq(TimerData.class), eq("TimerData"), any(Bson.class))).thenReturn(timer);
             db.when(() -> DB.findOne(eq(BunnyUser.class), eq("BunnyUsers"), any(Bson.class))).thenReturn(user);
-            db.when(() -> DB.saveProgress("123", user, timer, archive)).thenAnswer(invocation -> {
+            store.when(() -> TimerStore.saveProgress("123", user, timer, archive)).thenAnswer(invocation -> {
                 verifyNoInteractions(events);
                 return null;
             });
@@ -48,7 +52,7 @@ class TimerPersistenceTest {
             assertEquals(7200, timer.getAccount().getLifetimeTime());
             assertSame(archive, timer.getAccount().getLongestSemester());
             assertNull(timer.getCurrentSemester().getSemesterName());
-            db.verify(() -> DB.saveProgress("123", user, timer, archive));
+            store.verify(() -> TimerStore.saveProgress("123", user, timer, archive));
             verify(events, atLeastOnce()).handle(any());
         }
     }
@@ -70,13 +74,13 @@ class TimerPersistenceTest {
         var semester = timer.getCurrentSemester();
         var user = new BunnyUser();
         var interaction = mock(IReplyCallback.class);
-        try (var db = mockStatic(DB.class)) {
+        try (var db = mockStatic(DB.class); var store = mockStatic(TimerStore.class)) {
             db.when(() -> DB.findOne(eq(TimerData.class), eq("TimerData"), any(Bson.class))).thenReturn(timer);
             db.when(() -> DB.findOne(eq(BunnyUser.class), eq("BunnyUsers"), any(Bson.class))).thenReturn(user);
-            assertThrows(org.bunnys.handler.utils.InteractionErrors.StateFailure.class,
+            assertThrows(InteractionErrors.StateFailure.class,
                     () -> TimerAccountService.endSemester("123", interaction, 1L));
             assertSame(semester, timer.getCurrentSemester());
-            db.verify(() -> DB.saveProgress(anyString(), any(BunnyUser.class), any(TimerData.class), any(Semester.class)), never());
+            store.verify(() -> TimerStore.saveProgress(anyString(), any(BunnyUser.class), any(TimerData.class), any(Semester.class)), never());
             verifyNoInteractions(interaction);
         }
     }
@@ -104,14 +108,14 @@ class TimerPersistenceTest {
         timer.getSessionData().getSessionBreaks().setSessionBreakTime(60);
         BunnyUser user = new BunnyUser();
         IReplyCallback interaction = mock(IReplyCallback.class, RETURNS_DEEP_STUBS);
-        try (var db = mockStatic(DB.class)) {
+        try (var db = mockStatic(DB.class); var store = mockStatic(TimerStore.class)) {
             db.when(() -> DB.findOne(eq(TimerData.class), eq("TimerData"), any(Bson.class))).thenReturn(timer);
             db.when(() -> DB.findOne(eq(BunnyUser.class), eq("BunnyUsers"), any(Bson.class))).thenReturn(user);
             TimerSessionService.stopSession("123", interaction);
             assertEquals(240, timer.getCurrentSemester().getSemesterSubjects().getFirst().getTotalStudyTime(), 2);
             assertEquals(7740, timer.getAccount().getLifetimeTime(), 2);
             assertNull(timer.getSessionData().getSessionStartTime());
-            db.verify(() -> DB.saveProgress("123", user, timer));
+            store.verify(() -> TimerStore.saveProgress("123", user, timer));
         }
     }
 
@@ -153,12 +157,9 @@ class TimerPersistenceTest {
         timer.getSessionData().setSessionStartTime(new Date(System.currentTimeMillis() - 600_000));
         timer.getSessionData().setSessionTopic("CS-101");
         timer.getSessionData().getSessionBreaks().setSessionBreakStart(new Date(System.currentTimeMillis() + 600_000));
-        try (var db = mockStatic(DB.class)) {
-            db.when(() -> DB.findOne(eq(TimerData.class), eq("TimerData"), any(Bson.class))).thenReturn(timer);
-            String description = TimerSessionService.getTelemetryEmbed("123").getDescription();
-            assertTrue(description.contains("Currently on a break"));
-            assertFalse(description.contains("Telemetry feed active and recording"));
-        }
+        String description = SessionEmbeds.telemetry(timer.getSessionData(), System.currentTimeMillis()).getDescription();
+        assertTrue(description.contains("Currently on a break"));
+        assertFalse(description.contains("Telemetry feed active and recording"));
     }
 
     @Test void switchingAfterClockRollbackPreservesAlreadyAllocatedTime() {
@@ -189,14 +190,14 @@ class TimerPersistenceTest {
         timer.getSessionData().setSessionTime(600);
         var user = new BunnyUser();
         var interaction = mock(IReplyCallback.class, RETURNS_DEEP_STUBS);
-        try (var db = mockStatic(DB.class)) {
+        try (var db = mockStatic(DB.class); var store = mockStatic(TimerStore.class)) {
             db.when(() -> DB.findOne(eq(TimerData.class), eq("TimerData"), any(Bson.class))).thenReturn(timer);
             db.when(() -> DB.findOne(eq(BunnyUser.class), eq("BunnyUsers"), any(Bson.class))).thenReturn(user);
             TimerSessionService.stopSession("123", interaction);
             assertEquals(600, timer.getCurrentSemester().getSemesterSubjects().getFirst().getTotalStudyTime());
             assertEquals(4200, timer.getCurrentSemester().getSemesterTime());
             assertEquals(7800, timer.getAccount().getLifetimeTime());
-            db.verify(() -> DB.saveProgress("123", user, timer));
+            store.verify(() -> TimerStore.saveProgress("123", user, timer));
         }
     }
 
@@ -206,15 +207,24 @@ class TimerPersistenceTest {
         timer.getSessionData().setSessionTopic("CS-101 - Intro");
         BunnyUser user = new BunnyUser();
         IReplyCallback interaction = mock(IReplyCallback.class, RETURNS_DEEP_STUBS);
-        try (var db = mockStatic(DB.class)) {
+        try (var db = mockStatic(DB.class); var store = mockStatic(TimerStore.class)) {
             db.when(() -> DB.findOne(eq(TimerData.class), eq("TimerData"), any(Bson.class))).thenReturn(timer);
             db.when(() -> DB.findOne(eq(BunnyUser.class), eq("BunnyUsers"), any(Bson.class))).thenReturn(user);
-            String recap = TimerSessionService.stopSession("123", interaction);
-            long capped = org.bunnys.bunnynexus.timers.engine.LevelEngine.calculateXP(
-                    TimerSessionService.MAX_REWARDED_SESSION_SECS / 60.0);
-            assertTrue(recap.contains(String.format("%,d", capped)));
-            assertTrue(recap.contains("capped"));
+            // Unconfirmed, a forgotten timer is refused rather than silently recorded.
+            assertThrows(InteractionErrors.StateFailure.class, () -> TimerSessionService.stopSession("123", interaction, true));
+            store.verifyNoInteractions();
+            assertNotNull(timer.getSessionData().getSessionStartTime());
+            long start = timer.getSessionData().getSessionStartTime().getTime();
+            String recap = TimerSessionService.stopSession("123", interaction, true,
+                    new TimerSessionService.Confirmation(start, java.util.OptionalDouble.empty()));
+            // No cap: 72 unbroken hours still pay, at the lower rates of the later focus tiers.
+            long tiered = LevelEngine.calculateXP(LevelEngine.rewardedMinutes(java.util.List.of(72 * 3600.0)));
+            assertTrue(tiered > LevelEngine.calculateXP(12 * 60), "more than the old 12 h cap");
+            assertTrue(tiered < LevelEngine.calculateXP(72 * 60) / 3);
+            assertTrue(recap.contains(String.format("%,d", tiered)), recap);
+            assertTrue(recap.contains("Long unbroken stretches earn less"), recap);
             assertEquals(3 * 24 * 3600, timer.getCurrentSemester().getLongestSession(), 5);
+            store.verify(() -> TimerStore.saveProgress("123", user, timer));
         }
     }
 
@@ -227,12 +237,13 @@ class TimerPersistenceTest {
         var events = mock(IEventManager.class);
         when(interaction.getJDA()).thenReturn(jda);
         when(jda.getEventManager()).thenReturn(events);
-        try (var db = mockStatic(DB.class)) {
+        try (var db = mockStatic(DB.class); var store = mockStatic(TimerStore.class)) {
             db.when(() -> DB.findOne(eq(TimerData.class), eq("TimerData"), any(Bson.class))).thenReturn(timer);
             db.when(() -> DB.findOne(eq(BunnyUser.class), eq("BunnyUsers"), any(Bson.class))).thenReturn(new BunnyUser());
             TimerSessionService.stopSession("123", interaction);
             assertEquals(60, timer.getCurrentSemester().getLongestSession(), 2);
-            verify(events, never()).handle(any(org.bunnys.bunnynexus.events.custom.RecordBrokenEvent.class));
+            verify(events, never()).handle(any(RecordBrokenEvent.class));
+            store.verify(() -> TimerStore.saveProgress(eq("123"), any(BunnyUser.class), same(timer)));
         }
     }
 
@@ -243,13 +254,14 @@ class TimerPersistenceTest {
         timer.getSessionData().getSessionBreaks().setSessionBreakStart(new Date(System.currentTimeMillis() - 240_000));
         BunnyUser user = new BunnyUser();
         IReplyCallback interaction = mock(IReplyCallback.class, RETURNS_DEEP_STUBS);
-        try (var db = mockStatic(DB.class)) {
+        try (var db = mockStatic(DB.class); var store = mockStatic(TimerStore.class)) {
             db.when(() -> DB.findOne(eq(TimerData.class), eq("TimerData"), any(Bson.class))).thenReturn(timer);
             db.when(() -> DB.findOne(eq(BunnyUser.class), eq("BunnyUsers"), any(Bson.class))).thenReturn(user);
             assertThrows(IllegalStateException.class, () -> TimerSessionService.stopSession("123", interaction));
             TimerSessionService.stopSession("123", interaction, true);
             assertEquals(360, timer.getCurrentSemester().getSemesterSubjects().getFirst().getTotalStudyTime(), 2);
             assertEquals(240, timer.getCurrentSemester().getTotalBreakTime(), 2);
+            store.verify(() -> TimerStore.saveProgress("123", user, timer));
             assertNull(timer.getSessionData().getSessionStartTime());
         }
     }

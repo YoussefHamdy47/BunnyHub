@@ -1,6 +1,7 @@
 package org.bunnys.handler.commands;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * The alias rules, in one place.
@@ -31,7 +32,7 @@ final class Aliases {
             if (value == null)
                 continue;
 
-            String alias = value.trim().toLowerCase(java.util.Locale.ROOT);
+            String alias = value.trim().toLowerCase(Locale.ROOT);
 
             if (alias.isEmpty() || alias.equalsIgnoreCase(primary) || target.contains(alias))
                 continue;
@@ -45,7 +46,7 @@ final class Aliases {
         if (candidate == null)
             return false;
 
-        String needle = candidate.trim().toLowerCase(java.util.Locale.ROOT);
+        String needle = candidate.trim().toLowerCase(Locale.ROOT);
         if (needle.isEmpty())
             return false;
 

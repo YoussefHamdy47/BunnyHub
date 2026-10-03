@@ -9,7 +9,7 @@ import org.bunnys.utils.FailureDiagnostics;
 import java.util.concurrent.RejectedExecutionException;
 
 /** Drops a server's free-game settings when the bot is removed, so future alerts don't target it. */
-@SuppressWarnings("unused")
+@SuppressWarnings("unused") // Discovered reflectively by EventLoader.
 public class FreebieGuildLeave extends BunnyEvent {
     public FreebieGuildLeave(BunnyHub client) { super(client); }
 
@@ -21,7 +21,7 @@ public class FreebieGuildLeave extends BunnyEvent {
         try {
             // Database work never runs on the gateway thread.
             client.getCommandExecutor().execute(() -> {
-                try { system.repository().removeGuild(guildId); }
+                try { system.subscriptions().removeGuild(guildId); }
                 catch (RuntimeException failure) {
                     BunnyLog.warning("[Freebies] Could not remove settings for left server " + guildId + " | " + FailureDiagnostics.describe(failure));
                 }

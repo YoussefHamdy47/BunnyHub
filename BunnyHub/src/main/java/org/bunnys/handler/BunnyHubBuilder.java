@@ -1,9 +1,14 @@
 package org.bunnys.handler;
 
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Pattern;
 
 public class BunnyHubBuilder {
     // Default feature states
@@ -12,11 +17,56 @@ public class BunnyHubBuilder {
     private String tokenKey = "DISCORD_TOKEN";
 
 
-    private String eventPackage = null;
-    private String commandPackage = null;
-    private String buttonPackage = null;
-    private String modalPackage = null;
-    private String selectPackage = null;
+    private static final Pattern PACKAGE_NAME =
+            Pattern.compile("[A-Za-z_$][A-Za-z\\d_$]*(\\.[A-Za-z_$][A-Za-z\\d_$]*)*");
+
+    // Resolved per kind, independent of call order: an explicit package wins, else <base>.<folder>, else none.
+    private String basePackage;
+    private final Map<Discovery, String> folders = new EnumMap<>(Discovery.class);
+    private final Map<Discovery, String> packages = new EnumMap<>(Discovery.class);
+
+    /**
+     * Root package for everything the handler discovers. Each kind is looked for in a folder below it:
+     * {@code commands}, {@code events}, {@code buttons}, {@code modals}, {@code selects} and {@code services}
+     * by default; rename one with {@link #setFolder(Discovery, String)}.
+     */
+    public BunnyHubBuilder setBasePackage(String basePackage) {
+        this.basePackage = requirePackage(basePackage, "Base package");
+        return this;
+    }
+
+    /**
+     * Looks for one kind in a differently named folder under the base package, e.g.
+     * {@code setFolder(Discovery.COMMANDS, "bunnycmds")} scans {@code <base>.bunnycmds}. May contain dots.
+     */
+    public BunnyHubBuilder setFolder(Discovery kind, String folder) {
+        folders.put(Objects.requireNonNull(kind, "kind"), requirePackage(folder, kind + " folder"));
+        return this;
+    }
+
+    /** Scans exactly {@code packageName} for this kind, ignoring the base package. {@code null} clears the override. */
+    public BunnyHubBuilder setPackage(Discovery kind, String packageName) {
+        Objects.requireNonNull(kind, "kind");
+        if (packageName == null) packages.remove(kind);
+        else packages.put(kind, requirePackage(packageName, kind + " package"));
+        return this;
+    }
+
+    /** The package scanned for {@code kind}, or null when that kind is not discovered. */
+    public String getPackage(Discovery kind) {
+        String explicit = packages.get(kind);
+        if (explicit != null) return explicit;
+        return basePackage == null ? null : basePackage + "." + folders.getOrDefault(kind, kind.defaultFolder());
+    }
+
+    private static String requirePackage(String name, String what) {
+        if (name == null || !PACKAGE_NAME.matcher(name).matches())
+            throw new IllegalArgumentException(what + " must be a Java package name, got: " + name);
+        return name;
+    }
+
+    public BunnyHubBuilder setServicePackage(String packageName) { return setPackage(Discovery.SERVICES, packageName); }
+    public String getServicePackage() { return getPackage(Discovery.SERVICES); }
 
     /** MongoDB connection details. The database name is not this bot's to assume. */
     private String databaseName = "GBF";
@@ -43,7 +93,7 @@ public class BunnyHubBuilder {
     }
     public int getCommandUserCapacity() { return commandUserCapacity; }
     public int getAutocompleteUserCapacity() { return autocompleteUserCapacity; }
-    private java.time.Duration databaseTimeout = java.time.Duration.ofSeconds(10);
+    private Duration databaseTimeout = Duration.ofSeconds(10);
 
     public BunnyHubBuilder setAutocompletePool(int workers, int queueCapacity) {
         if (workers < 1 || queueCapacity < 1) throw new IllegalArgumentException("Autocomplete pool sizes must be positive.");
@@ -52,7 +102,7 @@ public class BunnyHubBuilder {
         return this;
     }
 
-    public BunnyHubBuilder setDatabaseTimeout(java.time.Duration timeout) {
+    public BunnyHubBuilder setDatabaseTimeout(Duration timeout) {
         if (timeout == null || timeout.toMillis() < 1) throw new IllegalArgumentException("Database timeout must be positive.");
         databaseTimeout = timeout;
         return this;
@@ -60,7 +110,7 @@ public class BunnyHubBuilder {
 
     public int getAutocompletePoolSize() { return autocompletePoolSize; }
     public int getAutocompleteQueueCapacity() { return autocompleteQueueCapacity; }
-    public java.time.Duration getDatabaseTimeout() { return databaseTimeout; }
+    public Duration getDatabaseTimeout() { return databaseTimeout; }
 
     // Explicitly empty by default
     private final List<GatewayIntent> intents = new ArrayList<>();
@@ -91,30 +141,11 @@ public class BunnyHubBuilder {
         return this;
     }
 
-    public BunnyHubBuilder setEventPackage(String packageName) {
-        this.eventPackage = packageName;
-        return this;
-    }
-
-    public BunnyHubBuilder setCommandPackage(String packageName) {
-        this.commandPackage = packageName;
-        return this;
-    }
-
-    public BunnyHubBuilder setButtonPackage(String packageName) {
-        this.buttonPackage = packageName;
-        return this;
-    }
-
-    public BunnyHubBuilder setModalPackage(String packageName) {
-        this.modalPackage = packageName;
-        return this;
-    }
-
-    public BunnyHubBuilder setSelectPackage(String packageName) {
-        this.selectPackage = packageName;
-        return this;
-    }
+    public BunnyHubBuilder setEventPackage(String packageName) { return setPackage(Discovery.EVENTS, packageName); }
+    public BunnyHubBuilder setCommandPackage(String packageName) { return setPackage(Discovery.COMMANDS, packageName); }
+    public BunnyHubBuilder setButtonPackage(String packageName) { return setPackage(Discovery.BUTTONS, packageName); }
+    public BunnyHubBuilder setModalPackage(String packageName) { return setPackage(Discovery.MODALS, packageName); }
+    public BunnyHubBuilder setSelectPackage(String packageName) { return setPackage(Discovery.SELECTS, packageName); }
 
     /**
      * The MongoDB database name.
@@ -210,9 +241,7 @@ public class BunnyHubBuilder {
         return List.copyOf(intents);
     }
 
-    public String getEventPackage() {
-        return eventPackage;
-    }
+    public String getEventPackage() { return getPackage(Discovery.EVENTS); }
 
     public List<String> getDeveloperIds() {
         return List.copyOf(developerIds);
@@ -230,21 +259,10 @@ public class BunnyHubBuilder {
         return List.copyOf(testServerIds);
     }
 
-    public String getCommandPackage() {
-        return commandPackage;
-    }
-
-    public String getButtonPackage() {
-        return buttonPackage;
-    }
-
-    public String getModalPackage() {
-        return modalPackage;
-    }
-
-    public String getSelectPackage() {
-        return selectPackage;
-    }
+    public String getCommandPackage() { return getPackage(Discovery.COMMANDS); }
+    public String getButtonPackage() { return getPackage(Discovery.BUTTONS); }
+    public String getModalPackage() { return getPackage(Discovery.MODALS); }
+    public String getSelectPackage() { return getPackage(Discovery.SELECTS); }
 
     public String getDatabaseName() {
         return databaseName;

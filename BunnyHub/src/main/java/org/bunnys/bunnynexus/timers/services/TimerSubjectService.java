@@ -8,28 +8,31 @@ import org.bunnys.database.models.timers.Subject;
 import org.bunnys.database.models.timers.TimerData;
 import org.bunnys.database.models.user.BunnyUser;
 import org.bunnys.handler.database.DB;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 public class TimerSubjectService {
 
     public record SubjectUpdate(String code, String name, Integer credits, String grade,
                                 Integer marksLost, boolean clearGrade) {}
 
-    public static java.util.List<String> subjectCodes(String userId, boolean account) {
-        java.util.List<Subject> subjects;
+    public static List<String> subjectCodes(String userId, boolean account) {
+        List<Subject> subjects;
         if (account) {
             var user = DB.findOne(BunnyUser.class, "BunnyUsers", Filters.eq("userID", userId));
-            subjects = user == null ? java.util.List.of() : user.getSubjects();
+            subjects = user == null ? List.of() : user.getSubjects();
         } else {
             var timer = DB.findOne(TimerData.class, "TimerData", Filters.eq("account.userID", userId));
-            subjects = timer == null ? java.util.List.of() : timer.getCurrentSemester().getSemesterSubjects();
+            subjects = timer == null ? List.of() : timer.getCurrentSemester().getSemesterSubjects();
         }
-        return subjects.stream().map(Subject::getSubjectCode).filter(java.util.Objects::nonNull)
+        return subjects.stream().map(Subject::getSubjectCode).filter(Objects::nonNull)
                 .map(String::trim).filter(code -> !code.isEmpty())
-                .map(code -> code.toUpperCase(java.util.Locale.ROOT)).distinct().sorted().toList();
+                .map(code -> code.toUpperCase(Locale.ROOT)).distinct().sorted().toList();
     }
 
     public static Subject updateSubject(String userId, boolean account, String code, SubjectUpdate update) {
-        java.util.Objects.requireNonNull(update);
+        Objects.requireNonNull(update);
         if (update.code() == null && update.name() == null && update.credits() == null
                 && update.grade() == null && update.marksLost() == null && !update.clearGrade())
             throw new InputFailure("Provide at least one course detail to update.");
@@ -151,7 +154,7 @@ public class TimerSubjectService {
             throw new InputFailure("Credit hours must be between 1 and 30.");
         if (subject.getGrade() != null && subject.getGradeEnum() == null)
             throw new InputFailure("Unknown grade.");
-        subject.setSubjectCode(subject.getSubjectCode().trim().toUpperCase(java.util.Locale.ROOT));
+        subject.setSubjectCode(subject.getSubjectCode().trim().toUpperCase(Locale.ROOT));
         subject.setSubjectName(subject.getSubjectName().trim());
     }
 }

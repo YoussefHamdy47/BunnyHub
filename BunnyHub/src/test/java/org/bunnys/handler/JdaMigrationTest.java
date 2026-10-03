@@ -13,6 +13,8 @@ import org.bunnys.bunnynexus.timers.buttons.SessionMenuManager;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
 
 class JdaMigrationTest {
     @Test void allCommandPayloadsSerializeWithJda6() {
@@ -21,8 +23,8 @@ class JdaMigrationTest {
         for (var state : SessionMenuManager.SessionState.values()) {
             var buttons = SessionMenuManager.buildButtons("123", state);
             assertEquals(4, buttons.size());
-            try (var message = new net.dv8tion.jda.api.utils.messages.MessageCreateBuilder().setContent("Session")
-                    .setComponents(net.dv8tion.jda.api.components.actionrow.ActionRow.of(buttons)).build()) {
+            try (var message = new MessageCreateBuilder().setContent("Session")
+                    .setComponents(ActionRow.of(buttons)).build()) {
                 assertNotNull(message.toData());
             }
         }

@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.IntStream;
 
 class InteractionExecutorTest {
     @Test void oneBusyUserDoesNotOccupyOtherWorkers() throws Exception {
@@ -41,7 +44,7 @@ class InteractionExecutorTest {
     @Test void gracefulShutdownDrainsInOrderAndReleasesAllKeys() throws Exception {
         var running = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        var order = new java.util.ArrayList<Integer>();
+        var order = new ArrayList<Integer>();
         try (var executor = new InteractionExecutor(2, 110)) {
             executor.submit("user", () -> { running.countDown(); await(release); });
             assertTrue(running.await(5, TimeUnit.SECONDS));
@@ -53,7 +56,7 @@ class InteractionExecutorTest {
             assertThrows(RejectedExecutionException.class, () -> executor.submit("new", () -> {}));
             release.countDown();
             assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
-            assertEquals(java.util.stream.IntStream.range(0, 100).boxed().toList(), order);
+            assertEquals(IntStream.range(0, 100).boxed().toList(), order);
             assertEquals(0, executor.snapshot().keys());
             assertEquals(101, executor.snapshot().completed());
             assertEquals(1, executor.snapshot().rejected());
@@ -63,7 +66,7 @@ class InteractionExecutorTest {
     @Test void readyKeysTakeTurnsInsteadOfDrainingOneUsersBacklog() throws Exception {
         var running = new CountDownLatch(1);
         var release = new CountDownLatch(1);
-        var order = new java.util.ArrayList<String>();
+        var order = new ArrayList<String>();
         try (var executor = new InteractionExecutor(1, 8)) {
             executor.submit("hot", () -> { running.countDown(); await(release); order.add("first"); });
             assertTrue(running.await(5, TimeUnit.SECONDS));
@@ -73,7 +76,7 @@ class InteractionExecutorTest {
             executor.shutdown();
             release.countDown();
             assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
-            assertEquals(java.util.List.of("first", "other", "second", "third"), order);
+            assertEquals(List.of("first", "other", "second", "third"), order);
         } finally { release.countDown(); }
     }
 

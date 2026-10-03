@@ -1,11 +1,12 @@
 package org.bunnys.handler;
 import java.util.List;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import java.time.Duration;
 /** Immutable startup settings, detached from the builder. */
 public final class BunnyHubConfig {
     private final int autocompletePoolSize;
     private final int autocompleteQueueCapacity;
-    private final java.time.Duration databaseTimeout;
+    private final Duration databaseTimeout;
     private final boolean logActions;
     private final boolean autoLogin;
     private final String tokenKey;
@@ -19,6 +20,7 @@ public final class BunnyHubConfig {
     private final String buttonPackage;
     private final String modalPackage;
     private final String selectPackage;
+    private final String servicePackage;
     private final String databaseName;
     private final String mongoUriKey;
     private final int commandPoolSize;
@@ -45,6 +47,7 @@ public final class BunnyHubConfig {
         this.buttonPackage = builder.getButtonPackage();
         this.modalPackage = builder.getModalPackage();
         this.selectPackage = builder.getSelectPackage();
+        this.servicePackage = builder.getServicePackage();
         this.databaseName = builder.getDatabaseName();
         this.mongoUriKey = builder.getMongoUriKey();
         this.commandPoolSize = builder.getCommandPoolSize();
@@ -53,7 +56,7 @@ public final class BunnyHubConfig {
     }
     public int getAutocompletePoolSize() { return autocompletePoolSize; }
     public int getAutocompleteQueueCapacity() { return autocompleteQueueCapacity; }
-    public java.time.Duration getDatabaseTimeout() { return databaseTimeout; }
+    public Duration getDatabaseTimeout() { return databaseTimeout; }
     public boolean isLogActions() { return logActions; }
     public boolean isAutoLogin() { return autoLogin; }
     public String getTokenKey() { return tokenKey; }
@@ -67,6 +70,7 @@ public final class BunnyHubConfig {
     public String getButtonPackage() { return buttonPackage; }
     public String getModalPackage() { return modalPackage; }
     public String getSelectPackage() { return selectPackage; }
+    public String getServicePackage() { return servicePackage; }
     public String getDatabaseName() { return databaseName; }
     public String getMongoUriKey() { return mongoUriKey; }
     public int getCommandPoolSize() { return commandPoolSize; }

@@ -5,6 +5,7 @@ import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.commands.BunnySubcommand;
 import org.bunnys.handler.commands.context.CommandContext;
 import java.util.function.BiFunction;
+import org.bunnys.utils.Embeds;
 
 /** /freebie-admin status | pause | resume | check — owner-only (FREEBIE_OWNER_IDS), in addition to developer-only gating. */
 public final class FreebieAdminCommands {
@@ -21,9 +22,11 @@ public final class FreebieAdminCommands {
             String text;
             if (system == null) text = "Free-game alerts are not running (check FREEBIE_* in .env and the startup log).";
             else if (!system.config().isOwner(user)) text = "Only freebie owners can use this.";
-            else text = action.apply(system, user);
-            ctx.reply(new net.dv8tion.jda.api.EmbedBuilder().setColor(org.bunnys.utils.AppDesign.ColorCodes.DEFAULT)
-                    .setTitle("Free-game alerts — admin").setDescription(text).build(), true);
+            else {
+                ctx.defer(true);
+                text = action.apply(system, user);
+            }
+            ctx.reply(Embeds.of("🎁", "Free-game alerts — admin", text).build(), true);
         }
     }
 

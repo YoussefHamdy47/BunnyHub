@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import java.util.List;
 
 class SubjectAutocompleteTest {
     private Subject subject(String code, String name) {
@@ -28,7 +29,7 @@ class SubjectAutocompleteTest {
                 assertTrue(filter.contains("account.userID")); assertTrue(filter.contains("123"));
                 return timer;
             });
-            assertEquals(java.util.List.of("CS99 - Match"), SubjectAutocomplete.suggest("123", "mAtCh"));
+            assertEquals(List.of("CS99 - Match"), SubjectAutocomplete.suggest("123", "mAtCh"));
         }
     }
 

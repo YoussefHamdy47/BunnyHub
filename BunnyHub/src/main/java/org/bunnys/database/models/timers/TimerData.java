@@ -2,8 +2,9 @@ package org.bunnys.database.models.timers;
 
 import org.bson.codecs.pojo.annotations.BsonId;
 import org.bson.types.ObjectId;
+import org.bunnys.handler.database.VersionedDocument;
 
-public class TimerData implements org.bunnys.handler.database.VersionedDocument {
+public class TimerData implements VersionedDocument {
     private Long revision;
     public Long getRevision() { return revision; }
     public void setRevision(Long revision) { this.revision = revision; }

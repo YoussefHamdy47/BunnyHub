@@ -2,10 +2,11 @@ package org.bunnys.utils;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.regex.Pattern;
 
 /** Bounded exception metadata. Never includes messages, toString(), or suppressed exception payloads. */
 public final class FailureDiagnostics {
-    private static final java.util.regex.Pattern CONTROL = java.util.regex.Pattern.compile("[\\p{Cntrl}\\p{Zl}\\p{Zp}]");
+    private static final Pattern CONTROL = Pattern.compile("[\\p{Cntrl}\\p{Zl}\\p{Zp}]");
     private FailureDiagnostics() {}
 
     public static String describe(Throwable failure) {

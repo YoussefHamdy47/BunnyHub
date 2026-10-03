@@ -1,15 +1,16 @@
 package org.bunnys.modals;
 
-import org.bunnys.handler.utils.InteractionErrors;
-
-import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
+import org.bunnys.bunnynexus.timers.Timers;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.modals.BunnyModal;
-import org.bunnys.bunnynexus.timers.Timers;
-import org.bunnys.utils.AppDesign;
-import org.bunnys.utils.BunnyLog;
+import org.bunnys.handler.utils.InteractionErrors;
+import org.bunnys.utils.ErrorReporter;
+import org.bunnys.utils.Replies;
+import org.bunnys.utils.SystemEmbeds;
 
+/** The typed confirmation that archives a semester: {@code semester_end_modal:<owner>:<requestedAt>:<revision>}. */
+@SuppressWarnings("unused") // Discovered reflectively by ModalRouter.
 public class SemesterEndModal extends BunnyModal {
     @Override public boolean deferEditBeforeDispatch() { return true; }
 
@@ -20,50 +21,33 @@ public class SemesterEndModal extends BunnyModal {
 
     @Override
     public void execute(BunnyHub client, ModalInteractionEvent event, String[] args) {
-        // Prevent silent failure: Acknowledge the event if arguments are malformed
         if (args.length < 4) {
-            event.getHook().sendMessage("> " + AppDesign.Emojis.ERROR + " **Expired form:** Run `/timer end_semester` again.").setEphemeral(true).queue();
+            Replies.error(event, "Expired form", "Run `/timer end_semester` again.");
             return;
         }
-
-        String targetId = args[1];
+        String ownerId = args[1];
         long requestTime;
         Long confirmedRevision;
-
         try {
             requestTime = Long.parseLong(args[2]);
             confirmedRevision = Timers.parseRevisionToken(args[3]);
         } catch (NumberFormatException e) {
-            event.getHook().sendMessage("> " + AppDesign.Emojis.ERROR + " **Error:** Invalid request timestamp.").setEphemeral(true).queue();
+            Replies.error(event, "Expired form", "Run `/timer end_semester` again.");
             return;
         }
-
-        if (!event.getUser().getId().equals(targetId)) {
-            event.getHook().sendMessage("> " + AppDesign.Emojis.ERROR + " **Access Denied:** This modal belongs to someone else.").setEphemeral(true).queue();
+        if (!event.getUser().getId().equals(ownerId)) {
+            Replies.error(event, "Access denied", "This form belongs to someone else.");
             return;
         }
-
         try {
-            Timers timerSystem = new Timers(targetId, event);
-            MessageEmbed finalRecapEmbed = timerSystem.processEndSemesterModal(event, requestTime, confirmedRevision);
-
-            // By setting the content to the ping, it happens completely outside the embed
-            event.getHook().editOriginalEmbeds(finalRecapEmbed)
-                    .setContent("<@" + targetId + ">")
-                    .setComponents() // This clears the confirmation buttons
-                    .queue();
-
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            // Catches invalid confirmation phrases, 5-minute timeouts, or missing semesters
-            if (!(e instanceof InteractionErrors.InputFailure || e instanceof InteractionErrors.StateFailure))
-                BunnyLog.error("[SemesterEndModal] Unexpected failure for user: " + targetId, e);
-            event.getHook().sendMessage("> ❌ **Termination aborted:** " + InteractionErrors.userMessage(e))
-                    .setEphemeral(true).queue();
-        } catch (Exception e) {
-            // Log to console AND alert the user so Discord doesn't timeout
-            BunnyLog.error("[SemesterEndModal] Critical failure during execution for user: " + targetId, e);
-            event.getHook().sendMessage("> " + AppDesign.Emojis.ERROR + " **System Error:** Could not finalize semester archival.")
-                    .setEphemeral(true).queue();
+            var recap = new Timers(ownerId, event).processEndSemesterModal(event, requestTime, confirmedRevision);
+            // The ping lives in the message content; mentions inside embeds never notify.
+            event.getHook().editOriginalEmbeds(recap).setContent("<@" + ownerId + ">").setComponents().queue();
+        } catch (InteractionErrors.InputFailure | InteractionErrors.StateFailure e) {
+            // Wrong phrase, 5-minute timeout, semester changed or missing.
+            Replies.error(event, "Semester not archived", InteractionErrors.userMessage(e));
+        } catch (RuntimeException e) {
+            Replies.privately(event, SystemEmbeds.crashed(ErrorReporter.report("semester end", null, e), false));
         }
     }
 }
