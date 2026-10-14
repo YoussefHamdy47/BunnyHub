@@ -96,7 +96,7 @@ public final class FreebieDm {
     public static MessageCreateData consent(Set<FreebieSection> sections) {
         var embed = Embeds.of("📬", "Free-game DMs are on")
                 .setDescription("You'll get a DM when the bot owner approves a free game in: **" + labels(sections) + "**.\n"
-                        + "At most " + DAILY_CAP + " a day. Use the button below or `/free-games unsubscribe` to stop.")
+                        + "At most " + DAILY_CAP + " a day. Use the button below to stop.")
                 .setTimestamp(null).build();
         return new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(unsubscribeButton()))
                 .setAllowedMentions(List.of()).build();

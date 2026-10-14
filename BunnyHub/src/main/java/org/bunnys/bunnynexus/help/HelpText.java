@@ -5,7 +5,6 @@ import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 
 import java.util.List;
-import java.util.Map;
 
 /** Text and field helpers for the help menu: option syntax, bounded text, and embeds clamped to Discord limits. */
 final class HelpText {
@@ -16,9 +15,6 @@ final class HelpText {
     /** Held under the real ceiling: the footer and title are counted after the fields. */
     static final int MAX_EMBED_TOTAL = MessageEmbed.EMBED_MAX_LENGTH_BOT - 300;
     static final int MAX_FIELDS = 24;
-
-    private static final Map<String, String> CATEGORY_EMOJI = Map.of(
-            "Study", "📚", "Free Games", "🎁", "Information", "🔎", "Utility", "🧰", "Owner", "🛠️");
 
     /** {@code <required>} and {@code [optional]}, in declared order. */
     static String syntax(List<OptionData> options) {
@@ -52,10 +48,6 @@ final class HelpText {
             case BOOLEAN -> "true";
             default -> option.getName();
         };
-    }
-
-    static String emoji(String category) {
-        return CATEGORY_EMOJI.getOrDefault(category, "📁");
     }
 
     static String describe(String text) {

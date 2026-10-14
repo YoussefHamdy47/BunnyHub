@@ -15,7 +15,9 @@ public class Main {
                 .setDatabaseName(database)
                 .setTokenKey("TOKEN")
                 .setCommandPool(24, 100)
-                .addIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.DIRECT_MESSAGES)
+                .addIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.DIRECT_MESSAGES,
+                        // Privileged: welcome/goodbye messages and join roles. Enable "Server Members Intent" in the Developer Portal.
+                        GatewayIntent.GUILD_MEMBERS)
                 .addDeveloperIds("333644367539470337")
                 .addTestServerIds("1187559385359200316")
                 .setLogActions(false)

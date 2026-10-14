@@ -16,14 +16,13 @@ public final class FreeGames extends BunnyCommand {
         super(client);
         setName("free-games");
         setCategory("Free Games");
-        setDescription("See the games you can claim for free right now, or get them by DM.");
+        setDescription("See games you can claim for free right now, or get them by DM.");
         addAliases("freegames", "free");
         setDeferBeforeDispatch(true);
         setCooldown(5);
         setExample("/free-games list launcher:epic");
         addSubcommand(new FreeGamesCommand.ListGames());
         addSubcommand(new FreeGamesCommand.Subscribe());
-        addSubcommand(new FreeGamesCommand.Unsubscribe());
         setDefaultSubcommand("list");
     }
 

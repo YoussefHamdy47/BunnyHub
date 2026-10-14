@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.components.selections.StringSelectMenu;
 import org.bunnys.commands.Avatar;
 import org.bunnys.commands.Help;
+import org.bunnys.commands.Setup;
 import org.bunnys.commands.Timer;
 import org.bunnys.commands.freebies.Freebie;
 import org.bunnys.commands.freebies.FreebieAdmin;
@@ -21,7 +22,7 @@ import org.bunnys.commands.freebies.FreeGames;
 
 class HelpMenuTest {
     private final List<BunnyCommand> commands = List.of(new Avatar(null), new Timer(null), new Info(null),
-            new Freebie(null), new FreebieAdmin(null), new Help(null), new FreeGames(null));
+            new Freebie(null), new FreebieAdmin(null), new Help(null), new FreeGames(null), new Setup(null));
     private final HelpMenu.Bot bot = new HelpMenu.Bot("Bunny", null, Map.of("timer", "111", "avatar", "222"));
     private final HelpMenu.Viewer member = new HelpMenu.Viewer("42", false);
     private final HelpMenu.Viewer developer = new HelpMenu.Viewer("7", true);
@@ -35,7 +36,7 @@ class HelpMenuTest {
     }
 
     @Test void everyViewRendersWithinDiscordLimits() {
-        List<String> views = new ArrayList<>(List.of(HelpMenu.OVERVIEW, "c=Study", "c=Free Games", "c=Information", "c=Owner"));
+        List<String> views = new ArrayList<>(List.of(HelpMenu.OVERVIEW, "c=Study", "c=Free Games", "c=Server", "c=Information", "c=Owner"));
         for (String path : HelpMenu.paths(commands, true)) views.add(HelpMenu.detailKey(path));
         for (String view : views) {
             HelpMenu.Rendered rendered = HelpMenu.render(bot, commands, developer, view);
@@ -56,7 +57,7 @@ class HelpMenuTest {
 
     @Test void detailUsesClickableMentionsAndOwnerScopedControls() {
         var rendered = HelpMenu.render(bot, commands, member, "d=timer start");
-        assertEquals("📘 /timer start", rendered.embed().getTitle());
+        assertEquals("/timer start", rendered.embed().getTitle());
         assertTrue(describe(rendered).contains("</timer start:111>"));
         var menu = rendered.rows().getFirst().getComponents().getFirst().asStringSelectMenu();
         assertEquals("help:cat:42", menu.getCustomId());
@@ -67,9 +68,9 @@ class HelpMenuTest {
     }
 
     @Test void lookupToleratesSlashesAliasesAndPastedOptions() {
-        assertEquals("📘 /timer start", HelpMenu.lookup(bot, commands, member, " /Timer  start subject:math ").embed().getTitle());
-        assertEquals("📘 /avatar", HelpMenu.lookup(bot, commands, member, "pfp").embed().getTitle());
-        assertEquals("📘 /timer", HelpMenu.lookup(bot, commands, member, "timer nonsense").embed().getTitle());
+        assertEquals("/timer start", HelpMenu.lookup(bot, commands, member, " /Timer  start subject:math ").embed().getTitle());
+        assertEquals("/avatar", HelpMenu.lookup(bot, commands, member, "pfp").embed().getTitle());
+        assertEquals("/timer", HelpMenu.lookup(bot, commands, member, "timer nonsense").embed().getTitle());
         assertTrue(HelpMenu.lookup(bot, commands, member, "study").embed().getTitle().contains("Study"));
         var missing = HelpMenu.lookup(bot, commands, member, "`nope`");
         assertTrue(missing.embed().getDescription().contains("No command matches `'nope'`"));
@@ -79,21 +80,34 @@ class HelpMenuTest {
 
     @Test void freeGamesListsItsSubcommandsUnderTheFreeGamesCategory() {
         var paths = HelpMenu.paths(commands, false);
-        assertTrue(paths.containsAll(List.of("free-games list", "free-games subscribe", "free-games unsubscribe")), paths.toString());
+        assertTrue(paths.containsAll(List.of("free-games list", "free-games subscribe")), paths.toString());
+        assertFalse(paths.contains("free-games unsubscribe"), "turning DMs off lives in the subscribe panel");
         String parent = describe(HelpMenu.render(bot, commands, member, HelpMenu.detailKey("free-games")));
-        assertTrue(parent.contains("list") && parent.contains("subscribe") && parent.contains("unsubscribe"), parent);
+        assertTrue(parent.contains("list") && parent.contains("subscribe"), parent);
         String category = describe(HelpMenu.render(bot, commands, member, "c=Free Games"));
-        assertTrue(category.contains("/free-games list") && category.contains("/free-games subscribe")
-                && category.contains("/free-games unsubscribe"), category);
+        assertTrue(category.contains("/free-games list") && category.contains("/free-games subscribe"), category);
         String detail = describe(HelpMenu.render(bot, commands, member, HelpMenu.detailKey("free-games list")));
         assertTrue(detail.contains("/free-games list launcher:epic"), detail);
         assertFalse(detail.contains("/free-games launcher:"), "no example of the old form");
-        assertEquals("📘 /free-games list", HelpMenu.lookup(bot, commands, member, "/free-games list launcher:epic").embed().getTitle());
+        assertEquals("/free-games list", HelpMenu.lookup(bot, commands, member, "/free-games list launcher:epic").embed().getTitle());
+    }
+
+    @Test void serverToolsAreSingleCommandsWithoutEmojiClutter() {
+        var paths = HelpMenu.paths(commands, false);
+        assertTrue(paths.contains("setup") && paths.contains("freebie"), paths.toString());
+        assertTrue(paths.stream().noneMatch(p -> p.startsWith("freebie ")), "the dashboard replaced the freebie subcommands: " + paths);
+        String server = describe(HelpMenu.render(bot, commands, member, "c=Server"));
+        assertTrue(server.contains("/setup") && server.contains("/freebie"), server);
+        for (String view : List.of(HelpMenu.OVERVIEW, "c=Server", "d=setup", "d=timer start")) {
+            String text = describe(HelpMenu.render(bot, commands, member, view));
+            assertTrue(text.codePoints().noneMatch(c -> Character.getType(c) == Character.OTHER_SYMBOL && c >= 0x2600),
+                    view + " has emoji: " + text);
+        }
     }
 
     @Test void staleViewsFallBackToTheOverview() {
-        assertTrue(HelpMenu.render(bot, commands, member, "d=removed").embed().getTitle().endsWith(" Bunny Help"));
-        assertTrue(HelpMenu.render(bot, commands, member, "c=Owner").embed().getTitle().endsWith(" Bunny Help"));
+        assertTrue(HelpMenu.render(bot, commands, member, "d=removed").embed().getTitle().equals("Bunny Help"));
+        assertTrue(HelpMenu.render(bot, commands, member, "c=Owner").embed().getTitle().equals("Bunny Help"));
     }
 
     private static String describe(HelpMenu.Rendered rendered) {
