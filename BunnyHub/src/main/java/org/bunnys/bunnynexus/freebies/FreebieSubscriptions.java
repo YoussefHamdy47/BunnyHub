@@ -6,8 +6,9 @@ import com.mongodb.client.model.IndexOptions;
 import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.Accumulators;
 import com.mongodb.client.model.Aggregates;
-import com.mongodb.client.model.ReplaceOptions;
+import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Sorts;
+import com.mongodb.client.model.Updates;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import java.time.Instant;
@@ -24,7 +25,14 @@ public final class FreebieSubscriptions {
     /** Every launcher in every allowed channel; bounds per-server reads. */
     public static final int MAX_PER_GUILD = MAX_CHANNELS_PER_GUILD * FreebieStore.values().length;
 
-    public record Subscription(String guildId, String channelId, FreebieStore store, Optional<String> roleId) {}
+    /** {@code reminderHours}: ending-soon reminder for the section (0 = off, the default; 6 or 24). */
+    public record Subscription(String guildId, String channelId, FreebieStore store, Optional<String> roleId, int reminderHours) {
+        public Subscription(String guildId, String channelId, FreebieStore store, Optional<String> roleId) {
+            this(guildId, channelId, store, roleId, 0);
+        }
+    }
+    /** Ending-soon reminder choices, stored per section on each of its subscriptions; 0 is off. */
+    public static final List<Integer> REMINDER_CHOICES = List.of(0, 24, 6);
     public record Audience(int channels, int guilds) {}
     public enum SaveResult { CREATED, UPDATED, LIMIT_REACHED }
     public record ChannelChange(SaveResult result, Set<FreebieStore> added, Set<FreebieStore> removed) {}
@@ -105,6 +113,14 @@ public final class FreebieSubscriptions {
      */
     public SaveResult setSection(String guildId, FreebieSection section, String channelId, Set<FreebieStore> stores,
                                  Optional<String> roleId, String actorId, Instant now) {
+        return setSection(guildId, section, channelId, stores, roleId, null, actorId, now);
+    }
+
+    /** As above; a non-null {@code reminderHours} also sets the section's ending-soon reminder (null keeps it). */
+    public SaveResult setSection(String guildId, FreebieSection section, String channelId, Set<FreebieStore> stores,
+                                 Optional<String> roleId, Integer reminderHours, String actorId, Instant now) {
+        if (reminderHours != null && !REMINDER_CHOICES.contains(reminderHours))
+            throw new IllegalArgumentException("Unsupported reminder setting.");
         List<String> wanted = section.stores().stream().filter(stores::contains).map(FreebieStore::id).toList();
         if (wanted.isEmpty()) throw new IllegalArgumentException("Pick at least one launcher; use clearSection to turn it off.");
         List<String> sectionIds = section.stores().stream().map(FreebieStore::id).toList();
@@ -115,7 +131,7 @@ public final class FreebieSubscriptions {
         boolean newChannel = current.stream().noneMatch(s -> s.channelId().equals(channelId));
 
         for (String id : wanted)
-            upsert(new Subscription(guildId, channelId, FreebieStore.byId(id).orElseThrow(), roleId), actorId, now);
+            upsert(new Subscription(guildId, channelId, FreebieStore.byId(id).orElseThrow(), roleId), reminderHours, actorId, now);
         subscriptions.deleteMany(and(eq("guildId", guildId), in("store", sectionIds),
                 or(ne("channelId", channelId), nin("store", wanted))));
         // Same race rule as save(): if another admin filled the last slot meanwhile, the newcomer backs out.
@@ -141,6 +157,17 @@ public final class FreebieSubscriptions {
         return subscriptions.deleteMany(eq("guildId", guildId)).getDeletedCount();
     }
 
+    /** The ping role was deleted: those settings keep posting, without a ping. */
+    public long clearRole(String guildId, String roleId) {
+        return subscriptions.updateMany(and(eq("guildId", guildId), eq("roleId", roleId)),
+                Updates.set("roleId", null)).getModifiedCount();
+    }
+
+    /** Every setting in a stable order, at most {@code limit}; for the deleted channel/role sweep. */
+    List<Subscription> all(int limit) {
+        return subscriptions.find().sort(Sorts.ascending("_id")).limit(limit).map(FreebieSubscriptions::read).into(new ArrayList<>());
+    }
+
     private Set<String> channels(String guildId) {
         return subscriptions.distinct("channelId", eq("guildId", guildId), String.class).into(new HashSet<>());
     }
@@ -159,15 +186,35 @@ public final class FreebieSubscriptions {
         return false;
     }
 
-    private void upsert(Subscription s, String actorId, Instant now) {
+    private void upsert(Subscription s, String actorId, Instant now) { upsert(s, null, actorId, now); }
+
+    /** Sets the saved fields and keeps any other (such as the section's reminder) unless {@code reminderHours} is given. */
+    private void upsert(Subscription s, Integer reminderHours, String actorId, Instant now) {
         String id = id(s.guildId(), s.channelId(), s.store());
-        subscriptions.replaceOne(eq("_id", id), new Document("_id", id).append("schemaVersion", 1).append("guildId", s.guildId())
+        var fields = new Document("schemaVersion", 1).append("guildId", s.guildId())
                 .append("channelId", s.channelId()).append("store", s.store().id()).append("roleId", s.roleId().orElse(null))
-                .append("updatedBy", actorId).append("updatedAt", Date.from(now)), new ReplaceOptions().upsert(true));
+                .append("updatedBy", actorId).append("updatedAt", Date.from(now));
+        if (reminderHours != null) fields.append("reminderHours", reminderHours);
+        subscriptions.updateOne(eq("_id", id), new Document("$set", fields), new UpdateOptions().upsert(true));
+    }
+
+    /** One subscription by its key; empty when the channel no longer posts that launcher. */
+    public Optional<Subscription> find(String guildId, String channelId, FreebieStore store) {
+        return Optional.ofNullable(subscriptions.find(eq("_id", id(guildId, channelId, store))).first()).map(FreebieSubscriptions::read);
+    }
+
+    /** Channels posting {@code store} with an ending-soon reminder on, keyed by channel ID. */
+    Map<String, Subscription> withReminders(FreebieStore store) {
+        Map<String, Subscription> byChannel = new HashMap<>();
+        for (var s : subscriptions.find(and(eq("store", store.id()), in("reminderHours", 6, 24))).map(FreebieSubscriptions::read))
+            byChannel.put(s.channelId(), s);
+        return byChannel;
     }
 
     private static Subscription read(Document d) {
+        Object hours = d.get("reminderHours");
         return new Subscription(d.getString("guildId"), d.getString("channelId"),
-                FreebieStore.byId(d.getString("store")).orElse(FreebieStore.OTHER), Optional.ofNullable(d.getString("roleId")));
+                FreebieStore.byId(d.getString("store")).orElse(FreebieStore.OTHER), Optional.ofNullable(d.getString("roleId")),
+                hours instanceof Number n ? n.intValue() : 0);
     }
 }

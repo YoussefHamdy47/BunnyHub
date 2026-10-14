@@ -116,9 +116,9 @@ class FreebieUnitTest {
             assertTrue(noRole.getContent().isEmpty());
             assertTrue(noRole.getMentionedRoles().isEmpty());
             var embed = withRole.getEmbeds().getFirst();
-            assertEquals("🎁 Mechabellum (Epic Games)", embed.getTitle());
+            assertEquals("<:Epic:824679104220626954> Mechabellum (Epic Games)", embed.getTitle());
             assertTrue(embed.getDescription().contains("\\*\\*great\\*\\*"), embed.getDescription());
-            assertEquals("Source: GamerPower • ref abc", embed.getFooter().getText());
+            assertEquals("Powered by GamerPower • ref abc", embed.getFooter().getText());
             var sent = mock(Message.class);
             when(sent.getEmbeds()).thenReturn(withRole.getEmbeds());
             assertTrue(FreebieMessages.carriesReference(sent, "abc"));

@@ -44,6 +44,29 @@ final class FreebieDeliveryStore {
                 combine(set("verifyFirst", true), set("submittedAt", Date.from(now)), inc("sendAttempts", 1)))
                 .getModifiedCount() == 1;
     }
+    /** Queued or blocked alerts for a deleted channel end with an authored reason, so summaries can complete. */
+    long cancelForChannel(String guildId, String channelId, Instant now) {
+        return rows.updateMany(and(eq("guildId", guildId), eq("channelId", channelId), in("state", "PENDING", "BLOCKED")),
+                cancelledDeleted(now)).getModifiedCount();
+    }
+    /** The sender found the channel deleted while holding the lease. */
+    boolean cancelDeleted(FreebieRepository.Claimed c, Instant now) {
+        return rows.updateOne(owned(c, now), combine(cancelledDeleted(now), unset("leaseToken"), unset("leaseUntil")))
+                .getModifiedCount() == 1;
+    }
+    private static Bson cancelledDeleted(Instant now) {
+        return combine(set("state", "CANCELLED"), set("cancelReason", FreebieCleanup.CHANNEL_DELETED),
+                set("failureDetail", FreebieCleanup.CHANNEL_DELETED_TEXT), set("finishedAt", Date.from(now)),
+                inc("deliveryRevision", 1L));
+    }
+    /** Distinct [guildId, channelId] pairs that still have queued or blocked alerts. */
+    List<List<String>> openDestinations(int limit) {
+        return rows.aggregate(List.of(Aggregates.match(in("state", "PENDING", "BLOCKED")),
+                        Aggregates.group(new Document("g", "$guildId").append("c", "$channelId")),
+                        Aggregates.sort(Sorts.ascending("_id")), Aggregates.limit(limit)))
+                .map(d -> List.of(d.get("_id", Document.class).getString("g"), d.get("_id", Document.class).getString("c")))
+                .into(new ArrayList<>());
+    }
     Optional<Document> get(String id) { return Optional.ofNullable(rows.find(eq("_id", id)).first()); }
     List<Document> page(String offer, String after) {
         return rows.find(and(eq("offerId", offer), gt("_id", after))).sort(Sorts.ascending("_id"))

@@ -16,7 +16,7 @@ public final class FreebieHistoryCommands extends BunnySubcommand {
         this.retry = retry;
         setName(retry ? "retry" : "history");
         setDescription(retry ? "Preview a retry for one failed or blocked destination" : "Private paginated delivery history for an offer");
-        addOption(new OptionData(OptionType.STRING, "offer", "Offer ID (gamerpower:number)", true).setMaxLength(40));
+        addOption(new OptionData(OptionType.STRING, "offer", "Offer ID from its review card", true).setMaxLength(40));
         addOption(new OptionData(OptionType.STRING, "channel", "Destination ID; with history shows retry audit", retry).setMaxLength(20));
         if (!retry) addOption(new OptionData(OptionType.INTEGER, "audit-page", "Retry audit page (requires channel)", false).setRequiredRange(1, 20));
     }
@@ -29,8 +29,8 @@ public final class FreebieHistoryCommands extends BunnySubcommand {
         ctx.defer(true);
         String offer = slash.event().getOption("offer").getAsString();
         String channel = slash.event().getOption("channel") == null ? "" : slash.event().getOption("channel").getAsString();
-        if (!offer.matches("gamerpower:[0-9]{1,20}") || (!channel.isEmpty() && !channel.matches("[0-9]{17,20}"))) {
-            ctx.reply(Embeds.of("🎁", "Delivery history", "Use a gamerpower:number offer ID and a numeric channel ID.").build(), true); return;
+        if (!offer.matches("(?:gamerpower:[0-9]{1,20}|epic:[0-9a-f]{16})") || (!channel.isEmpty() && !channel.matches("[0-9]{17,20}"))) {
+            ctx.reply(Embeds.of("🎁", "Delivery history", "Use the offer ID from its review card and a numeric channel ID.").build(), true); return;
         }
         var view = retry ? system.deliveryAdmin().preview(ctx.getUser().getId(), offer, channel)
                 : !channel.isEmpty() ? system.deliveryAdmin().audit(ctx.getUser().getId(), offer, channel,
@@ -39,3 +39,4 @@ public final class FreebieHistoryCommands extends BunnySubcommand {
         ctx.reply(Embeds.of("🎁", "Delivery history", view.text()).build(), view.rows(), true);
     }
 }
+

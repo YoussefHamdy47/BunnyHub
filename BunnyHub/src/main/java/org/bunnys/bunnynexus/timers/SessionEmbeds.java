@@ -27,6 +27,8 @@ public final class SessionEmbeds {
                 .append("✦ **Net Study Time:** `").append(Durations.formatSeconds(clock.activeStudy())).append("`\n")
                 .append("✦ **Total Break Time:** `").append(Durations.formatSeconds(clock.breaks())).append("`\n")
                 .append("✦ **Break Count:** `").append(session.getNumberOfBreaks()).append("`\n");
+        SessionClock.sinceLastBreak(session, nowMillis).ifPresent(seconds -> info
+                .append("✦ **Time Since Last Break:** `").append(Durations.formatSeconds(seconds)).append("`\n"));
         if (session.getSessionBreaks().getSessionBreakStart() != null)
             info.append("\n> ⏸ *Currently on a break. Duration: ").append(Durations.formatSeconds(clock.openBreak())).append(".*");
         else

@@ -42,6 +42,11 @@ public final class FreebieDeliveryAdmin {
                 .append("; previous finish ").append(time(a, "finishedAt"))
                 .append(a.getString("blockedReason") == null ? "" : "\n" + FreebieDeliveryStore.reason(a))
                 .append(a.getString("failure") == null ? "" : "\n" + failure(a)).append('\n'));
+        if (page == 1) for (var job : repository.lifecycle().forDestination(offerId, channel))
+            text.append('\n').append("EDIT".equals(job.getString("kind")) ? "Ended-card edit" : "Ending-soon reminder")
+                    .append(": **").append(job.getString("state")).append("** • attempts ").append(job.getInteger("attempts", 0))
+                    .append(" • queued ").append(time(job, "createdAt")).append("; finished ").append(time(job, "finishedAt"))
+                    .append('\n').append(FreebieLifecycleStore.explain(job)).append('\n');
         text.append("\nUse history with channel and audit-page to inspect other pages (five records per page).");
         return text(text.toString());
     }
@@ -60,6 +65,8 @@ public final class FreebieDeliveryAdmin {
                     .append("; finished ").append(time(d, "finishedAt")).append("; next check ").append(time(d, "nextAttemptAt"));
             if (d.getString("failure") != null) text.append("\n").append(failure(d));
             if (d.getString("blockedReason") != null) text.append("\n").append(FreebieDeliveryStore.reason(d));
+            if (FreebieCleanup.CHANNEL_DELETED.equals(d.getString("cancelReason")))
+                text.append("\n").append(FreebieCleanup.CHANNEL_DELETED_TEXT);
             if (d.getString("messageId") != null) text.append("\n[Discord message](https://discord.com/channels/")
                     .append(d.getString("guildId")).append('/').append(d.getString("channelId")).append('/')
                     .append(d.getString("messageId")).append(')');
@@ -73,7 +80,7 @@ public final class FreebieDeliveryAdmin {
         }
         if (page.isEmpty()) text.append("No destinations on this page.");
         var rows = page.size() > FreebieDeliveryStore.PAGE_SIZE
-                ? List.of(ActionRow.of(Button.secondary("freebie_delivery:page:" + offerId.substring("gamerpower:".length())
+                ? List.of(ActionRow.of(Button.secondary("freebie_delivery:page:" + (offerId.startsWith("gamerpower:") ? offerId.substring(11) : "e" + offerId.substring(5))
                     + ":" + page.get(FreebieDeliveryStore.PAGE_SIZE - 1).getString("channelId"), "Next page"))) : List.<ActionRow>of();
         return new View(text.toString(), rows);
     }
@@ -89,7 +96,7 @@ public final class FreebieDeliveryAdmin {
                 + "**. Saved ping role: " + Optional.ofNullable(d.getString("roleId")).orElse("none") + ". Attempts so far: " + d.getInteger("attempts", 0)
                 + ".\nUncertain acceptance requires history verification; the same destination, reference and nonce are retained."
                 + "\nConfirmation expires in five minutes. Results appear in delivery history; an existing summary is not reposted.",
-                List.of(ActionRow.of(Button.danger("freebie_delivery:retry:" + offerId.substring("gamerpower:".length())
+                List.of(ActionRow.of(Button.danger("freebie_delivery:retry:" + (offerId.startsWith("gamerpower:") ? offerId.substring(11) : "e" + offerId.substring(5))
                         + ":" + channel + ":" + token.get(), "Confirm this retry"))));
     }
     public View confirm(String actor, String offerId, String channel, String token) {
@@ -141,6 +148,7 @@ public final class FreebieDeliveryAdmin {
     }
     private static View text(String text) { return new View(text, List.of()); }
 }
+
 
 
 

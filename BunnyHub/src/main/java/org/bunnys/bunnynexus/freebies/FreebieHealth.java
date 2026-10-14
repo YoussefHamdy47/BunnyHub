@@ -50,7 +50,9 @@ final class FreebieHealth {
         return new Snapshot(queue(deliveries, in("state", "PENDING", "SENDING", "BLOCKED"), "$createdAt", "leaseUntil", now),
                 queue(offers, and(eq("state", "PENDING"), eq("reviewMessageId", null)), "$discoveredAt", "reviewPostUntil", now),
                 queue(offers, pendingSummary, new Document("$ifNull", List.of("$updatedAt", "$discoveredAt")), "summaryLeaseUntil", now),
-                new Queue(noticeSources.total(), noticeSources.oldest(), noticeLeases.leased(), noticeLeases.expired()),
+                // Failed-delivery notices are counted at their source; settings-change notices only exist here.
+                new Queue(noticeSources.total() + notices.countDocuments(and(eq("noticeState", "PENDING"), exists("noticeKind", true))),
+                        noticeSources.oldest(), noticeLeases.leased(), noticeLeases.expired()),
                 deliveries.countDocuments(recentFailure), List.copyOf(failures), List.copyOf(summaries));
     }
 

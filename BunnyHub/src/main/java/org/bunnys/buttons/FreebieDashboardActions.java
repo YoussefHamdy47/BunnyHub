@@ -2,16 +2,23 @@ package org.bunnys.buttons;
 
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import org.bunnys.bunnynexus.commands.freebies.FreebieAutoSetup;
+import org.bunnys.bunnynexus.commands.freebies.FreebieCatchUp;
 import org.bunnys.bunnynexus.commands.freebies.FreebieDashboard;
+import org.bunnys.bunnynexus.commands.freebies.FreebieExistingSetup;
 import org.bunnys.bunnynexus.commands.freebies.FreebieServerSetup;
 import org.bunnys.bunnynexus.freebies.FreebieSection;
+import org.bunnys.bunnynexus.freebies.FreebieSubscriptions;
 import org.bunnys.bunnynexus.freebies.FreebieSystem;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.buttons.BunnyButton;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 /**
- * Dashboard writes: auto-setup (one shared channel or a channel per section) and posting the role picker in the
+ * Dashboard writes: auto-setup (one shared channel or a channel per section; existing free-game channels and roles
+ * are offered first, {@code freebie_dashrun:<layout>:<guild>:<sections>[:<mask>.<fingerprint>]}) and posting the role picker in the
  * current channel. Each creates things in Discord, so the clicker is rate limited and the click is acknowledged
  * before any work; the dashboard is then redrawn with the outcome.
  */
@@ -31,17 +38,25 @@ public class FreebieDashboardActions extends BunnyButton {
         }
         event.deferEdit().complete();
         var subscriptions = system.subscriptions();
-        String notice = switch (args[1]) {
-            case FreebieDashboard.ONE_CHANNEL, FreebieDashboard.CHANNEL_PER_SECTION -> args.length != 4 ? "⚠️ This control is malformed."
-                    : FreebieServerSetup.autoSetup(guild, event.getMember(), FreebieSection.decode(args[3]),
-                            FreebieDashboard.CHANNEL_PER_SECTION.equals(args[1]), subscriptions);
+        boolean layout = FreebieDashboard.ONE_CHANNEL.equals(args[1]) || FreebieDashboard.CHANNEL_PER_SECTION.equals(args[1]);
+        if (layout && args.length != 4 && args.length != 5) {
+            event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieDashboard.dashboard(guild,
+                    subscriptions.forGuild(guild.getId()), "⚠️ This control is malformed."))).queue();
+            return;
+        }
+        String notice;
+        if (layout) {
+            var result = autoSetup(event, args, subscriptions);
+            if (result.isEmpty()) return; // Asked which existing channels and roles to use.
+            notice = result.get();
+        } else notice = switch (args[1]) {
             case FreebieDashboard.ROLE_PANEL -> {
                 var actor = event.getMember();
                 // The picker hands roles out on the admin's behalf, so they must be able to hand them out themselves.
                 if (!actor.hasPermission(Permission.MANAGE_ROLES))
                     yield "⚠️ Posting a role picker needs **Manage Roles**.";
                 var roles = FreebieServerSetup.pickableRoles(guild, subscriptions.forGuild(guild.getId()));
-                roles.values().removeIf(role -> !actor.canInteract(role));
+                roles.keySet().removeIf(role -> !actor.canInteract(role));
                 var channel = event.getGuildChannel();
                 if (roles.isEmpty())
                     yield "⚠️ No section pings a role members can safely pick. A picker role must grant nothing beyond "
@@ -55,5 +70,26 @@ public class FreebieDashboardActions extends BunnyButton {
         };
         var saved = subscriptions.forGuild(guild.getId());
         event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieDashboard.dashboard(guild, saved, notice))).queue();
+    }
+
+    /**
+     * Runs auto-setup, or (empty result) first asks which existing free-game channels and roles to use when the
+     * server has some and the admin has not answered for this exact scan yet.
+     */
+    private static Optional<String> autoSetup(ButtonInteractionEvent event, String[] args, FreebieSubscriptions subscriptions) {
+        var guild = event.getGuild();
+        var sections = FreebieCatchUp.sectionsOf(args[3]);
+        var post = FreebieCatchUp.choiceOf(args[3]);
+        boolean split = FreebieDashboard.CHANNEL_PER_SECTION.equals(args[1]);
+        var found = FreebieExistingSetup.scan(guild, sections, split);
+        Optional<Set<Integer>> chosen = args.length == 5 ? FreebieExistingSetup.answer(args[4], found) : Optional.empty();
+        if (chosen.isEmpty() && !found.isEmpty()) {
+            String changed = args.length == 5 ? "⚠️ Your channels or roles changed since I asked; please check again." : null;
+            event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieExistingSetup.prompt(guild.getId(), sections,
+                    args[1], found, FreebieExistingSetup.all(found), changed, post))).queue();
+            return Optional.empty();
+        }
+        return Optional.of(FreebieAutoSetup.run(guild, event.getMember(), sections, split, subscriptions,
+                FreebieExistingSetup.select(found, chosen.orElse(Set.of())), post, FreebieSystem.current().orElse(null)));
     }
 }

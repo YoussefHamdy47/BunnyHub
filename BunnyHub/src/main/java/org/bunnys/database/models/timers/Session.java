@@ -17,6 +17,7 @@ public class Session {
     private Date lastSessionDate = null;
     private List<String> subjectsStudied = new ArrayList<>();
     private List<Double> studyStretches = new ArrayList<>();
+    private List<Double> subjectTimes = new ArrayList<>();
 
     public Session() {
     }
@@ -120,5 +121,17 @@ public class Session {
 
     public void setStudyStretches(List<Double> studyStretches) {
         this.studyStretches = studyStretches == null ? new ArrayList<>() : studyStretches;
+    }
+
+    /**
+     * Study time credited to each entry of {@link #getSubjectsStudied()}, in the same order, in seconds. Sessions
+     * started before this field existed may list fewer entries; missing ones are treated as unknown.
+     */
+    public List<Double> getSubjectTimes() {
+        return subjectTimes;
+    }
+
+    public void setSubjectTimes(List<Double> subjectTimes) {
+        this.subjectTimes = subjectTimes == null ? new ArrayList<>() : subjectTimes;
     }
 }

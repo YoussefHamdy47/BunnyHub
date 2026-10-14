@@ -2,8 +2,10 @@
 setlocal EnableDelayedExpansion
 title BunnyNexus Telemetry Engine
 
-set DELAY=5
 set MAX_DELAY=60
+
+:START
+set DELAY=5
 set ATTEMPT=0
 
 :CHECK_INTERNET
@@ -36,8 +38,16 @@ if errorlevel 1 (
 
 cls
 echo  Discord reachable. Initializing Telemetry Engine...
+echo  Type "stop" and press Enter to shut down, then choose Restart or Quit.
+echo.
 cd /d "%~dp0"
 
 java -jar target\BunnyHub-4.00.jar
+set EXIT_CODE=%ERRORLEVEL%
 
-pause
+echo.
+echo  Bot stopped (exit code %EXIT_CODE%).
+echo  [R] Restart   [Q] Quit
+choice /c RQ /n /m " Choose: "
+if errorlevel 2 goto :EOF
+goto START

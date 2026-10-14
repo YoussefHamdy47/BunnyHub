@@ -71,6 +71,13 @@ class FreebieHealthTest {
         var repository = mock(FreebieRepository.class); var health = mock(FreebieHealth.class);
         var deliveries = mock(FreebieDeliveryStore.class);
         when(repository.health()).thenReturn(health); when(repository.deliveries()).thenReturn(deliveries);
+        when(repository.retention()).thenReturn(mock(FreebieRetention.class));
+        var lifecycle = mock(FreebieLifecycleStore.class);
+        when(repository.lifecycle()).thenReturn(lifecycle);
+        when(repository.dmJobs()).thenReturn(mock(FreebieDmJobs.class));
+        when(repository.dmSubscribers()).thenReturn(mock(FreebieDmSubscribers.class));
+        when(repository.dmJobs().stats()).thenReturn(new FreebieDmJobs.Stats(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE, now));
+        when(lifecycle.stats(any(), any())).thenReturn(new FreebieLifecycleStore.Stats(Long.MAX_VALUE, Long.MAX_VALUE, now));
         when(repository.overview()).thenReturn(new FreebieRepository.Overview(Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE, Long.MAX_VALUE));
         var queue = new FreebieHealth.Queue(Long.MAX_VALUE, now, Long.MAX_VALUE, Long.MAX_VALUE);
         var failure = new FreebieHealth.Failure(id, id, "MISSING_PERMISSIONS");
@@ -86,6 +93,7 @@ class FreebieHealthTest {
             String text = system.status("333644367539470337");
             assertTrue(text.length() <= 4096, "size=" + text.length());
             assertTrue(text.contains("Restore Read Message History")); assertTrue(text.contains("Next check"));
+            assertTrue(text.contains("Ended-card edits") && text.contains("Ending-soon reminders"), text);
         } finally { system.close(); }
     }}
 

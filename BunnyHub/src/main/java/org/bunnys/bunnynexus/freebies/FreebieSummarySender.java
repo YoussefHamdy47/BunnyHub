@@ -72,7 +72,7 @@ final class FreebieSummarySender {
                 catch (RuntimeException failure) { log(offer.id(), failure); }
                 if (!repository.summaries().owns(job, clock.instant()))
                     return CompletableFuture.<Message>failedFuture(new IllegalStateException("summary lease expired before send"));
-                return channel.sendMessage(FreebieMessages.summary(offer, counts, failures, names))
+                return channel.sendMessage(FreebieMessages.summary(offer, counts, failures, names, repository.dmJobs().totals(offer.id())))
                         .setNonce(FreebieMessages.nonce("summary|" + offer.id())).timeout(45, TimeUnit.SECONDS).submit();
             }, executor).whenCompleteAsync((message, failure) -> finish(job, message, failure), executor);
         } catch (RuntimeException failure) { finish(job, null, failure); }

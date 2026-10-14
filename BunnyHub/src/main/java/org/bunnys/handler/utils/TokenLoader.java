@@ -7,10 +7,31 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class TokenLoader {
+    /** {@code -Dbunny.env.file=.env.test} reads that file (in the working directory) instead of {@code .env}. */
+    public static final String ENV_FILE_PROPERTY = "bunny.env.file";
     private static Dotenv dotenv;
+
+    /**
+     * The explicitly requested env file, if any. A requested file that does not exist is an error: silently
+     * falling back to {@code .env} would start a test instance with production settings.
+     */
+    static String requestedFile(String requested, java.util.function.Predicate<String> exists) {
+        if (requested == null || requested.isBlank()) return null;
+        String name = requested.strip();
+        if (name.contains("/") || name.contains("\\") || !name.startsWith(".env"))
+            throw new IllegalStateException(ENV_FILE_PROPERTY + " must name an .env* file in the working directory.");
+        if (!exists.test(name)) throw new IllegalStateException("Env file " + name + " not found; refusing to fall back to .env.");
+        return name;
+    }
 
     private static synchronized void init() {
         if (dotenv == null) {
+            String requested = requestedFile(System.getProperty(ENV_FILE_PROPERTY), name -> Files.exists(Path.of(name)));
+            if (requested != null) {
+                dotenv = Dotenv.configure().directory(".").filename(requested).load();
+                BunnyLog.info("Settings loaded from " + requested + " (not .env).");
+                return;
+            }
             try {
                 var directory = Files.exists(Path.of(".env"))
                         || !Files.exists(Path.of("src/main/resources/.env"))

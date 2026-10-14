@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.components.selections.StringSelectMenu;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
@@ -19,7 +20,8 @@ public final class FreebieMessages {
     private FreebieMessages() {}
 
     public static final String BUTTON_PREFIX = "freebie_review";
-    private static final String FOOTER_PREFIX = "Source: GamerPower • ref ";
+    private static final String FOOTER_PREFIX = "Powered by GamerPower • ref ";
+    private static final String LEGACY_FOOTER_PREFIX = "Source: GamerPower • ref ";
 
     /** Stable per channel+offer, so Discord drops a duplicate if a timed-out send actually arrived. */
     public static String nonce(String deliveryId) {
@@ -31,30 +33,26 @@ public final class FreebieMessages {
     /** Short reference printed in the footer; lets a retry find a message that was sent but not acknowledged. */
     public static String reference(String deliveryId) { return nonce(deliveryId).substring(0, 12); }
     public static boolean carriesReference(Message message, String reference) {
-        return message.getEmbeds().stream().anyMatch(embed -> embed.getFooter() != null
-                && (FOOTER_PREFIX + reference).equals(embed.getFooter().getText()));
+        return message.getEmbeds().stream().anyMatch(embed -> isAlertFooter(embed, reference));
+    }
+    static boolean isAlertFooter(MessageEmbed embed, String reference) {
+        return embed.getFooter() != null && ((FOOTER_PREFIX + reference).equals(embed.getFooter().getText())
+                || (LEGACY_FOOTER_PREFIX + reference).equals(embed.getFooter().getText())
+                || ("Powered by Epic Games • ref " + reference).equals(embed.getFooter().getText()));
     }
 
     /** The public alert. Only {@code roleId} may be pinged - never @everyone/@here or users. */
     public static MessageCreateData alert(FreebieOffer offer, Optional<String> roleId, String reference) {
         var builder = new MessageCreateBuilder().setEmbeds(alertEmbed(offer, reference))
-                .setComponents(ActionRow.of(Button.link(offer.claimUrl().toString(), "Claim it"),
-                        Button.link(offer.pageUrl().toString(), "Details")))
+                .setComponents(ActionRow.of(FreebieCards.claimButton(offer),
+                        Button.link(offer.pageUrl().toString(), "Offer details")))
                 .setAllowedMentions(List.of()).mentionRepliedUser(false);
         roleId.ifPresent(role -> builder.setContent("<@&" + role + ">").mentionRoles(role));
         return builder.build();
     }
 
     static MessageEmbed alertEmbed(FreebieOffer offer, String reference) {
-        var embed = Embeds.of("🎁", text(title(offer.title()), 250))
-                .setAuthor("Free game • " + offer.store().label())
-                .setUrl(offer.claimUrl().toString())
-                .setDescription(text(offer.description(), 700))
-                .addField("Normally", offer.worth().map(w -> "~~" + w + "~~ → **Free**").orElse("**Free**"), true)
-                .addField("Ends", offer.endsAt().map(end -> "<t:" + end.getEpochSecond() + ":R>").orElse("Unknown / while supplies last"), true)
-                .setFooter(FOOTER_PREFIX + reference);
-        offer.image().ifPresent(image -> embed.setImage(image.toString()));
-        return embed.build();
+        return FreebieCards.embed(offer, "Powered by " + offer.sourceLabel() + " • ref " + reference);
     }
 
     /** Major PC launchers ping the owners; the other sections wait quietly to be reviewed in bulk. */
@@ -62,10 +60,10 @@ public final class FreebieMessages {
         boolean priority = offer.store().section().priority();
         Set<String> pinged = priority ? ownerIds : Set.of();
         String pings = String.join(" ", pinged.stream().sorted().map(id -> "<@" + id + ">").toList());
-        String headline = priority ? "**New free game on a major launcher — waiting for approval.**"
-                : "**New " + offer.store().section().label().toLowerCase(Locale.ROOT) + " giveaway — waiting for approval** (lower priority, no ping).";
+        String headline = priority ? "**Ready for review · Major PC**"
+                : "**Ready for review · " + offer.store().section().label().toLowerCase(Locale.ROOT) + "**";
         return new MessageCreateBuilder().setContent((pings.isEmpty() ? "" : pings + " ") + headline
-                        + " The first embed is exactly what servers will receive.")
+                        + "\nPublic preview below. Review the launcher and audience before approving.")
                 .setAllowedMentions(List.of()).mentionUsers(pinged)
                 .setEmbeds(alertEmbed(offer, "preview"), reviewEmbed(offer, channels, guilds, "Waiting for review"))
                 .setComponents(reviewControls(offer))
@@ -79,7 +77,7 @@ public final class FreebieMessages {
     /** Approve / Reject plus a launcher picker to correct the auto-detected store before approving. */
     public static List<ActionRow> reviewControls(FreebieOffer offer) {
         var menu = StringSelectMenu.create(STORE_MENU_PREFIX + ":" + offer.id()).setPlaceholder("Wrong launcher? Change it here");
-        for (FreebieStore store : FreebieStore.values()) menu.addOption(store.label(), store.id());
+        for (FreebieStore store : FreebieStore.values()) menu.addOption(store.label(), store.id(), Emoji.fromFormatted(FreebieCards.emoji(store)));
         menu.setDefaultValues(offer.store().id());
         return List.of(ActionRow.of(Button.success(BUTTON_PREFIX + ":approve:" + offer.id(), "Approve"),
                         Button.danger(BUTTON_PREFIX + ":reject:" + offer.id(), "Reject")),
@@ -100,7 +98,7 @@ public final class FreebieMessages {
 
     private static List<ActionRow> catchUp(String guildId, String channelId, String scope, int live) {
         return List.of(ActionRow.of(Button.primary(CATCH_UP_PREFIX + ":" + guildId + ":" + channelId + ":" + scope,
-                "Also post the " + live + " game(s) free right now")));
+                "Post " + live + (live == 1 ? " available game" : " available games"))));
     }
 
     public static final String LAUNCHERS_PREFIX = "freebie_launchers";
@@ -112,25 +110,29 @@ public final class FreebieMessages {
     public static List<ActionRow> launcherPicker(String guildId, String channelId, Optional<String> roleId, Set<FreebieStore> ticked) {
         var menu = StringSelectMenu.create(LAUNCHERS_PREFIX + ":" + guildId + ":" + channelId + ":" + roleId.orElse("-"))
                 .setPlaceholder("Pick the launchers to post").setRequiredRange(1, FreebieStore.values().length);
-        for (FreebieStore store : FreebieStore.values()) menu.addOption(store.label(), store.id());
+        for (FreebieStore store : FreebieStore.values()) menu.addOption(store.label(), store.id(), Emoji.fromFormatted(FreebieCards.emoji(store)));
         if (!ticked.isEmpty()) menu.setDefaultValues(ticked.stream().map(FreebieStore::id).toList());
         return List.of(ActionRow.of(menu.build()));
     }
     public static MessageEmbed reviewEmbed(FreebieOffer offer, int channels, int guilds, String status) {
-        var embed = Embeds.of("🔎", "Review: " + text(title(offer.title()), 200))
-                .addField("Status", status, false)
-                .addField("Detected launcher", offer.store().label() + "\n" + offer.store().section().emoji() + " "
+        var embed = Embeds.of("🔎", "Owner review")
+                .setDescription("**" + text(title(offer.title()), 200) + "**\n" + status)
+                .addField("LAUNCHER", offer.store().label() + "\n" + offer.store().section().emoji() + " "
                         + offer.store().section().label(), true)
-                .addField("GamerPower platforms", text(offer.platforms(), 200), true)
-                .addField("Subscribed now", channels + " channel(s) in " + guilds + " server(s)", true)
-                .addField("Instructions", text(offer.instructions(), 900), false);
+                .addField("AUDIENCE", "**" + channels + "** channels\n**" + guilds + "** servers", true)
+                .addField("SOURCE / REGION", offer.sourceLabel() + " · " + offer.region(), false)
+                .addField("SOURCE PLATFORMS", text(offer.platforms(), 200), false)
+                .setTimestamp(null);
         return embed.setFooter("Freebie review • ref " + nonce("review|" + offer.id())).build();
     }
 
     public static MessageCreateData confirm(FreebieOffer offer, int channels, int guilds) {
         return new MessageCreateBuilder()
-                .setContent("Send **" + text(title(offer.title()), 200) + "** to **" + channels + "** channel(s) in **" + guilds
-                        + "** server(s) subscribed to " + offer.store().label() + "? This cannot be undone once messages go out.")
+                .setEmbeds(Embeds.of("📣", "Ready to send?")
+                        .setDescription("**" + text(title(offer.title()), 200) + "**\n" + offer.store().label()
+                                + "\n\nMessages cannot be recalled once sent.")
+                        .addField("CHANNELS", String.valueOf(channels), true)
+                        .addField("SERVERS", String.valueOf(guilds), true).setTimestamp(null).build())
                 .setComponents(ActionRow.of(Button.success(BUTTON_PREFIX + ":confirm:" + offer.id(), "Yes, send it")))
                 .setAllowedMentions(List.of()).build();
     }
@@ -141,21 +143,31 @@ public final class FreebieMessages {
 
     public static MessageCreateData summary(FreebieOffer offer, FreebieRepository.Counts counts, List<FreebieRepository.FailedDelivery> failures,
                                             Map<String, String> guildNames) {
-        var embed = Embeds.of("📬", "Delivery finished: " + text(title(offer.title()), 200))
-                .addField("Sent", String.valueOf(counts.sent()), true)
-                .addField("Failed", String.valueOf(counts.failed()), true)
-                .addField("Cancelled", String.valueOf(counts.cancelled()), true);
+        return summary(offer, counts, failures, guildNames, null);
+    }
+
+    /** {@code dms}: personal DM totals when this is reported; DMs still queued never hold the summary back. */
+    static MessageCreateData summary(FreebieOffer offer, FreebieRepository.Counts counts, List<FreebieRepository.FailedDelivery> failures,
+                                     Map<String, String> guildNames, FreebieDmJobs.Totals dms) {
+        var embed = Embeds.of("📬", "Delivery report")
+                .setDescription("**" + text(title(offer.title()), 200) + "**\n" + offer.store().label())
+                .addField("✓ SENT", String.valueOf(counts.sent()), true)
+                .addField("! FAILED", String.valueOf(counts.failed()), true)
+                .addField("— CANCELLED", String.valueOf(counts.cancelled()), true);
         embed.setFooter(summaryReference(offer.id()));
+        if (dms != null && dms.sent() + dms.skipped() + dms.failed() + dms.cancelled() + dms.open() > 0)
+            embed.appendDescription("\n\n**Personal DMs** · " + dms.sent() + " sent · " + dms.open() + " still queued · "
+                    + dms.skipped() + " over the daily limit · " + dms.failed() + " failed · " + dms.cancelled() + " cancelled");
         if (!failures.isEmpty()) {
             var lines = new StringBuilder();
             for (var failure : failures) {
                 String line = "• " + text(guildNames.getOrDefault(failure.guildId(), "Unknown server"), 60) + " (`" + failure.guildId()
                         + "`) <#" + failure.channelId() + "> — " + failure.reason().name().toLowerCase(Locale.ROOT).replace('_', ' ')
                         + (failure.serverNotified() ? " (owner told)" : "") + "\n";
-                if (lines.length() + line.length() > 3900) { lines.append("…and more"); break; }
+                if (lines.length() + line.length() > 3500) { lines.append("…and more"); break; }
                 lines.append(line);
             }
-            embed.setDescription(lines.toString());
+            embed.appendDescription("\n\n**Destinations needing attention**\n" + lines);
         }
         return new MessageCreateBuilder().setEmbeds(embed.build()).setAllowedMentions(List.of()).build();
     }
@@ -188,10 +200,11 @@ public final class FreebieMessages {
      */
     public static MessageCreateData liveList(List<FreebieOffer> offers, Optional<FreebieStore> store) {
         String scope = store.map(FreebieStore::label).orElse("every launcher");
-        var embed = Embeds.of("🎁", "Free right now" + store.map(s -> " on " + s.label()).orElse(""));
+        var embed = Embeds.of("🎁", "Free right now" + store.map(s -> " on " + s.label()).orElse(""))
+                .setAuthor("BunnyNexus • THE FREE GAMES COLLECTION").setTimestamp(null);
         if (offers.isEmpty()) {
             embed.setDescription("Nothing is free on " + scope + " right now. New games are checked every few minutes."
-                    + "\n\nServer admins can get them posted automatically with `/freebie setup`.");
+                    + "\n\nSet up your next discovery with `/freebie dashboard`.");
             return new MessageCreateBuilder().setEmbeds(embed.build()).setAllowedMentions(List.of()).build();
         }
         var lines = new StringBuilder();
@@ -199,14 +212,14 @@ public final class FreebieMessages {
         for (FreebieOffer offer : offers) {
             String line = "**[" + text(title(offer.title()), 120) + "](" + offer.claimUrl() + ")**\n"
                     + offer.store().label()
-                    + offer.worth().map(w -> " · ~~" + text(w, 20) + "~~").orElse("")
+                    + offer.worth().map(w -> " · ~~" + text(w, 20) + "~~").orElse("") + " · **FREE**"
                     + offer.endsAt().map(end -> " · ends <t:" + end.getEpochSecond() + ":R>").orElse("") + "\n\n";
             if (lines.length() + line.length() > 3800) break;
             lines.append(line);
             listed++;
         }
         embed.setDescription(lines.toString().strip());
-        Embeds.footer(embed, listed + (listed == 1 ? " game" : " games") + " • Reviewed by the bot owner • Source: GamerPower");
+        Embeds.footer(embed, listed + (listed == 1 ? " game" : " games") + " • Reviewed by the bot owner • Sources credited on individual cards");
         List<Button> buttons = new ArrayList<>();
         for (FreebieOffer offer : offers.subList(0, Math.min(listed, 5)))
             buttons.add(Button.link(offer.claimUrl().toString(), label(title(offer.title()))));
@@ -217,12 +230,36 @@ public final class FreebieMessages {
     /** Sent to a server owner when their alert channel could not receive a game. */
     public static MessageCreateData serverNotice(String guildName, String channelId, FreebieFailure reason, FreebieOffer offer) {
         var embed = Embeds.of("⚠️", "A free-game alert could not be delivered")
-                .setDescription("Your server **" + text(guildName, 100) + "** is set up to receive free-game alerts in <#" + channelId
-                        + ">, but I couldn't post there.\n\n**Why:** " + reason.explanation()
-                        + "\n\n**Fix:** give me those permissions in the channel, or pick another channel with `/freebie setup`."
-                        + " Use `/freebie remove` to stop these alerts.")
-                .addField("The game you missed", "[" + text(title(offer.title()), 200) + "](" + offer.claimUrl() + ")", false);
+                .setDescription("Alerts need attention in **" + text(guildName, 100) + "** · <#" + channelId + ">")
+                .addField("WHAT HAPPENED", reason.explanation(), false)
+                .addField("NEXT STEP", "Check channel access and permissions, or choose a new destination in `/freebie dashboard`."
+                        + "\nTo stop alerts, use `/freebie remove`.", false)
+                .addField("VIEW THE OFFER", "[" + text(title(offer.title()), 200) + "](" + offer.claimUrl() + ")", false);
         Embeds.footer(embed, "You get at most one of these notices per day.");
+        return new MessageCreateBuilder().setEmbeds(embed.build()).setAllowedMentions(List.of()).build();
+    }
+
+    /** Sent to a server owner when an alert channel or ping role they set up was deleted. */
+    static MessageCreateData changeNotice(String guildName, FreebieNoticeStore.Change change) {
+        var launchers = String.join(", ", change.stores().stream().map(id -> FreebieStore.byId(id).map(FreebieStore::label).orElse(id)).toList());
+        String name = change.targetName().map(n -> text(n, 80)).orElse(null);
+        boolean channel = FreebieNoticeStore.CHANNEL_DELETED.equals(change.kind());
+        var embed = Embeds.of(channel ? "🗑️" : "🔕", channel ? "A free-game alert channel was deleted" : "A free-game ping role was deleted");
+        if (channel) {
+            embed.setDescription("In **" + text(guildName, 100) + "**, the channel " + (name == null ? "" : "**#" + name + "** ")
+                    + "that received free-game alerts no longer exists.")
+                    .addField("WHAT CHANGED", "I stopped posting **" + text(launchers, 900) + "** there and removed those settings. "
+                            + "Alerts that were still queued for it were cancelled.", false)
+                    .addField("NEXT STEP", "Pick a new channel in `/freebie dashboard` to keep getting these games.", false);
+        } else {
+            String where = String.join(", ", change.channels().stream().distinct().map(id -> "<#" + id + ">").toList());
+            embed.setDescription("In **" + text(guildName, 100) + "**, the role " + (name == null ? "" : "**@" + name + "** ")
+                    + "pinged for free games no longer exists.")
+                    .addField("WHAT CHANGED", "Alerts for **" + text(launchers, 900) + "** still post"
+                            + (where.isEmpty() ? "" : " in " + where) + ", but without a ping.", false)
+                    .addField("NEXT STEP", "Choose a new ping role in `/freebie dashboard`, then post a new role picker if you use one.", false);
+        }
+        Embeds.footer(embed, "Sent once for this change.");
         return new MessageCreateBuilder().setEmbeds(embed.build()).setAllowedMentions(List.of()).build();
     }
 
@@ -251,3 +288,4 @@ public final class FreebieMessages {
         return clean.substring(0, cut) + "…";
     }
 }
+

@@ -23,7 +23,7 @@ final class FreebieDiscovery {
 
     private final FreebieConfig config;
     private final FreebieRepository repository;
-    private final GamerPowerFeed feed;
+    private final FreebieFeed feed;
     private final Clock clock;
     private final FreebieReviewChannel reviews;
     private final BiConsumer<FreebieOffer, String> ended;
@@ -33,10 +33,11 @@ final class FreebieDiscovery {
     // Written on the discovery thread only; the volatile ones are also read by /freebie-admin status.
     private int failures;
     private boolean healthAlerted;
+    private volatile Instant retryNotBefore = Instant.MIN;
     private volatile Instant lastPollAt, lastPollOk;
     private volatile String lastProblem = "not polled yet";
 
-    FreebieDiscovery(FreebieConfig config, FreebieRepository repository, GamerPowerFeed feed, Clock clock,
+    FreebieDiscovery(FreebieConfig config, FreebieRepository repository, FreebieFeed feed, Clock clock,
                      FreebieReviewChannel reviews, BiConsumer<FreebieOffer, String> ended) {
         this.config = config; this.repository = repository; this.feed = feed; this.clock = clock;
         this.reviews = reviews; this.ended = ended;
@@ -48,56 +49,71 @@ final class FreebieDiscovery {
         executor.schedule(this::pollAndReschedule, initialDelaySeconds, TimeUnit.SECONDS);
     }
 
-    /** One extra check on the discovery thread; the regular schedule is unchanged. */
+    /** One extra check on the discovery thread, respecting failure backoff; the regular schedule is unchanged. */
     void pollNow() {
-        executor.execute(() -> {
-            try { poll(); }
-            catch (RuntimeException failure) { failed(failure); }
-        });
+        executor.execute(this::attempt);
     }
 
     String status() {
-        return "Last GamerPower check: " + (lastPollAt == null ? "not yet" : "<t:" + lastPollAt.getEpochSecond() + ":R>")
+        return "Last " + feed.provider().label + " check: " + (lastPollAt == null ? "not yet" : "<t:" + lastPollAt.getEpochSecond() + ":R>")
                 + (lastProblem.isEmpty() ? " ✅" : " ⚠️ " + lastProblem) + "\n"
-                + "Last successful check: " + (lastPollOk == null ? "none since start" : "<t:" + lastPollOk.getEpochSecond() + ":R>");
+                + "Last successful check: " + (lastPollOk == null ? "none since start" : "<t:" + lastPollOk.getEpochSecond() + ":R>")
+                + (clock.instant().isBefore(retryNotBefore) ? "\nDiscovery retry: <t:" + retryNotBefore.getEpochSecond() + ":R>" : "");
     }
 
     private void pollAndReschedule() {
+        Duration next = attempt();
+        try {
+            if (!executor.isShutdown()) executor.schedule(this::pollAndReschedule, Math.max(1, next.toSeconds()), TimeUnit.SECONDS);
+        } catch (RejectedExecutionException shuttingDown) { /* Shutdown raced the reschedule. */ }
+    }
+
+    private Duration attempt() {
+        Instant now = clock.instant();
+        if (now.isBefore(retryNotBefore)) return Duration.between(now, retryNotBefore);
+        lastPollAt = now;
         Duration next;
         // Anything thrown must still reschedule, or discovery would silently stop for good.
         try { next = poll(); }
         catch (Throwable failure) { next = failed(failure); }
-        try {
-            if (!executor.isShutdown()) executor.schedule(this::pollAndReschedule, next.toSeconds(), TimeUnit.SECONDS);
-        } catch (RejectedExecutionException shuttingDown) { /* Shutdown raced the reschedule. */ }
+        retryNotBefore = failures > 0 ? clock.instant().plus(next) : Instant.MIN;
+        return next;
     }
 
     private Duration poll() {
-        var fetch = feed.fetch();
+        var fetch = feed.poll();
         Instant now = clock.instant();
-        lastPollAt = now;
-        var batch = fetch.batch().filter(b -> b.state() != GamerPowerIntake.State.FAILED);
-        if (batch.isEmpty()) {
+        
+        if (fetch.state() == FreebieFeed.State.FAILED) {
             failures++;
             lastProblem = fetch.problem();
-            BunnyLog.warning("[Freebies] GamerPower poll failed: " + fetch.problem());
+            BunnyLog.warning("[Freebies] " + feed.provider().label + " poll failed: " + fetch.problem());
             checkHealth(now);
             Duration backoff = backoff();
             return fetch.retryAfter().filter(wait -> wait.compareTo(backoff) > 0).orElse(backoff);
         }
-        failures = 0;
-        lastPollOk = now;
-        lastProblem = "";
-        checkHealth(now);
         int fresh = 0;
         Set<String> present = new HashSet<>();
-        for (var candidate : batch.get().candidates()) {
-            present.add(FreebieOffer.idFor(candidate.sourceItemId()));
+        for (var candidate : fetch.candidates()) {
+            if (candidate.provider() != feed.provider()) throw new IllegalArgumentException("Mismatched feed provider");
+            present.add(candidate.identity());
+            present.add(FreebieSourceStore.canonicalId(candidate));
             if (repository.recordSeen(candidate, now)) fresh++;
         }
         // Only a complete, valid feed may be used as evidence that an offer ended.
-        if (fetch.complete()) for (var gone : repository.markMissing(present)) ended.accept(gone, "no longer listed as active");
+        if (fetch.complete()) for (var gone : repository.markMissing(feed.provider(), present)) ended.accept(gone, "no longer listed as active");
         if (fresh > 0) BunnyLog.info("[Freebies] " + fresh + " new giveaway(s) queued for review.");
+        if (!fetch.complete()) {
+            failures++;
+            lastProblem = fetch.problem();
+            checkHealth(now);
+            return backoff();
+        }
+        // Fetching alone is not recovery: all accepted rows and absence checks must reach storage first.
+        failures = 0;
+        lastPollOk = clock.instant();
+        lastProblem = "";
+        checkHealth(lastPollOk);
         return Duration.ofMinutes(config.pollMinutes());
     }
 
@@ -119,9 +135,15 @@ final class FreebieDiscovery {
         boolean unhealthy = Duration.between(reference, now).compareTo(HEALTH_ALERT_AFTER) >= 0;
         if (unhealthy == healthAlerted) return;
         healthAlerted = unhealthy;
-        reviews.notifyOwners(unhealthy
-                ? "⚠️ Free-game discovery has not worked for over an hour (last problem: " + lastProblem
-                        + "). New giveaways may be missed until GamerPower is reachable again."
-                : "✅ Free-game discovery is working again.");
+        try {
+            reviews.notifyOwners(unhealthy
+                    ? "⚠️ " + feed.provider().label + " free-game discovery has not worked for over an hour (last problem: " + lastProblem
+                            + "). New giveaways may be missed until complete feed processing recovers."
+                    : "✅ " + feed.provider().label + " free-game discovery is working again.");
+        } catch (RuntimeException noticeFailure) {
+            // A synchronous Discord failure must never stop polling or replace the discovery outcome.
+            BunnyLog.warning("[Freebies] Discovery health notice failed | " + FailureDiagnostics.describe(noticeFailure));
+        }
     }
 }
+

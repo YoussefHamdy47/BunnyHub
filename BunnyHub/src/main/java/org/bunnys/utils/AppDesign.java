@@ -12,6 +12,8 @@ public final class AppDesign {
         public static final String VERIFY = "<:verified:821419611438317638>";
         public static final String ERROR = "<:error:822091680605011978>";
         public static final String STOP = "<:Stop:1518033663047241929>";
+        public static final String EPIC = "<:Epic:824679104220626954>";
+        public static final String STEAM = "<:steam:705062577817780315>";
 
         // Progress Bar Components
         public static final String PROGRESS_BAR_LEFT_EMPTY = "<:leftEmpty:1068143435095220265>";

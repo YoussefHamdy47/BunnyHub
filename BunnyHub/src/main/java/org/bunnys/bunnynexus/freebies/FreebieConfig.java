@@ -1,7 +1,9 @@
 package org.bunnys.bunnynexus.freebies;
 
 import org.bunnys.handler.utils.TokenLoader;
+import org.bunnys.utils.BunnyLog;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -15,10 +17,18 @@ import java.util.function.Function;
  *       mobile), reviewed without a ping; defaults to the main review channel</li>
  *   <li>FREEBIE_OWNER_IDS - comma-separated user IDs allowed to approve/reject/stop (required)</li>
  *   <li>FREEBIE_POLL_MINUTES - GamerPower poll interval, 5-120, default 10</li>
+ *   <li>FREEBIE_RETENTION_DAYS - how long finished alerts, offers and notices are kept, at least 30, default 90;
+ *       an invalid value is logged and the default used</li>
+ *   <li>FREEBIE_DM_MAX_SUBSCRIBERS - most users who may get personal DM alerts, 0-100000, default 100; 0 turns
+ *       DM alerts off. An invalid value is logged and the default used</li>
  *   <li>FREEBIE_ENABLED - set to false to keep the whole system off without removing the other keys</li>
  * </ul>
  */
-public record FreebieConfig(String reviewChannelId, String otherReviewChannelId, Set<String> ownerIds, int pollMinutes) {
+public record FreebieConfig(String reviewChannelId, String otherReviewChannelId, Set<String> ownerIds, int pollMinutes,
+                            int retentionDays, int dmMaxSubscribers) {
+    public static final int DEFAULT_RETENTION_DAYS = 90, MIN_RETENTION_DAYS = 30, MAX_RETENTION_DAYS = 3650;
+    public static final int DEFAULT_DM_SUBSCRIBERS = 100, MAX_DM_SUBSCRIBERS = 100_000;
+
     public FreebieConfig {
         reviewChannelId = snowflake(reviewChannelId);
         otherReviewChannelId = snowflake(otherReviewChannelId);
@@ -26,6 +36,21 @@ public record FreebieConfig(String reviewChannelId, String otherReviewChannelId,
         if (ownerIds.isEmpty()) throw new IllegalArgumentException("At least one freebie owner ID is required.");
         ownerIds.forEach(FreebieConfig::snowflake);
         if (pollMinutes < 5 || pollMinutes > 120) throw new IllegalArgumentException("Poll interval must be 5-120 minutes.");
+        if (retentionDays < MIN_RETENTION_DAYS || retentionDays > MAX_RETENTION_DAYS)
+            throw new IllegalArgumentException("Retention must be " + MIN_RETENTION_DAYS + "-" + MAX_RETENTION_DAYS + " days.");
+        if (dmMaxSubscribers < 0 || dmMaxSubscribers > MAX_DM_SUBSCRIBERS)
+            throw new IllegalArgumentException("DM subscriber cap must be 0-" + MAX_DM_SUBSCRIBERS + ".");
+    }
+
+    public FreebieConfig(String reviewChannelId, String otherReviewChannelId, Set<String> ownerIds, int pollMinutes, int retentionDays) {
+        this(reviewChannelId, otherReviewChannelId, ownerIds, pollMinutes, retentionDays, DEFAULT_DM_SUBSCRIBERS);
+    }
+
+    /** Personal DM alerts are on unless the cap is 0. */
+    public boolean dmEnabled() { return dmMaxSubscribers > 0; }
+
+    public FreebieConfig(String reviewChannelId, String otherReviewChannelId, Set<String> ownerIds, int pollMinutes) {
+        this(reviewChannelId, otherReviewChannelId, ownerIds, pollMinutes, DEFAULT_RETENTION_DAYS);
     }
 
     /** Every section reviewed in one channel. */
@@ -62,11 +87,37 @@ public record FreebieConfig(String reviewChannelId, String otherReviewChannelId,
             int poll = minutes == null || minutes.isBlank() ? 10 : Integer.parseInt(minutes.strip());
             String other = env.apply("FREEBIE_OTHER_REVIEW_CHANNEL_ID");
             String otherChannel = other == null || other.isBlank() ? channel.strip() : other.strip();
-            return Optional.of(new FreebieConfig(channel.strip(), otherChannel, ids, poll));
+            int retention = retentionDays(env.apply("FREEBIE_RETENTION_DAYS"), BunnyLog::warning);
+            int dm = dmMaxSubscribers(env.apply("FREEBIE_DM_MAX_SUBSCRIBERS"), BunnyLog::warning);
+            return Optional.of(new FreebieConfig(channel.strip(), otherChannel, ids, poll, retention, dm));
         } catch (IllegalArgumentException invalid) {
             problems.add("invalid freebie settings: " + invalid.getMessage());
             return Optional.empty();
         }
+    }
+
+    /** Retention never disables the system: a missing value means the default, an invalid one is logged. */
+    static int retentionDays(String raw, Consumer<String> warn) {
+        if (raw == null || raw.isBlank()) return DEFAULT_RETENTION_DAYS;
+        try {
+            int days = Integer.parseInt(raw.strip());
+            if (days >= MIN_RETENTION_DAYS && days <= MAX_RETENTION_DAYS) return days;
+        } catch (NumberFormatException ignored) { /* Reported below. */ }
+        warn.accept("[Freebies] FREEBIE_RETENTION_DAYS must be a whole number from " + MIN_RETENTION_DAYS + " to "
+                + MAX_RETENTION_DAYS + "; using " + DEFAULT_RETENTION_DAYS + ".");
+        return DEFAULT_RETENTION_DAYS;
+    }
+
+    /** Like retention, the DM cap never disables the system: missing means the default, invalid is logged. */
+    static int dmMaxSubscribers(String raw, Consumer<String> warn) {
+        if (raw == null || raw.isBlank()) return DEFAULT_DM_SUBSCRIBERS;
+        try {
+            int cap = Integer.parseInt(raw.strip());
+            if (cap >= 0 && cap <= MAX_DM_SUBSCRIBERS) return cap;
+        } catch (NumberFormatException ignored) { /* Reported below. */ }
+        warn.accept("[Freebies] FREEBIE_DM_MAX_SUBSCRIBERS must be a whole number from 0 to " + MAX_DM_SUBSCRIBERS
+                + "; using " + DEFAULT_DM_SUBSCRIBERS + ".");
+        return DEFAULT_DM_SUBSCRIBERS;
     }
 
     public static Optional<FreebieConfig> fromEnvironment(List<String> problems) {
