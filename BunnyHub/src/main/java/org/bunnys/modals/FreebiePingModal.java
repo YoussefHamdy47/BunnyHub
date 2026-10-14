@@ -50,8 +50,9 @@ public class FreebiePingModal extends BunnyModal {
             if (problem.isPresent()) { notice = problem.get(); break; }
         }
         if (notice == null) {
-            subscriptions.setStoreRole(guild.getId(), store, role.map(Role::getId), event.getUser().getId(), Instant.now());
-            notice = "**" + store.label() + "** now " + role.map(r -> "pings " + r.getAsMention()).orElse("posts without a ping") + ".";
+            long changed = subscriptions.setStoreRole(guild.getId(), store, role.map(Role::getId), event.getUser().getId(), Instant.now());
+            notice = changed == 0 ? "**" + store.label() + "** isn't on any more, so there was nothing to change."
+                    : "**" + store.label() + "** now " + role.map(r -> "pings " + r.getAsMention()).orElse("posts without a ping") + ".";
             saved = subscriptions.forGuild(guild.getId());
         }
         event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieDashboard.pings(guild, saved, notice))).queue();
