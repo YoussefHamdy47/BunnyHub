@@ -46,6 +46,10 @@ final class HelpControls {
         // 2. Pick a command: the category's commands, plus the branches of the one on screen.
         List<BunnyCommand> scope = category == null ? catalog.all() : catalog.categories().get(category);
         String selected = target == null ? null : target.path();
+        // Inside a category every subcommand is listed, as long as they all fit in one menu.
+        int total = 0;
+        for (BunnyCommand command : scope) total += 1 + branches(command).size();
+        boolean expandAll = category != null && total <= MAX_MENU_OPTIONS;
         StringSelectMenu.Builder picker = StringSelectMenu.create(PREFIX + ":cmd:" + owner)
                 .setPlaceholder("Pick a command for full usage");
         for (BunnyCommand command : scope) {
@@ -53,11 +57,11 @@ final class HelpControls {
             picker.addOptions(SelectOption.of("/" + command.getName(), detailKey(command.getName()))
                     .withDescription(shorten(command.getDescription(), MAX_OPTION_TEXT))
                     .withDefault(command.getName().equals(selected)));
-            boolean expanded = target != null && target.command() == command;
+            boolean expanded = expandAll || (target != null && target.command() == command);
             if (!expanded) continue;
             for (Branch branch : branches(command)) {
                 if (picker.getOptions().size() >= MAX_MENU_OPTIONS) break;
-                picker.addOptions(SelectOption.of("  ↳ /" + branch.path(), detailKey(branch.path()))
+                picker.addOptions(SelectOption.of("↳ /" + branch.path(), detailKey(branch.path()))
                         .withDescription(shorten(branch.subcommand().getDescription(), MAX_OPTION_TEXT))
                         .withDefault(branch.path().equals(selected)));
             }

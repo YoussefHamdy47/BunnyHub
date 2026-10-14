@@ -102,7 +102,7 @@ public final class FreebieDm {
                 .setAllowedMentions(List.of()).build();
     }
 
-    /** Section picker for {@code /free-games subscribe}; bound to the user who asked. */
+    /** Section picker for {@code /free-games dms}; bound to the user who asked. */
     public static List<ActionRow> picker(String userId, Set<FreebieSection> current) {
         var menu = StringSelectMenu.create(PICKER_PREFIX + ":" + userId).setPlaceholder("Sections to get DMs for")
                 .setRequiredRange(1, FreebieSection.values().length);

@@ -31,8 +31,8 @@ public final class ServerInfoEmbeds {
             embed.setThumbnail(guild.getIconUrl());
 
         // Deliberately the total, not a humans-and-bots split. That split needs a full
-        // member cache, which this bot does not keep (only members still on the rules screen
-        // are cached) - counting whatever happens to be cached would report a wrong number.
+        // member cache, which needs the GUILD_MEMBERS intent this bot does not take -
+        // counting whatever happens to be cached would report a confidently wrong number.
         embed.addField("Members", "👥" + " "
                 + String.format("%,d", guild.getMemberCount()), true);
         embed.addField("Owner", "👑" + " <@" + guild.getOwnerId() + ">", true);
