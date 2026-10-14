@@ -119,6 +119,16 @@ public final class FreebieSubscriptions {
     /** As above; a non-null {@code reminderHours} also sets the section's ending-soon reminder (null keeps it). */
     public SaveResult setSection(String guildId, FreebieSection section, String channelId, Set<FreebieStore> stores,
                                  Optional<String> roleId, Integer reminderHours, String actorId, Instant now) {
+        return setSection(guildId, section, channelId, stores, roleId, false, reminderHours, actorId, now);
+    }
+
+    /**
+     * As above. {@code keepLauncherPings}: launchers already in the section keep the ping each has (set with
+     * {@link #setStoreRole}); only newly ticked launchers get {@code roleId}.
+     */
+    public SaveResult setSection(String guildId, FreebieSection section, String channelId, Set<FreebieStore> stores,
+                                 Optional<String> roleId, boolean keepLauncherPings, Integer reminderHours,
+                                 String actorId, Instant now) {
         if (reminderHours != null && !REMINDER_CHOICES.contains(reminderHours))
             throw new IllegalArgumentException("Unsupported reminder setting.");
         List<String> wanted = section.stores().stream().filter(stores::contains).map(FreebieStore::id).toList();
@@ -130,13 +140,24 @@ public final class FreebieSubscriptions {
         if (after.size() > MAX_CHANNELS_PER_GUILD) return SaveResult.LIMIT_REACHED;
         boolean newChannel = current.stream().noneMatch(s -> s.channelId().equals(channelId));
 
-        for (String id : wanted)
-            upsert(new Subscription(guildId, channelId, FreebieStore.byId(id).orElseThrow(), roleId), reminderHours, actorId, now);
+        Map<FreebieStore, Optional<String>> kept = new EnumMap<>(FreebieStore.class);
+        if (keepLauncherPings) for (Subscription s : current) if (s.store().section() == section) kept.putIfAbsent(s.store(), s.roleId());
+        for (String id : wanted) {
+            FreebieStore store = FreebieStore.byId(id).orElseThrow();
+            upsert(new Subscription(guildId, channelId, store, kept.getOrDefault(store, roleId)), reminderHours, actorId, now);
+        }
         subscriptions.deleteMany(and(eq("guildId", guildId), in("store", sectionIds),
                 or(ne("channelId", channelId), nin("store", wanted))));
         // Same race rule as save(): if another admin filled the last slot meanwhile, the newcomer backs out.
         if (newChannel && !keepWithinLimit(guildId, channelId)) return SaveResult.LIMIT_REACHED;
         return newChannel ? SaveResult.CREATED : SaveResult.UPDATED;
+    }
+
+    /** One launcher's ping, in every channel of the server that posts it. Returns how many settings changed. */
+    public long setStoreRole(String guildId, FreebieStore store, Optional<String> roleId, String actorId, Instant now) {
+        return subscriptions.updateMany(and(eq("guildId", guildId), eq("store", store.id())),
+                Updates.combine(Updates.set("roleId", roleId.orElse(null)), Updates.set("updatedBy", actorId),
+                        Updates.set("updatedAt", Date.from(now)))).getMatchedCount();
     }
 
     /** Turns one section off in every channel of the server. */

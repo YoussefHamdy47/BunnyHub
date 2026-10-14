@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * Subscribe/unsubscribe for personal DM alerts, used by {@code /free-games subscribe|unsubscribe} and the
+ * Subscribe/unsubscribe for personal DM alerts, used by {@code /free-games dms} and the
  * Unsubscribe button. Blocking database work; command workers only.
  */
 public final class FreebieDmService {

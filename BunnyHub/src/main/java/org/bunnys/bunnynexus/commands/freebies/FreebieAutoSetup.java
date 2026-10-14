@@ -227,7 +227,7 @@ public final class FreebieAutoSetup {
     /** Alert channels are read-only for members; the bot gets exactly what delivery needs. */
     private static TextChannel channel(Guild guild, Category category, String name) {
         for (TextChannel channel : category.getTextChannels()) if (channel.getName().equals(name)) return channel;
-        return category.createTextChannel(name).setTopic("Free games, checked by the bot owner before they are posted.")
+        return category.createTextChannel(name).setTopic("Free games from your favourite launchers. /free-games help explains how it works.")
                 .addPermissionOverride(guild.getPublicRole(), EnumSet.noneOf(Permission.class), EnumSet.of(Permission.MESSAGE_SEND))
                 .addMemberPermissionOverride(guild.getSelfMember().getIdLong(), BOT_CHANNEL_ACCESS, EnumSet.noneOf(Permission.class))
                 .complete();

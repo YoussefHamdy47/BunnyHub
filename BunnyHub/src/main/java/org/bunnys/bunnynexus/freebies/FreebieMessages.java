@@ -44,8 +44,7 @@ public final class FreebieMessages {
     /** The public alert. Only {@code roleId} may be pinged - never @everyone/@here or users. */
     public static MessageCreateData alert(FreebieOffer offer, Optional<String> roleId, String reference) {
         var builder = new MessageCreateBuilder().setEmbeds(alertEmbed(offer, reference))
-                .setComponents(ActionRow.of(FreebieCards.claimButton(offer),
-                        Button.link(offer.pageUrl().toString(), "Offer details")))
+                .setComponents(ActionRow.of(FreebieCards.claimButton(offer)))
                 .setAllowedMentions(List.of()).mentionRepliedUser(false);
         roleId.ifPresent(role -> builder.setContent("<@&" + role + ">").mentionRoles(role));
         return builder.build();
@@ -57,13 +56,20 @@ public final class FreebieMessages {
 
     /** Major PC launchers ping the owners; the other sections wait quietly to be reviewed in bulk. */
     public static MessageCreateData review(FreebieOffer offer, int channels, int guilds, Set<String> ownerIds) {
+        return review(offer, channels, guilds, ownerIds, false);
+    }
+
+    /** {@code automatic}: the launcher is on the auto-send list, so nobody is pinged and it goes out on its own. */
+    public static MessageCreateData review(FreebieOffer offer, int channels, int guilds, Set<String> ownerIds, boolean automatic) {
         boolean priority = offer.store().section().priority();
-        Set<String> pinged = priority ? ownerIds : Set.of();
+        Set<String> pinged = priority && !automatic ? ownerIds : Set.of();
         String pings = String.join(" ", pinged.stream().sorted().map(id -> "<@" + id + ">").toList());
-        String headline = priority ? "**Ready for review · Major PC**"
+        String headline = automatic ? "**Found · " + offer.store().label() + " is sent automatically**"
+                : priority ? "**Ready for review · Major PC**"
                 : "**Ready for review · " + offer.store().section().label().toLowerCase(Locale.ROOT) + "**";
-        return new MessageCreateBuilder().setContent((pings.isEmpty() ? "" : pings + " ") + headline
-                        + "\nPublic preview below. Review the launcher and audience before approving.")
+        String hint = automatic ? "It goes out within a minute. Use **Stop** afterwards if something is wrong."
+                : "Public preview below. Review the launcher and audience before approving.";
+        return new MessageCreateBuilder().setContent((pings.isEmpty() ? "" : pings + " ") + headline + "\n" + hint)
                 .setAllowedMentions(List.of()).mentionUsers(pinged)
                 .setEmbeds(alertEmbed(offer, "preview"), reviewEmbed(offer, channels, guilds, "Waiting for review"))
                 .setComponents(reviewControls(offer))
@@ -84,7 +90,7 @@ public final class FreebieMessages {
                 ActionRow.of(menu.build()));
     }
 
-    /** Offered after /freebie setup when approved games for that launcher are still claimable. */
+    /** Offered after a channel is set up when approved games for that launcher are still claimable. */
     public static List<ActionRow> catchUpControls(String guildId, String channelId, FreebieStore store, int live) {
         return catchUp(guildId, channelId, store.id(), live);
     }
@@ -101,19 +107,6 @@ public final class FreebieMessages {
                 "Post " + live + (live == 1 ? " available game" : " available games"))));
     }
 
-    public static final String LAUNCHERS_PREFIX = "freebie_launchers";
-
-    /**
-     * Multi-select shown by {@code /freebie setup} without a launcher. The ID carries only the guild, channel and
-     * the role already validated by the command ({@code -} for none); the handler re-validates all three.
-     */
-    public static List<ActionRow> launcherPicker(String guildId, String channelId, Optional<String> roleId, Set<FreebieStore> ticked) {
-        var menu = StringSelectMenu.create(LAUNCHERS_PREFIX + ":" + guildId + ":" + channelId + ":" + roleId.orElse("-"))
-                .setPlaceholder("Pick the launchers to post").setRequiredRange(1, FreebieStore.values().length);
-        for (FreebieStore store : FreebieStore.values()) menu.addOption(store.label(), store.id(), Emoji.fromFormatted(FreebieCards.emoji(store)));
-        if (!ticked.isEmpty()) menu.setDefaultValues(ticked.stream().map(FreebieStore::id).toList());
-        return List.of(ActionRow.of(menu.build()));
-    }
     public static MessageEmbed reviewEmbed(FreebieOffer offer, int channels, int guilds, String status) {
         var embed = Embeds.of("🔎", "Owner review")
                 .setDescription("**" + text(title(offer.title()), 200) + "**\n" + status)
@@ -204,7 +197,7 @@ public final class FreebieMessages {
                 .setAuthor("BunnyNexus • THE FREE GAMES COLLECTION").setTimestamp(null);
         if (offers.isEmpty()) {
             embed.setDescription("Nothing is free on " + scope + " right now. New games are checked every few minutes."
-                    + "\n\nSet up your next discovery with `/freebie dashboard`.");
+                    + "\n\nSet up your next discovery with `/free-games setup`.");
             return new MessageCreateBuilder().setEmbeds(embed.build()).setAllowedMentions(List.of()).build();
         }
         var lines = new StringBuilder();
@@ -219,7 +212,7 @@ public final class FreebieMessages {
             listed++;
         }
         embed.setDescription(lines.toString().strip());
-        Embeds.footer(embed, listed + (listed == 1 ? " game" : " games") + " • Reviewed by the bot owner • Sources credited on individual cards");
+        Embeds.footer(embed, listed + (listed == 1 ? " game" : " games") + " • Sources credited on individual cards");
         List<Button> buttons = new ArrayList<>();
         for (FreebieOffer offer : offers.subList(0, Math.min(listed, 5)))
             buttons.add(Button.link(offer.claimUrl().toString(), label(title(offer.title()))));
@@ -232,8 +225,8 @@ public final class FreebieMessages {
         var embed = Embeds.of("⚠️", "A free-game alert could not be delivered")
                 .setDescription("Alerts need attention in **" + text(guildName, 100) + "** · <#" + channelId + ">")
                 .addField("WHAT HAPPENED", reason.explanation(), false)
-                .addField("NEXT STEP", "Check channel access and permissions, or choose a new destination in `/freebie dashboard`."
-                        + "\nTo stop alerts, use `/freebie remove`.", false)
+                .addField("NEXT STEP", "Check channel access and permissions, or choose a new destination in `/free-games setup`."
+                        + "\nTo stop alerts, open a section there and untick its launchers.", false)
                 .addField("VIEW THE OFFER", "[" + text(title(offer.title()), 200) + "](" + offer.claimUrl() + ")", false);
         Embeds.footer(embed, "You get at most one of these notices per day.");
         return new MessageCreateBuilder().setEmbeds(embed.build()).setAllowedMentions(List.of()).build();
@@ -250,14 +243,14 @@ public final class FreebieMessages {
                     + "that received free-game alerts no longer exists.")
                     .addField("WHAT CHANGED", "I stopped posting **" + text(launchers, 900) + "** there and removed those settings. "
                             + "Alerts that were still queued for it were cancelled.", false)
-                    .addField("NEXT STEP", "Pick a new channel in `/freebie dashboard` to keep getting these games.", false);
+                    .addField("NEXT STEP", "Pick a new channel in `/free-games setup` to keep getting these games.", false);
         } else {
             String where = String.join(", ", change.channels().stream().distinct().map(id -> "<#" + id + ">").toList());
             embed.setDescription("In **" + text(guildName, 100) + "**, the role " + (name == null ? "" : "**@" + name + "** ")
                     + "pinged for free games no longer exists.")
                     .addField("WHAT CHANGED", "Alerts for **" + text(launchers, 900) + "** still post"
                             + (where.isEmpty() ? "" : " in " + where) + ", but without a ping.", false)
-                    .addField("NEXT STEP", "Choose a new ping role in `/freebie dashboard`, then post a new role picker if you use one.", false);
+                    .addField("NEXT STEP", "Choose a new ping role in `/free-games setup`, then post a new role picker if you use one.", false);
         }
         Embeds.footer(embed, "Sent once for this change.");
         return new MessageCreateBuilder().setEmbeds(embed.build()).setAllowedMentions(List.of()).build();

@@ -111,6 +111,61 @@ class FreebieDashboardTest {
         assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "x"}).isEmpty());
     }
 
+    @Test void launcherPingsKeepTheirOwnRolesThroughTheSectionForm() {
+        String epicRole = "9223372036854775805";
+        var saved = List.of(new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.of(epicRole)),
+                new Subscription(GUILD, CHANNEL, FreebieStore.STEAM, Optional.of(ROLE)));
+        var state = FreebieDashboard.states(saved).get(FreebieSection.MAJOR_PC);
+        assertTrue(state.mixedPings());
+        String[] args = FreebieDashboard.sectionButton(guild(), state).getCustomId().split(":", -1);
+        assertEquals(FreebieDashboard.MIXED, args[5]);
+        var form = FreebieDashboard.sectionForm(args).orElseThrow();
+        assertEquals(FreebieDashboard.SECTION_MODAL_PREFIX + ":" + GUILD + ":m:k", form.getId(), "empty role = keep the pings");
+        assertTrue(((Label) form.getComponents().get(1)).getChild().asEntitySelectMenu().getDefaultValues().isEmpty());
+        assertEquals(Map.of(FreebieStore.EPIC, Set.of(Optional.of(epicRole)), FreebieStore.STEAM, Set.of(Optional.of(ROLE))),
+                FreebieDashboard.launcherPings(saved));
+    }
+
+    @Test void pingsViewOffersEveryEnabledLauncherAndOpensItsForm() {
+        var guild = guild();
+        var view = FreebieDashboard.pings(guild, List.of(new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.of(ROLE)),
+                new Subscription(GUILD, CHANNEL, FreebieStore.STEAM, Optional.empty())), null);
+        assertTrue(view.embed().getDescription().contains("**Epic Games Store** · <@&" + ROLE + ">"), view.embed().getDescription());
+        assertTrue(view.embed().getDescription().contains("**Steam** · nobody"));
+        var menu = view.rows().getFirst().getComponents().getFirst().asStringSelectMenu();
+        assertEquals(FreebieDashboard.PING_SELECT_PREFIX + ":" + GUILD, menu.getCustomId());
+        assertEquals(List.of("epic:" + ROLE, "steam:-"), menu.getOptions().stream().map(SelectOption::getValue).toList());
+
+        var form = FreebieDashboard.pingForm(GUILD, "epic:" + ROLE).orElseThrow();
+        assertEquals(FreebieDashboard.PING_MODAL_PREFIX + ":" + GUILD + ":epic", form.getId());
+        assertEquals(ROLE, ((Label) form.getComponents().getFirst()).getChild().asEntitySelectMenu().getDefaultValues().getFirst().getId());
+        assertTrue(FreebieDashboard.pingForm(GUILD, "nope:-").isEmpty());
+        assertTrue(FreebieDashboard.pingForm(GUILD, "epic").isEmpty());
+        assertEquals(1, FreebieDashboard.pings(guild, List.of(), null).rows().size(), "nothing on: just Back");
+    }
+
+    @Test void quickSetupAsksForEverythingInOneForm() {
+        var form = FreebieDashboard.quickForm(GUILD);
+        assertEquals(FreebieDashboard.QUICK_MODAL_PREFIX + ":" + GUILD, form.getId());
+        var labels = form.getComponents().stream().map(c -> (Label) c).toList();
+        assertEquals(4, labels.size());
+        assertEquals(Set.of("m"), ticked(labels.get(1).getChild().asStringSelectMenu().getOptions()), "major PC by default");
+        assertEquals(Set.of("y"), ticked(labels.get(3).getChild().asStringSelectMenu().getOptions()));
+    }
+
+    @Test void dashboardLeadsWithQuickSetupAndHelp() {
+        var guild = guild();
+        when(guild.getSelfMember()).thenReturn(mock(net.dv8tion.jda.api.entities.SelfMember.class));
+        var empty = FreebieDashboard.dashboard(guild, List.of(), null);
+        var row = empty.rows().get(1).getButtons();
+        assertEquals(List.of("Quick setup", "Create channels for me", "Launcher pings", "Post role picker", "Help"),
+                row.stream().map(b -> b.getLabel()).toList());
+        assertEquals(net.dv8tion.jda.api.components.buttons.ButtonStyle.PRIMARY, row.getFirst().getStyle());
+        assertTrue(row.get(2).isDisabled(), "no launchers to ping yet");
+        var guide = FreebieGuide.embed(Set.of(FreebieStore.EPIC)).getFields().stream().map(f -> f.getValue()).toList();
+        assertTrue(String.join("\n", guide).contains("**Epic Games Store** games are posted as soon as they are found"), guide.toString());
+    }
+
     @Test void masksRoundTripEverySubset() {
         for (FreebieSection section : FreebieSection.values())
             for (int mask = 0; mask < 1 << section.stores().size(); mask++)

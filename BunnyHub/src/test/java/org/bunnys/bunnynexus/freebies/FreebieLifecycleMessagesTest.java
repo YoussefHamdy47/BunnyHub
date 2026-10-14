@@ -40,7 +40,8 @@ class FreebieLifecycleMessagesTest {
         var before = buttons(alert.getComponents()).stream().map(Button::getLabel).toList();
         var after = buttons(edit.getComponents()).stream().map(Button::getLabel).toList();
         assertTrue(before.stream().anyMatch(l -> l.startsWith("Claim")));
-        assertEquals(List.of("Offer details"), after);
+        assertEquals(List.of(), after, "only the claim button was there, so an ended card has none");
+        assertTrue(before.stream().noneMatch(l -> l.equals("Offer details")), "credit is the footer, not a GamerPower link");
         // The original carried a role ping; the edit carries no content and allows no mention at all.
         assertEquals("<@&" + ROLE + ">", alert.getContent());
         assertEquals("", edit.getContent());

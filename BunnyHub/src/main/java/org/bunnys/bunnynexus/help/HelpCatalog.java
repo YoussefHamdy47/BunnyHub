@@ -16,7 +16,7 @@ import java.util.TreeMap;
 /** The commands a viewer may see, grouped into ordered categories, and path lookup by name or alias. */
 final class HelpCatalog {
     /** Preferred category order; anything else follows alphabetically. */
-    private static final List<String> CATEGORY_ORDER = List.of("Study", "Free Games", "Information", "Utility", "Owner");
+    private static final List<String> CATEGORY_ORDER = List.of("Study", "Free Games", "Moderation", "Information", "Utility", "Owner");
 
     record Branch(String path, BunnySubcommand subcommand) {}
 

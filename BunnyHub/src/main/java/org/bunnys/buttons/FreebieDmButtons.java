@@ -29,7 +29,7 @@ public class FreebieDmButtons extends BunnyButton {
 
     /** Whatever the id says, only the clicker's own subscription is touched. */
     static String unsubscribe(FreebieDmService dms, User clicker) {
-        return dms.unsubscribe(clicker.getId()) ? "Done. You won't get free-game DMs any more. `/free-games subscribe` turns them back on."
+        return dms.unsubscribe(clicker.getId()) ? "Done. You won't get free-game DMs any more. `/free-games dms` turns them back on."
                 : "You aren't subscribed to free-game DMs.";
     }
 

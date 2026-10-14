@@ -54,7 +54,14 @@ class EpicIntakeTest {
     }
     @Test void missingPartialTruncatedAndErrorEnvelopesCannotEndOffers() throws Exception {
         var root = root(); search(root).get("paging", Document.class).put("total", 99); assertEquals(FreebieFeed.State.FAILED, decode(root).state());
-        root = root(); root.put("errors", List.of()); assertEquals(FreebieFeed.State.FAILED, decode(root).state());
+        // Item errors next to valid data: the games are still found, but the feed is never "complete".
+        root = root(); root.put("errors", List.of(new Document("message", "price lookup failed")));
+        var degraded = decode(root);
+        assertEquals(FreebieFeed.State.PARTIAL, degraded.state());
+        assertEquals(decode(root()).candidates().size(), degraded.candidates().size(), "same games as a clean response");
+        assertFalse(degraded.candidates().isEmpty());
+        // Errors with no data at all still fail.
+        assertEquals(FreebieFeed.State.FAILED, new EpicIntake().decode("{\"errors\":[{\"message\":\"x\"}]}".getBytes(StandardCharsets.UTF_8), NOW).state());
         assertEquals(FreebieFeed.State.FAILED, new EpicIntake().decode("{}".getBytes(StandardCharsets.UTF_8), NOW).state());
         assertEquals(FreebieFeed.State.FAILED, new EpicIntake().decode(Arrays.copyOf(captured(), 500), NOW).state());
     }
