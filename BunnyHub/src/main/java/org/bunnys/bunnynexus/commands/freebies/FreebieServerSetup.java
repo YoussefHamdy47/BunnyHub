@@ -43,6 +43,13 @@ public final class FreebieServerSetup {
     public static SectionSaved saveSection(Guild guild, FreebieSection section, StandardGuildMessageChannel channel,
                                            Optional<Role> role, Set<FreebieStore> stores, Integer reminderHours, String actorId,
                                            FreebieSubscriptions subscriptions) {
+        return saveSection(guild, section, channel, role, stores, false, reminderHours, actorId, subscriptions);
+    }
+
+    /** As above; {@code keepLauncherPings} leaves each launcher's own ping alone (see the dashboard's Launcher pings). */
+    public static SectionSaved saveSection(Guild guild, FreebieSection section, StandardGuildMessageChannel channel,
+                                           Optional<Role> role, Set<FreebieStore> stores, boolean keepLauncherPings,
+                                           Integer reminderHours, String actorId, FreebieSubscriptions subscriptions) {
         Set<FreebieStore> picked = EnumSet.noneOf(FreebieStore.class);
         stores.stream().filter(s -> s.section() == section).forEach(picked::add);
         if (picked.isEmpty()) {
@@ -54,12 +61,13 @@ public final class FreebieServerSetup {
         var problem = FreebieSettingsCommands.validate(guild, channel, role);
         if (problem.isPresent()) return failed("⚠️ " + problem.get());
         var result = subscriptions.setSection(guild.getId(), section, channel.getId(), picked, role.map(Role::getId),
-                reminderHours, actorId, Instant.now());
+                keepLauncherPings, reminderHours, actorId, Instant.now());
         if (result == SaveResult.LIMIT_REACHED)
             return failed("⚠️ This server already uses " + FreebieSubscriptions.MAX_CHANNELS_PER_GUILD
                     + " alert channels. Put this section in one of those, or turn another section off first.");
         return new SectionSaved("✅ **" + section.label() + "** now posts " + labels(picked) + " in " + channel.getAsMention()
-                + role.map(r -> ", pinging " + r.getAsMention()).orElse(" without a ping") + "."
+                + (keepLauncherPings ? ", each launcher keeping its own ping"
+                        : role.map(r -> ", pinging " + r.getAsMention()).orElse(" without a ping")) + "."
                 + (reminderHours != null && reminderHours > 0 ? " Reminder " + reminderHours + " hours before a game ends." : "")
                 + (guild.getSelfMember().hasPermission(channel, Permission.MESSAGE_HISTORY) ? ""
                 : "\n⚠️ Please also give me **Read Message History** there, so retries can never double-post."),

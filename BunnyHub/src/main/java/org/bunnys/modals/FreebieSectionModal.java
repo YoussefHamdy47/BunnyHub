@@ -29,7 +29,8 @@ public class FreebieSectionModal extends BunnyModal {
     public void execute(BunnyHub client, ModalInteractionEvent event, String[] args) {
         var system = FreebieSystem.current().orElse(null);
         var guild = event.getGuild();
-        var section = args.length == 3 ? FreebieSection.byCode(args[2]).orElse(null) : null;
+        // A fourth part "k": the section had per-launcher pings, so an empty role keeps them.
+        var section = args.length == 3 || (args.length == 4 && "k".equals(args[3])) ? FreebieSection.byCode(args[2]).orElse(null) : null;
         if (system == null || section == null || !FreebieDashboard.canManage(guild, event.getMember(), args[1])) {
             event.getHook().sendMessage("You need **Manage Server** in this server to do that.").setEphemeral(true)
                     .setAllowedMentions(List.of()).queue();
@@ -49,7 +50,8 @@ public class FreebieSectionModal extends BunnyModal {
         // New for this section = the channel had none of the section's launchers before this save.
         boolean fresh = channel == null || subscriptions.forGuild(guild.getId()).stream()
                 .noneMatch(s -> s.channelId().equals(channel.getId()) && s.store().section() == section);
-        var result = FreebieServerSetup.saveSection(guild, section, channel, role, stores, reminder, event.getUser().getId(), subscriptions);
+        boolean keepPings = args.length == 4 && role.isEmpty();
+        var result = FreebieServerSetup.saveSection(guild, section, channel, role, stores, keepPings, reminder, event.getUser().getId(), subscriptions);
         String notice = result.notice();
         boolean posted = result.channelId().isPresent() && post.resolve(fresh);
         // Only queued here; the sends run on the freebie sender at catch-up priority.

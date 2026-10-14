@@ -57,13 +57,20 @@ public final class FreebieMessages {
 
     /** Major PC launchers ping the owners; the other sections wait quietly to be reviewed in bulk. */
     public static MessageCreateData review(FreebieOffer offer, int channels, int guilds, Set<String> ownerIds) {
+        return review(offer, channels, guilds, ownerIds, false);
+    }
+
+    /** {@code automatic}: the launcher is on the auto-send list, so nobody is pinged and it goes out on its own. */
+    public static MessageCreateData review(FreebieOffer offer, int channels, int guilds, Set<String> ownerIds, boolean automatic) {
         boolean priority = offer.store().section().priority();
-        Set<String> pinged = priority ? ownerIds : Set.of();
+        Set<String> pinged = priority && !automatic ? ownerIds : Set.of();
         String pings = String.join(" ", pinged.stream().sorted().map(id -> "<@" + id + ">").toList());
-        String headline = priority ? "**Ready for review · Major PC**"
+        String headline = automatic ? "**Found · " + offer.store().label() + " is sent automatically**"
+                : priority ? "**Ready for review · Major PC**"
                 : "**Ready for review · " + offer.store().section().label().toLowerCase(Locale.ROOT) + "**";
-        return new MessageCreateBuilder().setContent((pings.isEmpty() ? "" : pings + " ") + headline
-                        + "\nPublic preview below. Review the launcher and audience before approving.")
+        String hint = automatic ? "It goes out within a minute. Use **Stop** afterwards if something is wrong."
+                : "Public preview below. Review the launcher and audience before approving.";
+        return new MessageCreateBuilder().setContent((pings.isEmpty() ? "" : pings + " ") + headline + "\n" + hint)
                 .setAllowedMentions(List.of()).mentionUsers(pinged)
                 .setEmbeds(alertEmbed(offer, "preview"), reviewEmbed(offer, channels, guilds, "Waiting for review"))
                 .setComponents(reviewControls(offer))
@@ -206,7 +213,7 @@ public final class FreebieMessages {
             listed++;
         }
         embed.setDescription(lines.toString().strip());
-        Embeds.footer(embed, listed + (listed == 1 ? " game" : " games") + " • Reviewed by the bot owner • Sources credited on individual cards");
+        Embeds.footer(embed, listed + (listed == 1 ? " game" : " games") + " • Sources credited on individual cards");
         List<Button> buttons = new ArrayList<>();
         for (FreebieOffer offer : offers.subList(0, Math.min(listed, 5)))
             buttons.add(Button.link(offer.claimUrl().toString(), label(title(offer.title()))));

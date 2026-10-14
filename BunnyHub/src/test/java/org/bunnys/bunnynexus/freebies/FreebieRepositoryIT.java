@@ -322,6 +322,24 @@ class FreebieRepositoryIT {
         assertEquals(Optional.of("100000000000000098"), repository.offer(first.offer().id()).orElseThrow().reviewChannelId());
     }
 
+    @Test void launcherPingsSurviveASectionSaveThatKeepsThem() {
+        String guild = "100000000000000016", channel = "270000000000000000", epicRole = "280000000000000000", all = "280000000000000001";
+        subscriptions.setSection(guild, FreebieSection.MAJOR_PC, channel, EnumSet.of(FreebieStore.EPIC, FreebieStore.STEAM),
+                Optional.of(all), "1", now);
+        assertEquals(1, subscriptions.setStoreRole(guild, FreebieStore.EPIC, Optional.of(epicRole), "1", now));
+        // Keeping pings: Epic keeps its own role, Steam keeps the shared one, newly ticked GOG gets the form's role (none).
+        subscriptions.setSection(guild, FreebieSection.MAJOR_PC, channel, EnumSet.of(FreebieStore.EPIC, FreebieStore.STEAM, FreebieStore.GOG),
+                Optional.empty(), true, null, "1", now);
+        Map<FreebieStore, FreebieSubscriptions.Subscription> byStore = new EnumMap<>(FreebieStore.class);
+        subscriptions.forGuild(guild).forEach(s -> byStore.put(s.store(), s));
+        assertEquals(Optional.of(epicRole), byStore.get(FreebieStore.EPIC).roleId());
+        assertEquals(Optional.of(all), byStore.get(FreebieStore.STEAM).roleId());
+        assertEquals(Optional.empty(), byStore.get(FreebieStore.GOG).roleId());
+        // Not keeping them: one role for the whole section again.
+        subscriptions.setSection(guild, FreebieSection.MAJOR_PC, channel, EnumSet.of(FreebieStore.EPIC), Optional.of(all), "1", now);
+        assertEquals(Optional.of(all), subscriptions.forGuild(guild).getFirst().roleId());
+    }
+
     @Test void sectionSaveMovesOnlyThatSectionAndCountsChannelsAfterTheMove() {
         String guild = "100000000000000014", general = "240000000000000000", pc = "240000000000000001";
         subscribe(guild, general, FreebieStore.EPIC);
