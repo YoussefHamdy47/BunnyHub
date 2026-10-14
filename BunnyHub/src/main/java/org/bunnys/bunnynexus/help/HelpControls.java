@@ -4,7 +4,6 @@ import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.components.selections.SelectOption;
 import net.dv8tion.jda.api.components.selections.StringSelectMenu;
-import net.dv8tion.jda.api.entities.emoji.Emoji;
 import org.bunnys.bunnynexus.help.HelpCatalog.Branch;
 import org.bunnys.bunnynexus.help.HelpCatalog.Target;
 import org.bunnys.handler.commands.BunnyCommand;
@@ -33,14 +32,13 @@ final class HelpControls {
         StringSelectMenu.Builder categories = StringSelectMenu.create(PREFIX + ":cat:" + owner)
                 .setPlaceholder("Choose a category");
         categories.addOptions(SelectOption.of("Overview", OVERVIEW)
-                .withDescription("Every command at a glance").withEmoji(Emoji.fromUnicode("🏠"))
+                .withDescription("Every command at a glance")
                 .withDefault(OVERVIEW.equals(view)));
         for (Map.Entry<String, List<BunnyCommand>> entry : catalog.categories().entrySet()) {
             if (categories.getOptions().size() >= MAX_MENU_OPTIONS) break;
             int count = entry.getValue().size();
             categories.addOptions(SelectOption.of(entry.getKey(), categoryKey(entry.getKey()))
                     .withDescription(count + (count == 1 ? " command" : " commands"))
-                    .withEmoji(Emoji.fromUnicode(emoji(entry.getKey())))
                     .withDefault(target == null && entry.getKey().equals(category)));
         }
         rows.add(ActionRow.of(categories.build()));
@@ -78,10 +76,8 @@ final class HelpControls {
                     : categoryKey(target.command().getCategory());
             String backLabel = target.subcommand() != null ? "Back to /" + target.command().getName() : "Back to " + target.command().getCategory();
             rows.add(ActionRow.of(
-                    Button.secondary(PREFIX + ":go:" + owner + ":" + back + ":a", shorten(backLabel, 80))
-                            .withEmoji(Emoji.fromUnicode("↩️")),
-                    Button.secondary(PREFIX + ":go:" + owner + ":" + OVERVIEW + ":b", "Home")
-                            .withEmoji(Emoji.fromUnicode("🏠"))));
+                    Button.secondary(PREFIX + ":go:" + owner + ":" + back + ":a", shorten(backLabel, 80)),
+                    Button.secondary(PREFIX + ":go:" + owner + ":" + OVERVIEW + ":b", "Home")));
         } else {
             List<String> pages = new ArrayList<>();
             pages.add(OVERVIEW);
@@ -90,12 +86,9 @@ final class HelpControls {
             String previous = pages.get(Math.max(0, index - 1));
             String next = pages.get(Math.min(pages.size() - 1, index + 1));
             rows.add(ActionRow.of(
-                    Button.secondary(PREFIX + ":go:" + owner + ":" + previous + ":a", "Previous")
-                            .withEmoji(Emoji.fromUnicode("◀️")).withDisabled(index == 0),
-                    Button.primary(PREFIX + ":go:" + owner + ":" + OVERVIEW + ":b", "Home")
-                            .withEmoji(Emoji.fromUnicode("🏠")).withDisabled(index == 0),
-                    Button.secondary(PREFIX + ":go:" + owner + ":" + next + ":c", "Next")
-                            .withEmoji(Emoji.fromUnicode("▶️")).withDisabled(index == pages.size() - 1)));
+                    Button.secondary(PREFIX + ":go:" + owner + ":" + previous + ":a", "Previous").withDisabled(index == 0),
+                    Button.primary(PREFIX + ":go:" + owner + ":" + OVERVIEW + ":b", "Home").withDisabled(index == 0),
+                    Button.secondary(PREFIX + ":go:" + owner + ":" + next + ":c", "Next").withDisabled(index == pages.size() - 1)));
         }
         return rows;
     }

@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.commands.freebies;
 
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import org.bunnys.bunnynexus.freebies.FreebieDm;
@@ -12,6 +13,8 @@ import org.bunnys.handler.commands.context.CommandContext;
 import org.bunnys.utils.Embeds;
 import org.bunnys.utils.SystemEmbeds;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Arrays;
 import java.util.Locale;
@@ -55,7 +58,7 @@ public final class FreeGamesCommand {
     public static final class Subscribe extends BunnySubcommand {
         public Subscribe() {
             setName("subscribe");
-            setDescription("Get a DM when a free game is approved, for the sections you choose.");
+            setDescription("Get free games by DM for the sections you choose, or turn DMs off.");
             setExample("/free-games subscribe");
         }
 
@@ -66,28 +69,17 @@ public final class FreeGamesCommand {
             if (!dms.enabled()) { ctx.reply(SystemEmbeds.notice("Free-game DMs", "Personal DM alerts are turned off right now."), true); return; }
             String user = ctx.getUser().getId();
             var current = dms.current(user);
-            var embed = Embeds.of("📬", current.isPresent() ? "Change your free-game DMs" : "Free-game DMs")
-                    .setDescription((current.isPresent() ? "You get DMs for **" + FreebieDm.labels(current.get()) + "**. "
-                            : "") + "Pick the sections you want a DM for. At most " + FreebieDm.DAILY_CAP + " a day; "
-                            + "every game is checked by the bot owner first.")
+            String rules = "At most " + FreebieDm.DAILY_CAP + " a day; every game is checked by the bot owner first.";
+            var embed = Embeds.of(null, current.isPresent() ? "Change your free-game DMs" : "Free-game DMs")
+                    .setDescription(current.isPresent()
+                            ? "You get DMs for **" + FreebieDm.labels(current.get()) + "**. Pick different sections below, "
+                                    + "or use **Unsubscribe** to stop. " + rules
+                            : "Pick the sections you want a DM for. " + rules)
                     .setTimestamp(null).build();
-            ctx.reply(embed, FreebieDm.picker(user, current.orElse(Set.of())), true);
-        }
-    }
-
-    public static final class Unsubscribe extends BunnySubcommand {
-        public Unsubscribe() {
-            setName("unsubscribe");
-            setDescription("Stop free-game DMs.");
-            setExample("/free-games unsubscribe");
-        }
-
-        @Override public void execute(BunnyHub client, CommandContext ctx) {
-            var system = FreebieSystem.current().orElse(null);
-            if (system == null) { unavailable(ctx); return; }
-            boolean removed = system.dms().unsubscribe(ctx.getUser().getId());
-            ctx.reply(SystemEmbeds.notice("Free-game DMs", removed ? "Done. You won't get free-game DMs any more."
-                    : "You weren't subscribed to free-game DMs."), true);
+            // Subscribers get the off switch right here, so changing and stopping DMs is one command.
+            List<ActionRow> rows = new ArrayList<>(FreebieDm.picker(user, current.orElse(Set.of())));
+            if (current.isPresent()) rows.add(ActionRow.of(FreebieDm.unsubscribeButton()));
+            ctx.reply(embed, rows, true);
         }
     }
 

@@ -15,7 +15,6 @@ import net.dv8tion.jda.api.utils.messages.MessageEditBuilder;
 import net.dv8tion.jda.api.utils.messages.MessageEditData;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.entities.channel.middleman.StandardGuildMessageChannel;
-import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.modals.Modal;
 import org.bunnys.bunnynexus.commands.freebies.FreebieSettingsCommands.Reply;
 import org.bunnys.bunnynexus.freebies.FreebieSection;
@@ -26,7 +25,7 @@ import org.bunnys.utils.Embeds;
 import java.util.*;
 
 /**
- * {@code /freebie dashboard}: one ephemeral panel showing every section (major PC, indie PC, console, mobile) with
+ * {@code /freebie}: one ephemeral panel showing every section (major PC, indie PC, console, mobile) with
  * its channel, ping role and launchers, plus buttons to edit a section, auto-setup the server or post a role picker.
  * Pure builders; the handlers in {@code buttons}, {@code selects} and {@code modals} do the work and re-check access.
  *
@@ -95,12 +94,12 @@ public final class FreebieDashboard {
     public static Reply dashboard(Guild guild, List<Subscription> saved, String notice) {
         var states = states(saved);
         long active = states.values().stream().filter(SectionState::on).count();
-        var embed = Embeds.of("🎁", "Your free-game hub").setTimestamp(null);
+        var embed = Embeds.of(null, "Free-game alerts").setTimestamp(null);
         embed.setDescription((notice == null || notice.isBlank() ? "" : notice + "\n\n")
-                + "**" + active + " / " + FreebieSection.values().length + " sections enabled** · Every offer reviewed by the bot owner.\n\n"
-                + (saved.isEmpty() ? "Start with **Auto-setup** to create channels and optional ping roles.\n" : "")
-                + "Choose a section below to edit its destination, launchers and pings.");
-        for (var state : states.values()) embed.addField(state.section().emoji() + " " + state.section().label(), describe(guild, state), false);
+                + (saved.isEmpty() ? "New here? **Auto-setup** creates the channels and ping roles for you.\n"
+                        : "**" + active + " of " + FreebieSection.values().length + " sections on.** ")
+                + "Click a section to change its channel, launchers or ping. Untick every launcher to turn it off.");
+        for (var state : states.values()) embed.addField(state.section().label(), describe(guild, state), false);
         long channels = saved.stream().map(Subscription::channelId).distinct().count();
         Embeds.footer(embed, channels + "/" + FreebieSubscriptions.MAX_CHANNELS_PER_GUILD + " alert channels used");
 
@@ -108,21 +107,21 @@ public final class FreebieDashboard {
         for (var state : states.values()) sections.add(sectionButton(guild, state));
         String id = guild.getId();
         return new Reply(embed.build(), List.of(ActionRow.of(sections), ActionRow.of(
-                Button.primary(NAV_PREFIX + ":" + AUTO + ":" + id, "Auto-setup").withEmoji(Emoji.fromUnicode("⚡")),
-                Button.secondary(RUN_PREFIX + ":" + ROLE_PANEL + ":" + id, "Post role picker here").withEmoji(Emoji.fromUnicode("🔔")),
-                Button.secondary(NAV_PREFIX + ":" + HOME + ":" + id, "Refresh").withEmoji(Emoji.fromUnicode("🔄")))));
+                Button.primary(NAV_PREFIX + ":" + AUTO + ":" + id, "Auto-setup"),
+                Button.secondary(RUN_PREFIX + ":" + ROLE_PANEL + ":" + id, "Post role picker here"),
+                Button.secondary(NAV_PREFIX + ":" + HOME + ":" + id, "Refresh"))));
     }
 
     private static String describe(Guild guild, SectionState state) {
         var labels = state.section().stores().stream().map(FreebieStore::label).toList();
-        if (!state.on()) return "○ **Not enabled**\n" + String.join(" · ", labels);
+        if (!state.on()) return "Off\n-# " + String.join(" · ", labels);
         var text = new StringBuilder();
         for (var entry : state.channels().entrySet()) {
             var channel = guild.getChannelById(StandardGuildMessageChannel.class, entry.getKey());
             boolean ok = channel != null && guild.getSelfMember().hasPermission(channel,
                     Permission.VIEW_CHANNEL, Permission.MESSAGE_SEND, Permission.MESSAGE_EMBED_LINKS);
-            text.append(ok ? "✅ " : "⚠️ ").append("<#").append(entry.getKey()).append(">")
-                    .append(ok ? "" : channel == null ? " • **channel missing**" : " • **I can't post here**");
+            text.append("<#").append(entry.getKey()).append(">")
+                    .append(ok ? "" : channel == null ? " • **channel was deleted**" : " • **I can't post here**");
             if (state.channels().size() > 1)
                 text.append(" • ").append(String.join(", ", entry.getValue().stream().map(FreebieStore::label).toList()));
             text.append("\n");
@@ -145,8 +144,7 @@ public final class FreebieDashboard {
         String role = state.role().filter(r -> guild.getRoleById(r) != null).orElse(NONE);
         String id = String.join(":", NAV_PREFIX, OPEN_SECTION, guild.getId(), String.valueOf(state.section().code()),
                 channel, role, Integer.toHexString(mask(state.section(), state.enabled())), String.valueOf(state.reminder()));
-        return Button.of(state.on() ? ButtonStyle.SUCCESS : ButtonStyle.SECONDARY, id, state.section().label())
-                .withEmoji(Emoji.fromUnicode(state.section().emoji()));
+        return Button.of(state.on() ? ButtonStyle.SUCCESS : ButtonStyle.SECONDARY, id, state.section().label());
     }
 
     static int mask(FreebieSection section, Set<FreebieStore> stores) {
@@ -221,7 +219,7 @@ public final class FreebieDashboard {
 
     /** {@code post}: whether auto-setup also posts the games that are free right now (toggled in place). */
     public static Reply autoSetup(String guildId, Set<FreebieSection> chosen, FreebieCatchUp post) {
-        var embed = Embeds.of("⚡", "Build your free-game corner").setTimestamp(null)
+        var embed = Embeds.of(null, "Auto-setup").setTimestamp(null)
                 .setDescription("Choose your sections, then pick a layout. I'll create read-only channels in **Free Games**, "
                         + "a ping role per section, and a picker so members can opt in.")
                 .addField("ONE SHARED CHANNEL", "All selected sections in `#free-games`.\nEach section keeps its own ping role.", true)
@@ -230,20 +228,19 @@ public final class FreebieDashboard {
                         + "If you already have channels or roles for free games (like #epic-games or @Steam), I'll ask before using them. "
                         + "Selected sections' settings are replaced; other sections stay unchanged.", false);
         embed.addField("Chosen sections", String.join("\n", Arrays.stream(FreebieSection.values()).filter(chosen::contains)
-                .map(s -> s.emoji() + " " + s.label() + " • " + String.join(", ", s.stores().stream().map(FreebieStore::label).toList()))
+                .map(s -> s.label() + " • " + String.join(", ", s.stores().stream().map(FreebieStore::label).toList()))
                 .toList()), false);
         var picker = StringSelectMenu.create(AUTO_SELECT_PREFIX + ":" + guildId + (post == FreebieCatchUp.AUTO ? "" : ":" + post.code()))
                 .setPlaceholder("Sections to set up")
                 .setRequiredRange(1, FreebieSection.values().length);
         for (FreebieSection section : FreebieSection.values())
-            picker.addOption(section.label(), String.valueOf(section.code()), Emoji.fromUnicode(section.emoji()));
+            picker.addOption(section.label(), String.valueOf(section.code()));
         picker.setDefaultValues(chosen.stream().map(s -> String.valueOf(s.code())).toList());
         String codes = FreebieCatchUp.token(chosen, post);
         return new Reply(embed.build(), List.of(ActionRow.of(picker.build()), ActionRow.of(
                 Button.success(RUN_PREFIX + ":" + ONE_CHANNEL + ":" + guildId + ":" + codes, "One channel for everything"),
                 Button.primary(RUN_PREFIX + ":" + CHANNEL_PER_SECTION + ":" + guildId + ":" + codes, "A channel per section"),
-                Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + guildId + ":" + FreebieCatchUp.token(chosen, post.next()), post.toggle())
-                        .withEmoji(Emoji.fromUnicode("📤")),
+                Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + guildId + ":" + FreebieCatchUp.token(chosen, post.next()), post.toggle()),
                 Button.secondary(NAV_PREFIX + ":" + HOME + ":" + guildId, "Back"))));
     }
 }

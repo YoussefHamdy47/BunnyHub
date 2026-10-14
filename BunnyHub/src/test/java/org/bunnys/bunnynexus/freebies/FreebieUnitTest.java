@@ -145,18 +145,8 @@ class FreebieUnitTest {
         assertTrue(list.getMentionedUsers().isEmpty() && list.getMentionedRoles().isEmpty());
     }
 
-    @Test void launcherChecklistFitsDiscordLimitsAndTicksCurrentSet() {
+    @Test void catchUpAllControlFitsDiscordLimits() {
         String snowflake = "12345678901234567890";
-        var rows = FreebieMessages.launcherPicker(snowflake, snowflake, Optional.of(snowflake), EnumSet.of(FreebieStore.EPIC, FreebieStore.GOG));
-        var menu = rows.getFirst().getComponents().getFirst().asStringSelectMenu();
-        assertTrue(menu.getCustomId().length() <= 100);
-        assertEquals(List.of(FreebieMessages.LAUNCHERS_PREFIX, snowflake, snowflake, snowflake), List.of(menu.getCustomId().split(":")));
-        assertEquals(1, menu.getMinValues());
-        assertEquals(FreebieStore.values().length, menu.getMaxValues());
-        assertEquals(Set.of("epic", "gog"), new HashSet<>(menu.getOptions().stream().filter(SelectOption::isDefault).map(SelectOption::getValue).toList()));
-        var noRole = FreebieMessages
-                .launcherPicker(snowflake, snowflake, Optional.empty(), Set.of()).getFirst().getComponents().getFirst().asStringSelectMenu();
-        assertTrue(noRole.getCustomId().endsWith(":-"));
         var all = FreebieMessages.catchUpAllControls(snowflake, snowflake, 4)
                 .getFirst().getComponents().getFirst().asButton();
         assertTrue(all.getCustomId().endsWith(":" + FreebieMessages.CATCH_UP_ALL));
