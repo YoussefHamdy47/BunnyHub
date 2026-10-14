@@ -77,7 +77,7 @@ final class FreebieLifecycleMessages {
         return FreebieMessages.isAlertFooter(embed, reference);
     }
 
-    /** The claim button is the link button labelled "Claim …"; "Offer details" and anything else stay. */
+    /** The claim button is the link button labelled "Claim …"; anything else (such as Unsubscribe) stays. */
     static boolean isClaim(ActionRowChildComponent component) {
         return component instanceof Button button && button.getStyle() == ButtonStyle.LINK && button.getLabel().startsWith("Claim");
     }

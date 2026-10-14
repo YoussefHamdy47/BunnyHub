@@ -14,7 +14,7 @@ public class Main {
                 .setBasePackage("org.bunnys")
                 .setDatabaseName(database)
                 .setTokenKey("TOKEN")
-                .setCommandPool(24, 100)
+                .setCommandPool(12, 100)
                 .addIntents(GatewayIntent.GUILD_MESSAGES, GatewayIntent.DIRECT_MESSAGES)
                 .addDeveloperIds("333644367539470337")
                 .addTestServerIds("1187559385359200316")

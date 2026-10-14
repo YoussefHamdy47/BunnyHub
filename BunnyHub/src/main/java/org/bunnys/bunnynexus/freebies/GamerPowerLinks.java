@@ -38,7 +38,7 @@ public final class GamerPowerLinks {
     /** Discord's limit for a link button's URL. */
     static final int MAX_URL = 512;
     private static final String GAMERPOWER = "www.gamerpower.com";
-    private static final Duration TIMEOUT = Duration.ofSeconds(8);
+    private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     /** One request to GamerPower: the status code and the {@code Location} header, if any. */
     record Hop(int status, Optional<String> location) {}
