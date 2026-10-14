@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 title BunnyNexus TEST instance
-:: Starts a separate TEST instance for live verification (see docs\LIVE_TEST.md).
+:: Starts a separate TEST instance for live verification (see "Test instance" in README.md).
 :: Reads settings from .env.test (git-ignored, never published), never from .env.
 :: Refuses to start when the test database is missing or is the production database GBF, or when the
 :: test token is the production token. The Java side checks the database again (-Dbunny.test.instance=true).
@@ -11,7 +11,7 @@ cd /d "%~dp0"
 set "ENV_FILE=.env.test"
 
 if not exist "%ENV_FILE%" (
-    echo  REFUSED: %ENV_FILE% not found. Create it as described in docs\LIVE_TEST.md.
+    echo  REFUSED: %ENV_FILE% not found. Create it as described under "Test instance" in README.md.
     goto :REFUSED
 )
 
