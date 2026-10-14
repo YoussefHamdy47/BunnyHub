@@ -47,8 +47,14 @@ final class FreebieNotifier {
     private void start(JDA client, FreebieNoticeStore.Claim job) {
         try {
             var guild = client.getGuildById(job.guildId());
-            var offer = repository.offer(job.offerId()).orElse(null);
-            if (guild == null || offer == null) throw new IllegalStateException("notice guild or offer unavailable");
+            if (guild == null && job.change().isPresent() && !client.isUnavailable(Long.parseLong(job.guildId()))) {
+                // Connected and the server is gone: the bot was removed, so there is nobody left to tell.
+                repository.notices().drop(job, clock.instant());
+                inFlight--;
+                return;
+            }
+            var offer = job.change().isPresent() ? null : repository.offer(job.offerId()).orElse(null);
+            if (guild == null || (job.change().isEmpty() && offer == null)) throw new IllegalStateException("notice guild or offer unavailable");
             String route = "SYSTEM".equals(job.route()) ? "SYSTEM" : "DM";
             String recipient = job.recipientId() == null ? guild.getOwnerId() : job.recipientId();
             CompletableFuture<? extends MessageChannel> channel;
@@ -65,17 +71,18 @@ final class FreebieNotifier {
                 CompletableFuture<Optional<Message>> history = job.verifyFirst()
                         ? destination.getHistory().retrievePast(50).timeout(45, TimeUnit.SECONDS).submit()
                             .thenApply(messages -> messages.stream().filter(m -> m.getAuthor().getId().equals(client.getSelfUser().getId()))
-                                    .filter(m -> FreebieMessages.carriesNoticeReference(m, job.deliveryId())).findFirst())
+                                    .filter(m -> FreebieMessages.carriesNoticeReference(m, job.reference())).findFirst())
                         : CompletableFuture.completedFuture(Optional.empty());
                 return history.thenComposeAsync(found -> {
                     if (closed || !repository.notices().owns(job, clock.instant()))
                         return CompletableFuture.<Message>failedFuture(new IllegalStateException("notice lease expired"));
                     if (found.isPresent()) return CompletableFuture.completedFuture(found.get());
-                    var notice = FreebieMessages.serverNotice(guild.getName(), job.failedChannel(), job.failure(), offer);
+                    var notice = job.change().isPresent() ? FreebieMessages.changeNotice(guild.getName(), job.change().get())
+                            : FreebieMessages.serverNotice(guild.getName(), job.failedChannel(), job.failure(), offer);
                     var embed = new net.dv8tion.jda.api.EmbedBuilder(notice.getEmbeds().getFirst())
-                            .setFooter(FreebieMessages.noticeReference(job.deliveryId())).build();
+                            .setFooter(FreebieMessages.noticeReference(job.reference())).build();
                     return destination.sendMessage(new MessageCreateBuilder().setEmbeds(embed).setAllowedMentions(List.of()).build())
-                            .setNonce(FreebieMessages.nonce("notice|" + job.deliveryId())).timeout(45, TimeUnit.SECONDS).submit();
+                            .setNonce(FreebieMessages.nonce("notice|" + job.reference())).timeout(45, TimeUnit.SECONDS).submit();
                 }, executor);
             }, executor).whenCompleteAsync((message, failure) -> finish(job, message, failure), executor);
         } catch (RuntimeException failure) { finish(job, null, failure); }

@@ -15,6 +15,7 @@ public class FreebieStoreSelect extends BunnySelect {
 
     @Override
     public void execute(BunnyHub client, StringSelectInteractionEvent event, String[] args) {
+        args = event.getComponentId().split(":", 2);
         var system = FreebieSystem.current().orElse(null);
         String refusal = null;
         if (system == null) refusal = "Free-game alerts are not running.";
@@ -31,3 +32,4 @@ public class FreebieStoreSelect extends BunnySelect {
         event.getHook().sendMessage(result).setEphemeral(true).setAllowedMentions(List.of()).queue();
     }
 }
+

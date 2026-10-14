@@ -1,6 +1,7 @@
 package org.bunnys.buttons;
 
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import org.bunnys.bunnynexus.commands.freebies.FreebieCatchUp;
 import org.bunnys.bunnynexus.commands.freebies.FreebieDashboard;
 import org.bunnys.bunnynexus.freebies.FreebieSection;
 import org.bunnys.bunnynexus.freebies.FreebieSystem;
@@ -28,8 +29,13 @@ public class FreebieDashboardButtons extends BunnyButton {
             // A form must be the first response, so it is built from the button id alone (no database read).
             case FreebieDashboard.OPEN_SECTION -> FreebieDashboard.sectionForm(args).ifPresentOrElse(
                     form -> event.replyModal(form).queue(), () -> deny(event, "This control is malformed."));
-            case FreebieDashboard.AUTO -> event.editMessage(FreebieDashboard.asEdit(
-                    FreebieDashboard.autoSetup(args[2], EnumSet.allOf(FreebieSection.class)))).queue();
+            // freebie_dash:auto:<guild>[:<sections>[!<post now>]]: open auto-setup, or redraw it with the toggle flipped.
+            case FreebieDashboard.AUTO -> {
+                var chosen = args.length == 4 ? FreebieCatchUp.sectionsOf(args[3]) : EnumSet.allOf(FreebieSection.class);
+                event.editMessage(FreebieDashboard.asEdit(FreebieDashboard.autoSetup(args[2],
+                        chosen.isEmpty() ? EnumSet.allOf(FreebieSection.class) : chosen,
+                        args.length == 4 ? FreebieCatchUp.choiceOf(args[3]) : FreebieCatchUp.AUTO))).queue();
+            }
             case FreebieDashboard.HOME -> {
                 event.deferEdit().complete();
                 var saved = system.subscriptions().forGuild(args[2]);

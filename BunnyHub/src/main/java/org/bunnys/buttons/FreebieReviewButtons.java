@@ -26,14 +26,20 @@ public class FreebieReviewButtons extends BunnyButton {
             deny(event, "Only the bot owner can review free-game alerts.");
             return;
         }
+        args = event.getComponentId().split(":", 3);
         if (args.length != 3) { deny(event, "This control is malformed."); return; }
         String action = args[1], offerId = args[2], actor = event.getUser().getId();
+        if (action.startsWith("source-")) {
+            event.deferReply(true).complete();
+            followUp(event, system.resolveSource(actor, offerId, action));
+            return;
+        }
         // Runs on a command worker: acknowledge first so database work can never outlast Discord's 3 s window.
         switch (action) {
             case "confirm" -> {
                 event.deferEdit().complete();
                 String result = system.confirmApproval(actor, offerId);
-                event.getHook().editOriginal(result).setComponents().setAllowedMentions(List.of()).queue();
+                event.getHook().editOriginal(result).setEmbeds().setComponents().setAllowedMentions(List.of()).queue();
             }
             case "approve" -> {
                 event.deferReply(true).complete();
@@ -62,3 +68,4 @@ public class FreebieReviewButtons extends BunnyButton {
         event.reply("> " + AppDesign.Emojis.ERROR + " " + message).setEphemeral(true).setAllowedMentions(List.of()).queue();
     }
 }
+

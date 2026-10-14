@@ -56,7 +56,10 @@ class FreebieDashboardTest {
         var form = FreebieDashboard.sectionForm(args).orElseThrow();
         assertEquals(FreebieDashboard.SECTION_MODAL_PREFIX + ":" + GUILD + ":m", form.getId());
         var labels = form.getComponents().stream().map(c -> (Label) c).toList();
-        assertEquals(3, labels.size());
+        assertEquals(5, labels.size(), "Discord's limit is five");
+        var reminder = labels.get(3).getChild().asStringSelectMenu();
+        assertEquals(FreebieDashboard.REMINDER_FIELD, reminder.getCustomId());
+        assertEquals(Set.of("0"), ticked(reminder.getOptions()), "existing settings without a value mean off");
         var channel = labels.get(0).getChild().asEntitySelectMenu();
         assertEquals(CHANNEL, channel.getDefaultValues().getFirst().getId());
         assertEquals(ROLE, labels.get(1).getChild().asEntitySelectMenu().getDefaultValues().getFirst().getId());
@@ -80,6 +83,32 @@ class FreebieDashboardTest {
         assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "zz"}).isEmpty());
         assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD}).isEmpty());
         assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "99999999999999999999", "-", "1"}).isEmpty());
+    }
+
+    @Test void theSectionReminderRidesInTheButtonAndDefaultsTheForm() {
+        var state = FreebieDashboard.states(List.of(new Subscription(GUILD, CHANNEL, FreebieStore.STEAM, Optional.of(ROLE), 24),
+                new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.of(ROLE), 24))).get(FreebieSection.MAJOR_PC);
+        assertEquals(24, state.reminder());
+        String id = FreebieDashboard.sectionButton(guild(), state).getCustomId();
+        assertTrue(id.length() <= 100, id.length() + " chars");
+        String[] args = id.split(":", -1);
+        assertEquals("24", args[7]);
+        var labels = FreebieDashboard.sectionForm(args).orElseThrow().getComponents().stream().map(c -> (Label) c).toList();
+        assertEquals(Set.of("24"), ticked(labels.get(3).getChild().asStringSelectMenu().getOptions()));
+        assertEquals(List.of("0", "24", "6"), labels.get(3).getChild().asStringSelectMenu().getOptions().stream()
+                .map(o -> o.getValue()).toList());
+
+        var mixed = FreebieDashboard.states(List.of(new Subscription(GUILD, CHANNEL, FreebieStore.STEAM, Optional.empty(), 24),
+                new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.empty(), 6))).get(FreebieSection.MAJOR_PC);
+        assertEquals(0, mixed.reminder(), "a section that disagrees opens as off");
+    }
+
+    @Test void olderDashboardButtonsStillOpenAndUnknownRemindersAreRefused() {
+        var legacy = FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1"}).orElseThrow();
+        var labels = legacy.getComponents().stream().map(c -> (Label) c).toList();
+        assertEquals(Set.of("0"), ticked(labels.get(3).getChild().asStringSelectMenu().getOptions()));
+        assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "12"}).isEmpty());
+        assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "x"}).isEmpty());
     }
 
     @Test void masksRoundTripEverySubset() {
@@ -144,9 +173,9 @@ class FreebieDashboardTest {
                 new Subscription(GUILD, "9223372036854775806", FreebieStore.ANDROID, Optional.empty()));
         var pcAndConsole = EnumSet.of(FreebieSection.MAJOR_PC, FreebieSection.CONSOLE);
         // Their current channels are replaced; mobile's is kept.
-        assertEquals(3, FreebieServerSetup.channelsAfterAutoSetup(saved, pcAndConsole, true));
-        assertEquals(2, FreebieServerSetup.channelsAfterAutoSetup(saved, pcAndConsole, false));
-        assertEquals(4, FreebieServerSetup.channelsAfterAutoSetup(List.of(), EnumSet.allOf(FreebieSection.class), true));
+        assertEquals(3, FreebieAutoSetup.channelsAfterAutoSetup(saved, pcAndConsole, true));
+        assertEquals(2, FreebieAutoSetup.channelsAfterAutoSetup(saved, pcAndConsole, false));
+        assertEquals(4, FreebieAutoSetup.channelsAfterAutoSetup(List.of(), EnumSet.allOf(FreebieSection.class), true));
     }
 
     @Test void rolePickerNeverPingsAndMergesSharedRoles() {
@@ -154,7 +183,7 @@ class FreebieDashboardTest {
         when(shared.getId()).thenReturn(ROLE);
         var roles = new EnumMap<FreebieSection, Role>(FreebieSection.class);
         for (FreebieSection section : FreebieSection.values()) roles.put(section, shared);
-        try (var panel = FreebieServerSetup.rolePanel(roles)) {
+        try (var panel = FreebieServerSetup.sectionRolePanel(roles)) {
             assertTrue(panel.getMentionedRoles().isEmpty());
             assertFalse(panel.getAllowedMentions().contains(Message.MentionType.ROLE));
             var buttons = panel.getComponents().getFirst().asActionRow().getComponents();

@@ -19,7 +19,6 @@ import org.bunnys.utils.Replies;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The study-session menu: {@code session:<action>:<owner>}. Runs on a command worker after the router acknowledged
@@ -130,14 +129,14 @@ public final class SessionMenuManager {
         long now = System.currentTimeMillis();
         var note = SessionEmbeds.paused(SessionClock.of(timers.session(), now).activeStudy(), now);
         event.getHook().editOriginalEmbeds(card).setComponents(ActionRow.of(buildButtons(userId, SessionState.PAUSED)))
-                .queue(done -> sendBriefly(event, note));
+                .queue(done -> sendBreakNote(event, note));
     }
 
     private static void resume(ButtonInteractionEvent event, String userId) {
         long breakMs = TimerSessionService.unpauseSession(userId);
         MessageEmbed card = new Timers(userId, event).refreshMainEmbed(event.getMessage().getEmbeds().getFirst());
         event.getHook().editOriginalEmbeds(card).setComponents(ActionRow.of(buildButtons(userId, SessionState.RUNNING)))
-                .queue(done -> sendBriefly(event, SessionEmbeds.resumed(breakMs)));
+                .queue(done -> sendBreakNote(event, SessionEmbeds.resumed(breakMs)));
     }
 
     private static void stats(ButtonInteractionEvent event, String userId) {
@@ -187,9 +186,9 @@ public final class SessionMenuManager {
         }
     }
 
-    /** Pause/resume notes are public but only relevant for a minute. */
-    private static void sendBriefly(ButtonInteractionEvent event, MessageEmbed note) {
-        event.getHook().sendMessageEmbeds(note).queue(message -> message.delete().queueAfter(1, TimeUnit.MINUTES, null, ignored -> {}));
+    /** Pause/resume notes are visible only to the person controlling the session. */
+    private static void sendBreakNote(ButtonInteractionEvent event, MessageEmbed note) {
+        event.getHook().sendMessageEmbeds(note).setEphemeral(true).queue();
     }
 
     /** Runs on the command executor; performs a database read, so never call it from a JDA callback. */

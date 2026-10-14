@@ -1,6 +1,7 @@
 package org.bunnys.bunnynexus.timers.services;
 
 import org.bunnys.bunnynexus.timers.engine.LevelEngine;
+import org.bunnys.database.models.timers.Session;
 import org.bunnys.database.models.timers.TimerData;
 import org.bunnys.database.models.user.BunnyUser;
 import org.bunnys.utils.Durations;
@@ -9,6 +10,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.OptionalDouble;
 
@@ -79,9 +81,48 @@ final class SessionProgress {
         return stretches;
     }
 
+    /** How long one subject was studied during a session, in seconds. */
+    record SubjectTime(String code, double seconds) {}
+
+    /** Shown for study a session logged before it recorded its per-subject split. */
+    static final String UNSPLIT_STUDY = "Earlier subjects";
+
+    /** Adds credited study time to the session's entry for {@code code} (an entry of the studied-subjects list). */
+    static void addSubjectTime(Session session, String code, double seconds) {
+        List<String> studied = session.getSubjectsStudied();
+        List<Double> times = session.getSubjectTimes();
+        int index = -1;
+        for (int i = 0; i < studied.size() && index < 0; i++)
+            if (studied.get(i) != null && studied.get(i).trim().equalsIgnoreCase(code)) index = i;
+        if (index < 0) return;
+        while (times.size() < studied.size()) times.add(0.0);
+        times.set(index, times.get(index) + Math.max(0, seconds));
+    }
+
+    /**
+     * The session's study split by subject, longest first. Subjects switched away from within a second are left out
+     * unless nothing else was studied; study the session did not split (it began before the split was recorded) is
+     * listed as {@link #UNSPLIT_STUDY}.
+     */
+    static List<SubjectTime> subjectTimes(Session session, double studySecs) {
+        List<String> studied = session.getSubjectsStudied();
+        List<Double> times = session.getSubjectTimes();
+        List<SubjectTime> all = new ArrayList<>();
+        double split = 0;
+        for (int i = 0; i < studied.size(); i++) {
+            double seconds = i < times.size() && times.get(i) != null ? times.get(i) : 0;
+            split += seconds;
+            all.add(new SubjectTime(studied.get(i).trim(), seconds));
+        }
+        if (!studied.isEmpty() && studySecs - split >= 1) all.add(new SubjectTime(UNSPLIT_STUDY, studySecs - split));
+        List<SubjectTime> shown = all.stream().filter(entry -> entry.seconds() >= 1).toList();
+        return (shown.isEmpty() ? all : shown).stream()
+                .sorted(Comparator.comparingDouble(SubjectTime::seconds).reversed()).toList();
+    }
+
     /** @param adjustedFrom the tracked study time, when the user corrected it to {@code studySecs} */
     static String recap(long startMs, SessionClock clock, double studySecs, OptionalDouble adjustedFrom, int breakCount,
-                        List<String> subjects, long points, double rewardedMinutes) {
+                        List<SubjectTime> subjects, long points, double rewardedMinutes) {
         StringBuilder recap = new StringBuilder();
         recap.append("• Start Time: <t:").append(startMs / 1000).append(":F>\n")
                 .append("• Total Time Elapsed: ").append(Durations.formatSeconds(clock.elapsed())).append("\n")
@@ -97,8 +138,7 @@ final class SessionProgress {
                 .append(averageBreak > 0 ? Durations.formatSeconds(averageBreak) : "N/A").append("\n")
                 .append("• Number of Breaks:   ").append(breakCount).append("\n");
 
-        if (subjects != null && !subjects.isEmpty()) recap.append("\n• Studied Subjects: ").append(String.join(", ", subjects));
-        else recap.append("\n• No subjects studied this session.");
+        appendSubjects(recap, subjects);
 
         recap.append("\n\n• XP & RP Earned: ").append(String.format("%,d", points));
         // Say so only when the focus tiers actually reduced the reward (beyond the 5-minute block rounding).
@@ -107,5 +147,28 @@ final class SessionProgress {
                     .append(Durations.formatSeconds(rewardedMinutes * 60))
                     .append(" of study. A break of 15 minutes or more restores the full rate.");
         return recap.toString();
+    }
+
+    /**
+     * One subject gets a single line; several get a list with each one's share of the session. Times are rounded to
+     * the second, so a split of whole hours does not read as "59 minutes 59 seconds".
+     */
+    private static void appendSubjects(StringBuilder recap, List<SubjectTime> subjects) {
+        if (subjects == null || subjects.isEmpty()) {
+            recap.append("\n• No subjects studied this session.");
+            return;
+        }
+        if (subjects.size() == 1) {
+            SubjectTime only = subjects.getFirst();
+            recap.append("\n• Subject Studied: **").append(only.code()).append("** for ")
+                    .append(Durations.formatSeconds(Math.rint(only.seconds())));
+            return;
+        }
+        double total = subjects.stream().mapToDouble(SubjectTime::seconds).sum();
+        recap.append("\n• Subject Breakdown:");
+        for (SubjectTime subject : subjects) {
+            recap.append("\n   ◦ **").append(subject.code()).append("**: ").append(Durations.formatSeconds(Math.rint(subject.seconds())));
+            if (total > 0) recap.append(" (").append(Math.round(subject.seconds() * 100 / total)).append("%)");
+        }
     }
 }

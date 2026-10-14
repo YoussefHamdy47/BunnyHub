@@ -2,7 +2,7 @@
 
 Java 21 Discord bot for study sessions, semesters, academic records and GPA tracking, plus owner-reviewed free-game alerts for servers.
 
-- **Free-game alerts** (`/freebie`, `/free-games`, `/freebie-admin`) are live: GamerPower discovery, owner review in a private channel, durable per-channel delivery with retries.
+- **Free-game alerts** (`/freebie`, `/free-games list|subscribe|unsubscribe`, `/freebie-admin`) are live: GamerPower discovery, owner review in a private channel, durable per-channel delivery with retries, and optional personal DMs.
 - **Handler 2.0**: commands, routers, cooldowns and bounded executors.
 
 ## Build and run
@@ -97,6 +97,8 @@ Every newly archived semester is saved in `SemesterHistory`; the longest-semeste
 Course codes containing hyphens, such as `CS-101`, are supported. Autocomplete labels separate code and name with ` - `. New courses validate code/name lengths and credit hours. Streaks use UTC calendar days. Statistics show up to 12 courses to respect Discord embed limits; the GPA menu lists all courses.
 
 Pending sessions and GPA menus remain in memory and expire automatically. Pending menus do not survive a restart; active timers are persisted and their message IDs remain valid. Old menus cannot operate a replacement session. Only one bot process should own the same Discord application; optimistic writes protect data conflicts but do not coordinate in-memory menus across processes.
+
+Timer pause/resume confirmations are ephemeral. Live Telemetry shows elapsed time since the latest completed break when its end timestamp is available; see [Timer break responses and telemetry](docs/TIMER_BREAKS.md).
 
 ## Validation limits
 

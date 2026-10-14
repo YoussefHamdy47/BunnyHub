@@ -42,11 +42,18 @@ public final class FreebieDashboard {
     public static final String OPEN_SECTION = "s", AUTO = "auto", HOME = "home", ONE_CHANNEL = "one",
             CHANNEL_PER_SECTION = "split", ROLE_PANEL = "panel";
     /** Modal field ids. */
-    public static final String CHANNEL_FIELD = "channel", ROLE_FIELD = "role", LAUNCHERS_FIELD = "launchers";
+    public static final String CHANNEL_FIELD = "channel", ROLE_FIELD = "role", LAUNCHERS_FIELD = "launchers",
+            REMINDER_FIELD = "reminder", POST_FIELD = "post";
     private static final String NONE = "-";
 
     /** One section as saved: its channel(s) with their launchers, and the role(s) pinged. */
-    public record SectionState(FreebieSection section, Map<String, Set<FreebieStore>> channels, Set<Optional<String>> roles) {
+    public record SectionState(FreebieSection section, Map<String, Set<FreebieStore>> channels, Set<Optional<String>> roles,
+                               Set<Integer> reminders) {
+        public SectionState(FreebieSection section, Map<String, Set<FreebieStore>> channels, Set<Optional<String>> roles) {
+            this(section, channels, roles, new TreeSet<>());
+        }
+        /** Hours before the end for the ending-soon reminder; 0 (off) unless the whole section agrees. */
+        public int reminder() { return reminders.size() == 1 ? reminders.iterator().next() : 0; }
         public boolean on() { return !channels.isEmpty(); }
         public Set<FreebieStore> enabled() {
             Set<FreebieStore> all = EnumSet.noneOf(FreebieStore.class);
@@ -69,6 +76,7 @@ public final class FreebieDashboard {
             var state = states.get(s.store().section());
             state.channels().computeIfAbsent(s.channelId(), k -> EnumSet.noneOf(FreebieStore.class)).add(s.store());
             state.roles().add(s.roleId());
+            state.reminders().add(s.reminderHours());
         }
         return states;
     }
@@ -86,10 +94,12 @@ public final class FreebieDashboard {
 
     public static Reply dashboard(Guild guild, List<Subscription> saved, String notice) {
         var states = states(saved);
-        var embed = Embeds.of("🎁", "Free-game alerts dashboard");
+        long active = states.values().stream().filter(SectionState::on).count();
+        var embed = Embeds.of("🎁", "Your free-game hub").setTimestamp(null);
         embed.setDescription((notice == null || notice.isBlank() ? "" : notice + "\n\n")
-                + "Press a section to choose its channel, the role to ping and which launchers to post. "
-                + "**Auto-setup** creates the channels and roles for you. Every game is checked by the bot owner first.");
+                + "**" + active + " / " + FreebieSection.values().length + " sections enabled** · Every offer reviewed by the bot owner.\n\n"
+                + (saved.isEmpty() ? "Start with **Auto-setup** to create channels and optional ping roles.\n" : "")
+                + "Choose a section below to edit its destination, launchers and pings.");
         for (var state : states.values()) embed.addField(state.section().emoji() + " " + state.section().label(), describe(guild, state), false);
         long channels = saved.stream().map(Subscription::channelId).distinct().count();
         Embeds.footer(embed, channels + "/" + FreebieSubscriptions.MAX_CHANNELS_PER_GUILD + " alert channels used");
@@ -105,7 +115,7 @@ public final class FreebieDashboard {
 
     private static String describe(Guild guild, SectionState state) {
         var labels = state.section().stores().stream().map(FreebieStore::label).toList();
-        if (!state.on()) return "⚪ Off • " + String.join(", ", labels);
+        if (!state.on()) return "○ **Not enabled**\n" + String.join(" · ", labels);
         var text = new StringBuilder();
         for (var entry : state.channels().entrySet()) {
             var channel = guild.getChannelById(StandardGuildMessageChannel.class, entry.getKey());
@@ -117,10 +127,12 @@ public final class FreebieDashboard {
                 text.append(" • ").append(String.join(", ", entry.getValue().stream().map(FreebieStore::label).toList()));
             text.append("\n");
         }
-        text.append("Pings: ").append(String.join(", ", state.roles().stream()
+        text.append("**Pings** · ").append(String.join(", ", state.roles().stream()
                 .map(role -> role.map(r -> "<@&" + r + ">").orElse("nobody")).toList()));
+        text.append("\n**Launchers** · ").append(String.join(" · ", state.enabled().stream().sorted().map(FreebieStore::label).toList()));
+        if (state.reminder() > 0) text.append("\n**Reminder** · ").append(state.reminder()).append(" hours before a game ends");
         var off = state.section().stores().stream().filter(s -> !state.enabled().contains(s)).map(FreebieStore::label).toList();
-        if (!off.isEmpty()) text.append("\nNot posted: ").append(String.join(", ", off));
+        if (!off.isEmpty()) text.append("\n**Off** · ").append(String.join(", ", off));
         return text.toString();
     }
 
@@ -132,7 +144,7 @@ public final class FreebieDashboard {
         String channel = state.mainChannel().filter(c -> guild.getGuildChannelById(c) != null).orElse(NONE);
         String role = state.role().filter(r -> guild.getRoleById(r) != null).orElse(NONE);
         String id = String.join(":", NAV_PREFIX, OPEN_SECTION, guild.getId(), String.valueOf(state.section().code()),
-                channel, role, Integer.toHexString(mask(state.section(), state.enabled())));
+                channel, role, Integer.toHexString(mask(state.section(), state.enabled())), String.valueOf(state.reminder()));
         return Button.of(state.on() ? ButtonStyle.SUCCESS : ButtonStyle.SECONDARY, id, state.section().label())
                 .withEmoji(Emoji.fromUnicode(state.section().emoji()));
     }
@@ -158,7 +170,8 @@ public final class FreebieDashboard {
      * A section that is off starts with every launcher ticked, so picking a channel is all it takes.
      */
     public static Optional<Modal> sectionForm(String[] args) {
-        if (args.length != 7) return Optional.empty();
+        // Seven parts: dashboards drawn before reminders existed (reminder off).
+        if (args.length != 7 && args.length != 8) return Optional.empty();
         var section = FreebieSection.byCode(args[3]).orElse(null);
         if (section == null) return Optional.empty();
         int mask;
@@ -171,6 +184,16 @@ public final class FreebieDashboard {
             if (!NONE.equals(args[4])) channel.setDefaultValues(DefaultValue.channel(args[4]));
             if (!NONE.equals(args[5])) role.setDefaultValues(DefaultValue.role(args[5]));
         } catch (NumberFormatException malformed) { return Optional.empty(); }
+        String reminderNow = args.length == 8 ? args[7] : "0";
+        if (!FreebieSubscriptions.REMINDER_CHOICES.contains(parse(reminderNow))) return Optional.empty();
+        var reminder = StringSelectMenu.create(REMINDER_FIELD).setRequiredRange(1, 1)
+                .addOption("Off", "0", "No reminder")
+                .addOption("24 hours before", "24", "A short reply to the alert a day before a game ends")
+                .addOption("6 hours before", "6", "A short reply to the alert 6 hours before a game ends")
+                .setDefaultValues(reminderNow);
+        var post = StringSelectMenu.create(POST_FIELD).setRequiredRange(1, 1);
+        for (FreebieCatchUp choice : FreebieCatchUp.values()) post.addOption(choice.option(), String.valueOf(choice.code()));
+        post.setDefaultValues(String.valueOf(FreebieCatchUp.AUTO.code()));
         var ticked = mask == 0 ? EnumSet.copyOf(section.stores()) : unmask(section, mask);
         var launchers = StringSelectMenu.create(LAUNCHERS_FIELD).setRequiredRange(0, section.stores().size()).setRequired(false)
                 .setPlaceholder("Nothing ticked = section off");
@@ -180,35 +203,47 @@ public final class FreebieDashboard {
         return Optional.of(Modal.create(SECTION_MODAL_PREFIX + ":" + args[2] + ":" + section.code(), section.label())
                 .addComponents(Label.of("Channel", "Where these free games are posted", channel.build()),
                         Label.of("Role to ping", "Leave empty to post without a ping", role.build()),
-                        Label.of("Launchers", "Untick everything to turn this section off", launchers.build()))
+                        Label.of("Launchers", "Untick everything to turn this section off", launchers.build()),
+                        Label.of("Ending-soon reminder", "Only for games with a real end date; pings like new alerts",
+                                reminder.build()),
+                        Label.of("Post current games now", "Approved games that are still free; each at most once per channel",
+                                post.build()))
                 .build());
+    }
+
+    private static int parse(String value) {
+        try { return Integer.parseInt(value); } catch (NumberFormatException malformed) { return -1; }
     }
 
     // ------------------------------------------------------------------ auto-setup view
 
-    public static Reply autoSetup(String guildId, Set<FreebieSection> chosen) {
-        var embed = Embeds.of("⚡", "Auto-setup free-game alerts").setDescription("""
-                I'll create a **Free Games** category with read-only alert channels, one pingable role per section, \
-                and post a role picker so members choose their own pings. Channels and roles with the same names are \
-                reused, so running this again is safe.
+    public static Reply autoSetup(String guildId, Set<FreebieSection> chosen) { return autoSetup(guildId, chosen, FreebieCatchUp.AUTO); }
 
-                **One channel for everything** puts every chosen section in `#free-games`, each pinging its own role.
-                **A channel per section** gives each section its own channel.
-
-                The chosen sections' current settings are replaced; the others are left alone. \
-                You need **Manage Roles** and **Manage Channels**, and so do I.""");
+    /** {@code post}: whether auto-setup also posts the games that are free right now (toggled in place). */
+    public static Reply autoSetup(String guildId, Set<FreebieSection> chosen, FreebieCatchUp post) {
+        var embed = Embeds.of("⚡", "Build your free-game corner").setTimestamp(null)
+                .setDescription("Choose your sections, then pick a layout. I'll create read-only channels in **Free Games**, "
+                        + "a ping role per section, and a picker so members can opt in.")
+                .addField("ONE SHARED CHANNEL", "All selected sections in `#free-games`.\nEach section keeps its own ping role.", true)
+                .addField("SEPARATE CHANNELS", "A dedicated channel for each section.\nKeep different platforms together.", true)
+                .addField("BEFORE YOU CREATE", "You and the bot need **Manage Roles** and **Manage Channels**. "
+                        + "If you already have channels or roles for free games (like #epic-games or @Steam), I'll ask before using them. "
+                        + "Selected sections' settings are replaced; other sections stay unchanged.", false);
         embed.addField("Chosen sections", String.join("\n", Arrays.stream(FreebieSection.values()).filter(chosen::contains)
                 .map(s -> s.emoji() + " " + s.label() + " • " + String.join(", ", s.stores().stream().map(FreebieStore::label).toList()))
                 .toList()), false);
-        var picker = StringSelectMenu.create(AUTO_SELECT_PREFIX + ":" + guildId).setPlaceholder("Sections to set up")
+        var picker = StringSelectMenu.create(AUTO_SELECT_PREFIX + ":" + guildId + (post == FreebieCatchUp.AUTO ? "" : ":" + post.code()))
+                .setPlaceholder("Sections to set up")
                 .setRequiredRange(1, FreebieSection.values().length);
         for (FreebieSection section : FreebieSection.values())
             picker.addOption(section.label(), String.valueOf(section.code()), Emoji.fromUnicode(section.emoji()));
         picker.setDefaultValues(chosen.stream().map(s -> String.valueOf(s.code())).toList());
-        String codes = FreebieSection.encode(chosen);
+        String codes = FreebieCatchUp.token(chosen, post);
         return new Reply(embed.build(), List.of(ActionRow.of(picker.build()), ActionRow.of(
                 Button.success(RUN_PREFIX + ":" + ONE_CHANNEL + ":" + guildId + ":" + codes, "One channel for everything"),
                 Button.primary(RUN_PREFIX + ":" + CHANNEL_PER_SECTION + ":" + guildId + ":" + codes, "A channel per section"),
+                Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + guildId + ":" + FreebieCatchUp.token(chosen, post.next()), post.toggle())
+                        .withEmoji(Emoji.fromUnicode("📤")),
                 Button.secondary(NAV_PREFIX + ":" + HOME + ":" + guildId, "Back"))));
     }
 }

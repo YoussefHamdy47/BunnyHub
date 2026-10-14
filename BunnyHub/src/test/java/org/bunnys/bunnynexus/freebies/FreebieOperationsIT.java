@@ -12,6 +12,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class FreebieOperationsIT {
+    /** These rows are planned through the catch-up path, which the fresh-first claim leaves for last. */
+    java.util.Optional<FreebieRepository.Claimed> claimAny(java.time.Instant at, java.time.Duration lease) {
+        return repository.claim(at, lease).or(() -> repository.claimCatchUp(at, lease));
+    }
     LocalReplicaSet replica;
     MongoDatabase db;
     FreebieRepository repository;
@@ -28,7 +32,7 @@ class FreebieOperationsIT {
         repository.recordSeen(FreebieRepositoryIT.candidate(id, "PC, Steam"), at);
         var offer = repository.transition("gamerpower:" + id, FreebieOffer.State.PENDING, FreebieOffer.State.APPROVED, "owner", at).orElseThrow();
         repository.planDelivery(offer, new FreebieSubscriptions.Subscription(guild, channel, FreebieStore.STEAM, Optional.empty()), at);
-        var claim = repository.claim(at, Duration.ofMinutes(3)).orElseThrow();
+        var claim = claimAny(at, Duration.ofMinutes(3)).orElseThrow();
         assertTrue(repository.markFailed(claim, FreebieFailure.MISSING_PERMISSIONS, "private internal detail", at));
         return claim.id();
     }

@@ -30,6 +30,9 @@ class FreebieSummarySenderTest {
 
     @BeforeEach void setup() {
         when(repository.summaries()).thenReturn(store);
+        var dms = mock(FreebieDmJobs.class);
+        when(repository.dmJobs()).thenReturn(dms);
+        when(dms.totals(any())).thenReturn(new FreebieDmJobs.Totals(0, 0, 0, 0, 0));
         when(repository.counts(offer.id())).thenReturn(new FreebieRepository.Counts(2, 0, 0, 0));
         when(repository.failures(offer.id(), 40)).thenReturn(List.of());
         when(client.getChannelById(GuildMessageChannel.class, "100000000000000099")).thenReturn(channel);
@@ -62,6 +65,14 @@ class FreebieSummarySenderTest {
         drain();
         verify(store).sent(claim, "message", now);
         verify(action).setNonce(FreebieMessages.nonce("summary|" + offer.id()));
+    }
+
+    @Test void theSentSummaryCarriesTheDmTotalsWithoutWaitingForThem() {
+        when(repository.dmJobs().totals(offer.id())).thenReturn(new FreebieDmJobs.Totals(3, 1, 0, 0, 4));
+        begin();
+        var captor = org.mockito.ArgumentCaptor.forClass(MessageCreateData.class);
+        verify(channel).sendMessage(captor.capture());
+        assertTrue(captor.getValue().getEmbeds().getFirst().getDescription().contains("**Personal DMs** · 3 sent · 4 still queued"));
     }
 
     @Test void failedSendRetriesWithoutRecordingSuccess() {

@@ -7,6 +7,10 @@ import java.net.Proxy;
 import java.net.UnknownHostException;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,7 +19,16 @@ import java.util.Optional;
  * provider's CDN moved) but still refuses private/loopback answers, redirects, proxies and large bodies.
  * Blocking: call from the discovery thread only.
  */
-public final class GamerPowerFeed implements AutoCloseable {
+public final class GamerPowerFeed implements FreebieFeed {
+    @Override public Provider provider() { return Provider.GAMERPOWER; }
+    @Override public Result poll() {
+        var result = fetch();
+        var batch = result.batch();
+        State state = result.complete() ? State.COMPLETE
+                : batch.isPresent() && batch.get().state() == GamerPowerIntake.State.PARTIAL ? State.PARTIAL : State.FAILED;
+        return new Result(state, batch.map(b -> b.candidates().stream().map(Candidate::from).toList()).orElse(List.of()),
+                result.retryAfter(), state == State.PARTIAL ? "partial feed: " + batch.orElseThrow().rejectedItems() + " rejected item(s)" : result.problem());
+    }
     public record Fetch(Optional<GamerPowerIntake.Batch> batch, int httpStatus, Optional<Duration> retryAfter, String problem) {
         public boolean complete() {
             return batch.isPresent() && (batch.get().state() == GamerPowerIntake.State.CANDIDATES
@@ -56,7 +69,8 @@ public final class GamerPowerFeed implements AutoCloseable {
                 .header("Accept", "application/json").header("User-Agent", "BunnyNexus-Freebies/2.0").get().build();
         try (Response response = client.newCall(request).execute()) {
             int status = response.code();
-            if (status == 429 || status == 503) return new Fetch(Optional.empty(), status, retryAfter(response), "rate limited");
+            if (status == 429 || status == 503) return new Fetch(Optional.empty(), status,
+                    retryAfter(response.header("Retry-After"), clock.instant()), "rate limited");
             if (status != 200 && status != 201) return new Fetch(Optional.empty(), status, Optional.empty(), "HTTP " + status);
             ResponseBody body = response.body();
             byte[] bytes = body.byteStream().readNBytes(GamerPowerIntake.MAX_BYTES + 1);
@@ -68,13 +82,15 @@ public final class GamerPowerFeed implements AutoCloseable {
         }
     }
 
-    private static Optional<Duration> retryAfter(Response response) {
+    static Optional<Duration> retryAfter(String header, Instant now) {
+        if (header == null || header.length() > 128) return Optional.empty();
+        String value = header.strip();
         try {
-            String header = response.header("Retry-After");
-            if (header == null) return Optional.empty();
-            long seconds = Long.parseLong(header.strip());
-            return seconds > 0 ? Optional.of(Duration.ofSeconds(Math.min(seconds, 6 * 3600))) : Optional.empty();
-        } catch (NumberFormatException ignored) { return Optional.empty(); }
+            Duration wait = value.matches("[0-9]+") ? Duration.ofSeconds(Long.parseLong(value))
+                    : Duration.between(now, ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant());
+            if (wait.isNegative() || wait.isZero()) return Optional.empty();
+            return Optional.of(wait.compareTo(Duration.ofHours(6)) > 0 ? Duration.ofHours(6) : wait);
+        } catch (NumberFormatException | DateTimeParseException invalid) { return Optional.empty(); }
     }
 
     @Override public void close() {

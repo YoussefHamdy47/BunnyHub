@@ -183,12 +183,12 @@ public final class TimerSessionService {
             throw new StateFailure("This session ran for " + Durations.formatSeconds(clock.activeStudy())
                     + ". Press **End Session** again to confirm how long you really studied.");
         double study = studyTime(clock, session.getSessionTime(), confirmation.reportedStudySecs());
-        List<String> subjectsStudied = List.copyOf(session.getSubjectsStudied());
         int breakCount = session.getNumberOfBreaks();
 
         creditCurrentSubject(timerData, study - session.getSessionTime());
         // Time the user said they did not study is dropped, not counted as a break.
         SessionProgress.addToTotals(timerData, clock.breaks(), study);
+        List<SessionProgress.SubjectTime> subjectTimes = SessionProgress.subjectTimes(session, study);
 
         double previousLongest = timerData.getCurrentSemester().getLongestSession();
         if (previousLongest < study)
@@ -204,7 +204,7 @@ public final class TimerSessionService {
         SessionProgress.updateStreak(timerData, now);
 
         OptionalDouble adjustedFrom = confirmation.reportedStudySecs().isPresent() ? OptionalDouble.of(clock.activeStudy()) : OptionalDouble.empty();
-        String recap = SessionProgress.recap(startMs, clock, study, adjustedFrom, breakCount, subjectsStudied, points, rewardedMinutes);
+        String recap = SessionProgress.recap(startMs, clock, study, adjustedFrom, breakCount, subjectTimes, points, rewardedMinutes);
         clearSessionFields(session);
         TimerStore.saveProgress(userId, userData, timerData);
 
@@ -260,16 +260,20 @@ public final class TimerSessionService {
         long breakMs = Math.max(0, nowMillis - breaks.getSessionBreakStart().getTime());
         breaks.setSessionBreakTime(breaks.getSessionBreakTime() + breakMs / 1000.0);
         breaks.setSessionBreakStart(null);
+        breaks.setLastBreakEnd(new Date(nowMillis));
         return breakMs;
     }
 
-    /** Credits study time not yet allocated to the subject currently being studied. */
+    /** Credits study time not yet allocated to the subject currently being studied, also in the session's split. */
     private static void creditCurrentSubject(TimerData timerData, double seconds) {
-        String topic = timerData.getSessionData().getSessionTopic();
+        Session session = timerData.getSessionData();
+        String topic = session.getSessionTopic();
         if (topic == null || topic.isBlank()) return;
         double credit = Math.max(0, seconds);
-        findSubject(timerData, SubjectTopics.code(topic)).ifPresent(subject -> subject.setTotalStudyTime(
+        String code = SubjectTopics.code(topic);
+        findSubject(timerData, code).ifPresent(subject -> subject.setTotalStudyTime(
                 (subject.getTotalStudyTime() == null ? 0.0 : subject.getTotalStudyTime()) + credit));
+        SessionProgress.addSubjectTime(session, code, credit);
     }
 
     private static Optional<Subject> findSubject(TimerData timerData, String code) {
@@ -287,9 +291,11 @@ public final class TimerSessionService {
         session.setNumberOfBreaks(0);
         session.setSessionTime(0.0);
         session.getSessionBreaks().setSessionBreakStart(null);
+        session.getSessionBreaks().setLastBreakEnd(null);
         session.getSessionBreaks().setSessionBreakTime(0.0);
         session.getSubjectsStudied().clear();
         session.getStudyStretches().clear();
+        session.getSubjectTimes().clear();
     }
 
     private static void clearSessionFields(Session session) {
@@ -303,8 +309,10 @@ public final class TimerSessionService {
         session.setSessionTime(0.0);
         session.getSessionBreaks().setSessionBreakTime(0.0);
         session.getSessionBreaks().setSessionBreakStart(null);
+        session.getSessionBreaks().setLastBreakEnd(null);
         session.getSubjectsStudied().clear();
         session.getStudyStretches().clear();
+        session.getSubjectTimes().clear();
     }
 
     private static void saveTimerData(String userId, TimerData data) {

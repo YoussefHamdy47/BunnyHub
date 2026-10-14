@@ -36,6 +36,9 @@ public class BunnyHub implements AutoCloseable {
     private final BunnyServices services = new BunnyServices();
     private ClassScanner scanner;
 
+    /** The MongoDB database this client was built for (logged at startup so a test run can be checked). */
+    public String getDatabaseName() { return config.getDatabaseName(); }
+
     BunnyHub(BunnyHubConfig config) {
         this.config = config;
         this.interactionExecutor = new InteractionExecutor("BunnyCommand", config.getCommandPoolSize(), config.getCommandQueueCapacity(), config.getCommandUserCapacity());

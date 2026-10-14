@@ -1,6 +1,7 @@
 package org.bunnys.bunnynexus.timers.services;
 
 import org.bunnys.database.models.timers.Session;
+import java.util.OptionalDouble;
 
 /**
  * Live timings of a running session, in seconds. Every screen and the final recap derive them here, so a
@@ -13,6 +14,14 @@ import org.bunnys.database.models.timers.Session;
  * @param activeStudy  study time excluding breaks, never below the allocation watermark
  */
 public record SessionClock(double elapsed, double breaks, double openBreak, double activeStudy) {
+
+    /** Empty before a recorded break ends or while paused; older records have no end timestamp. */
+    public static OptionalDouble sinceLastBreak(Session session, long nowMillis) {
+        var breaks = session.getSessionBreaks();
+        if (breaks.getSessionBreakStart() != null || breaks.getLastBreakEnd() == null)
+            return OptionalDouble.empty();
+        return OptionalDouble.of(Math.max(0, nowMillis - breaks.getLastBreakEnd().getTime()) / 1000.0);
+    }
 
     /** Requires a started session. */
     public static SessionClock of(Session session, long nowMillis) {

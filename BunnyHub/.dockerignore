@@ -1,0 +1,10 @@
+.env
+.env.*
+**/.env
+**/.env.*
+.tools/
+target*/
+.idea/
+.vscode/
+.git/
+docs/

@@ -68,6 +68,21 @@ class FreebieRepositoryIT {
         assertTrue(repository.reviews().claim(now.plus(Duration.ofMinutes(10))).isEmpty());
     }
 
+    @Test void oneSourcesEmptyFeedCannotEndAnotherSourcesOffers() {
+        repository.recordSeen(candidate("1", "PC, Steam"), now);
+        var other = FreebieOffer.newDocument(candidate("2", "PC, Epic Games Store"), now);
+        other.put("_id", "epic:catalog-offer");
+        other.put("source", "epic");
+        replica.client.getDatabase(dbName).getCollection(FreebieRepository.OFFERS).insertOne(other);
+        assertTrue(repository.markMissing(Set.of()).isEmpty());
+        assertEquals(List.of("gamerpower:1"), repository.markMissing(Set.of()).stream().map(FreebieOffer::id).toList());
+        assertFalse(repository.offer("epic:catalog-offer").orElseThrow().gone());
+        var stored = replica.client.getDatabase(dbName).getCollection(FreebieRepository.OFFERS)
+                .find(new org.bson.Document("_id", "epic:catalog-offer")).first();
+        assertNotNull(stored);
+        assertEquals(0, stored.getInteger("missingPolls"));
+    }
+
     @Test void concurrentApprovalClicksApproveExactlyOnce() throws Exception {
         repository.recordSeen(candidate("1", "PC, Steam"), now);
         var pool = Executors.newFixedThreadPool(8);

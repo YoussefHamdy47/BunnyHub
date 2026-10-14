@@ -7,6 +7,7 @@ import org.bunnys.handler.database.DB;
 import org.bunnys.utils.BunnyLog;
 import org.bunnys.utils.FailureDiagnostics;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
@@ -33,6 +34,13 @@ public final class FreebieSystem {
     private final FreebieNotifier notifier;
     private final FreebieReviewChannel reviews;
     private final FreebieDiscovery discovery;
+    private EpicFeed epicFeed;
+    private FreebieDiscovery epicDiscovery;
+    private final FreebieLifecyclePlanner lifecycle;
+    private final FreebieLifecycleWorker lifecycleWorker;
+    private final FreebieDmWorker dmWorker;
+    private Instant nextSweep = Instant.MIN; // Discovery thread only.
+    static final Duration SWEEP_EVERY = Duration.ofMinutes(10);
 
     // Package-private for tests; production code goes through start().
     FreebieSystem(FreebieConfig config, FreebieRepository repository, FreebieSubscriptions subscriptions,
@@ -44,13 +52,20 @@ public final class FreebieSystem {
         reviews = new FreebieReviewChannel(config, repository, subscriptions, jda, sendingThread, clock);
         discovery = new FreebieDiscovery(config, repository, feed, clock, reviews, this::ended);
         notifier = new FreebieNotifier(repository, jda, clock, sendingThread);
-        sender = new FreebieSender(repository, jda, sendingThread, clock, notifier).withSubscriptions(subscriptions);
+        lifecycle = new FreebieLifecyclePlanner(repository, subscriptions);
+        lifecycleWorker = new FreebieLifecycleWorker(repository, subscriptions, sendingThread, clock);
+        dmWorker = new FreebieDmWorker(repository, sendingThread, clock);
+        sender = new FreebieSender(repository, jda, sendingThread, clock, notifier).withSubscriptions(subscriptions)
+                .withLifecycle(lifecycleWorker).withDms(dmWorker);
     }
 
     public static Optional<FreebieSystem> current() { return Optional.ofNullable(instance); }
     public FreebieConfig config() { return config; }
     public FreebieRepository repository() { return repository; }
     public FreebieSubscriptions subscriptions() { return subscriptions; }
+    private FreebieCleanup cleanup() { return new FreebieCleanup(subscriptions, repository.deliveries(), repository.notices()); }
+    /** Personal DM alerts: subscribe, unsubscribe, consent. */
+    public FreebieDmService dms() { return new FreebieDmService(config, repository, clock); }
     public FreebieDeliveryAdmin deliveryAdmin() { return new FreebieDeliveryAdmin(config, repository, subscriptions, jda, clock); }
 
     /** Starts only when FREEBIE_REVIEW_CHANNEL_ID and FREEBIE_OWNER_IDS are set; otherwise logs why and stays off. */
@@ -75,9 +90,12 @@ public final class FreebieSystem {
             return;
         }
         var system = new FreebieSystem(config.get(), repository, subscriptions, client::getJDA, Clock.systemUTC(), new GamerPowerFeed());
+        system.epicFeed = new EpicFeed(system.clock);
+        system.epicDiscovery = new FreebieDiscovery(config.get(), repository, system.epicFeed, system.clock, system.reviews, system::ended);
         instance = system;
         system.discoveryThread.scheduleWithFixedDelay(guarded("housekeeping", system::housekeeping), 20, 30, TimeUnit.SECONDS);
         system.discovery.start(system.discoveryThread, 15);
+        system.epicDiscovery.start(system.discoveryThread, 25);
         system.sendingThread.scheduleWithFixedDelay(guarded("sender", system.sender::tick), 10, 1, TimeUnit.SECONDS);
         system.sendingThread.scheduleWithFixedDelay(guarded("notices", system.notifier::tick), 10, 5, TimeUnit.SECONDS);
         BunnyLog.success("[Freebies] Started. Review channel " + config.get().reviewChannelId() + ", polling every "
@@ -93,6 +111,8 @@ public final class FreebieSystem {
 
     void close() {
         sender.close();
+        lifecycleWorker.close();
+        dmWorker.close();
         notifier.close();
         discoveryThread.shutdownNow();
         sendingThread.shutdown();
@@ -104,14 +124,33 @@ public final class FreebieSystem {
             Thread.currentThread().interrupt();
         }
         feed.close();
+        if (epicFeed != null) epicFeed.close();
     }
 
     // ------------------------------------------------------------------ housekeeping (discovery thread)
 
-    private void housekeeping() {
+    void housekeeping() {
+        Instant now = clock.instant();
+        // Advance legacy identity migration in bounded batches, even while disconnected.
+        if (repository.sources() != null) repository.sources().backfill();
+        // Database-only work: it needs no Discord connection.
+        if (repository.retention().due(now)) {
+            var purged = repository.retention().purge(now, config.retentionDays(), FreebieRetention.Limits.DEFAULT);
+            if (purged.deliveries() + purged.offers() + purged.notices() > 0)
+                BunnyLog.info("[Freebies] Retention purge removed " + purged.deliveries() + " alert(s), " + purged.offers()
+                        + " offer(s) and " + purged.notices() + " notice record(s).");
+        }
+        // Lifecycle jobs are database-planned; expired leases are also recovered here, so a pause cannot strand them.
+        repository.lifecycle().recover(now);
+        lifecycle.run(now);
+        repository.dmJobs().recover(now);
+        repository.dmSubscribers().expirePending(now);
         JDA client = jda.get();
         if (client == null || client.getStatus() != JDA.Status.CONNECTED) return;
-        Instant now = clock.instant();
+        if (!now.isBefore(nextSweep)) {
+            cleanup().sweep(client, now);
+            nextSweep = now.plus(SWEEP_EVERY);
+        }
         for (int i = 0; i < 5; i++) {
             var offer = repository.reviews().claim(clock.instant());
             if (offer.isEmpty()) break;
@@ -139,10 +178,15 @@ public final class FreebieSystem {
      */
     void fanOut(FreebieOffer offer) {
         Instant now = clock.instant();
-        int planned = repository.planDeliveries(offer, subscriptions.forStore(offer.store()), now);
+        // Channels known to be deleted are skipped; an uncached one is planned and judged by the sender later.
+        int planned = repository.planDeliveries(offer, FreebieCleanup.deliverable(jda.get(), subscriptions.forStore(offer.store())), now);
+        // DMs are planned before fan-out is recorded as done, so a crash in between replans them (idempotently).
+        if (config.dmEnabled()) repository.dmJobs().plan(offer.id(), repository.dmSubscribers().following(offer.store().section()), now);
         repository.setFanoutDone(offer.id(), planned);
-        if (repository.offer(offer.id()).map(FreebieOffer::state).orElse(null) == FreebieOffer.State.STOPPED)
+        if (repository.offer(offer.id()).map(FreebieOffer::state).orElse(null) == FreebieOffer.State.STOPPED) {
             repository.cancelPending(offer.id(), "stopped while sending was being planned", now);
+            repository.dmJobs().cancelForOffer(offer.id(), now);
+        }
     }
 
     /** The giveaway ended (or vanished from the feed): close review or stop remaining sends. */
@@ -155,12 +199,47 @@ public final class FreebieSystem {
             case APPROVED -> repository.transition(offer.id(), FreebieOffer.State.APPROVED, FreebieOffer.State.STOPPED, null, now)
                     .ifPresent(stopped -> {
                         repository.cancelPending(stopped.id(), why, now);
+                        repository.dmJobs().cancelForOffer(stopped.id(), now);
+                        markEnded(stopped.id());
                         reviews.edit(stopped, "Stopped automatically — " + why + ". Summary follows.",
                                 List.of());
                     });
             // Only late-subscriber catch-up sends can still be queued; the sender also refuses ended offers.
-            case COMPLETED -> repository.cancelPending(offer.id(), why, now);
+            case COMPLETED -> {
+                repository.cancelPending(offer.id(), why, now);
+                repository.dmJobs().cancelForOffer(offer.id(), now);
+                markEnded(offer.id());
+            }
             default -> { /* Already final. */ }
+        }
+    }
+
+    /** Queues ended-card edits now instead of at the next housekeeping run, when the trigger rules agree. */
+    private void markEnded(String offerId) {
+        Instant now = clock.instant();
+        var offer = repository.offer(offerId).orElse(null);
+        if (offer == null) return;
+        // Owner stops are recorded on the offer itself; housekeeping reads the same flag.
+        boolean owner = offer.state() == FreebieOffer.State.STOPPED && repository.stoppedByOwner(offerId);
+        FreebieLifecycle.endTrigger(offer, owner, now).ifPresent(end -> lifecycle.ended(offerId, end, now));
+    }
+
+    // ------------------------------------------------------------------ deletion events (gateway threads)
+
+    /** A guild channel was deleted; the database work runs on the freebie discovery thread. */
+    public void channelDeleted(String guildId, String channelId, String name) {
+        background("channel cleanup", () -> cleanup().channelDeleted(guildId, channelId, Optional.ofNullable(name), clock.instant()));
+    }
+
+    /** A role was deleted; settings that pinged it keep posting without a ping. */
+    public void roleDeleted(String guildId, String roleId, String name) {
+        background("role cleanup", () -> cleanup().roleDeleted(guildId, roleId, Optional.ofNullable(name), clock.instant()));
+    }
+
+    private void background(String name, Runnable task) {
+        try { discoveryThread.execute(guarded(name, task)); }
+        catch (RejectedExecutionException shuttingDown) {
+            BunnyLog.warning("[Freebies] Shutting down; " + name + " is left to the next housekeeping sweep.");
         }
     }
 
@@ -169,6 +248,15 @@ public final class FreebieSystem {
     public sealed interface Reply permits Text, Prompt {}
     public record Text(String message) implements Reply {}
     public record Prompt(MessageCreateData message) implements Reply {}
+
+    public FreebieDeliveryAdmin.View sourceDecision(String actor) {
+        requireOwner(actor);
+        return FreebieSourceDecisions.view(repository.sources());
+    }
+    public String resolveSource(String actor, String offerId, String action) {
+        requireOwner(actor);
+        return FreebieSourceDecisions.resolve(repository.sources(), actor, offerId, action, clock.instant());
+    }
 
     /** First click: show exactly how many channels will be messaged and ask for a second confirmation. */
     public Reply requestApproval(String actorId, String offerId) {
@@ -209,10 +297,12 @@ public final class FreebieSystem {
     public String stop(String actorId, String offerId) {
         requireOwner(actorId);
         Instant now = clock.instant();
-        var stopped = repository.transition(offerId, FreebieOffer.State.APPROVED, FreebieOffer.State.STOPPED, actorId, now);
-        if (stopped.isEmpty()) stopped = repository.transition(offerId, FreebieOffer.State.COMPLETED, FreebieOffer.State.STOPPED, actorId, now);
+        var stopped = repository.stopByOwner(offerId, FreebieOffer.State.APPROVED, actorId, now);
+        if (stopped.isEmpty()) stopped = repository.stopByOwner(offerId, FreebieOffer.State.COMPLETED, actorId, now);
         if (stopped.isEmpty()) return "This offer is not currently sending.";
         long cancelled = repository.cancelPending(offerId, "stopped by owner", now);
+        repository.dmJobs().cancelForOffer(offerId, now);
+        background("withdrawn cards", () -> markEnded(offerId));
         reviews.edit(stopped.get(), "Stopped by <@" + actorId + ">. " + cancelled + " pending message(s) cancelled; summary follows.",
                 List.of());
         return "Stopped. " + cancelled + " pending message(s) cancelled. Up to " + FreebieSender.MAX_IN_FLIGHT
@@ -239,6 +329,24 @@ public final class FreebieSystem {
         return repository.liveApproved(store, clock.instant(), FreebieMessages.MAX_LIVE_LISTED);
     }
 
+    /** Games live for a channel's launchers, and how many of them were newly queued there. */
+    public record CatchUp(int live, int queued) {}
+
+    /**
+     * The one catch-up path (button, section form, auto-setup): the channel's saved settings for the given
+     * launchers, each still-live approved game at most once per channel (the delivery ID), queued at catch-up
+     * priority so first posts of new approvals go first. Only plans; never waits for a send.
+     */
+    public CatchUp catchUpChannel(String guildId, String channelId, java.util.function.Predicate<FreebieStore> stores) {
+        int live = 0, queued = 0;
+        for (var subscription : subscriptions.forGuild(guildId))
+            if (subscription.channelId().equals(channelId) && stores.test(subscription.store())) {
+                live += liveFor(subscription.store()).size();
+                queued += catchUp(subscription);
+            }
+        return new CatchUp(live, queued);
+    }
+
     public int catchUp(FreebieSubscriptions.Subscription subscription) {
         int queued = 0;
         for (var offer : liveFor(subscription.store()))
@@ -250,28 +358,13 @@ public final class FreebieSystem {
 
     public String status(String actorId) {
         requireOwner(actorId);
-        var overview = repository.overview();
-        String text = "**Free-game alerts**\n"
-                + "Sending: " + (repository.sendingPaused() ? "⏸️ **paused**" : "▶️ running") + "\n"
-                + discovery.status() + "\n"
-                + "Waiting for review: " + overview.pendingReviews() + "\n"
-                + "Offers sending: " + overview.sending() + " • queued messages: " + overview.queuedDeliveries()
-                + " (" + overview.retrying() + " retrying)\n"
-                + "In flight now: " + sender.inFlight() + " • checked <t:" + clock.instant().getEpochSecond() + ":T>"
-                + blockedStatus()
-                + FreebieHealth.render(repository.health().snapshot(clock.instant()), jda.get(), config, clock.instant());
-        return text.length() <= 4000 ? text : text.substring(0, 3900) + "\nDetails shortened; use delivery history for complete destination pages.";
+        return FreebieStatusText.render(repository, config, discovery.status() + (epicDiscovery == null ? "" : "\n" + epicDiscovery.status()) + "\nSource identity decisions: /freebie-admin sources", sender.inFlight(), jda.get(), clock.instant());
     }
 
-    private String blockedStatus() {
-        StringBuilder result = new StringBuilder("\n**Blocked alerts** (up to 3; use history for all)\n");
-        for (var d : repository.deliveries().blocked()) result.append('`').append(d.getString("offerId"))
-                .append("` / `").append(d.getString("channelId")).append("`: ")
-                .append(FreebieDeliveryStore.reason(d)).append(" Next check ")
-                .append(FreebieDeliveryAdmin.time(d, "nextAttemptAt")).append('\n');
-        return result.toString();
+    static String lifecycleStatus(FreebieLifecycleStore.Stats edits, FreebieLifecycleStore.Stats reminders, Instant now) {
+        return FreebieStatusText.lifecycle(edits, reminders, now);
     }
-
+    static String retentionStatus(int days, Optional<FreebieRetention.Last> last) { return FreebieStatusText.retention(days, last); }
     public String setPaused(String actorId, boolean paused) {
         requireOwner(actorId);
         repository.setSendingPaused(paused, actorId, clock.instant());
@@ -284,7 +377,8 @@ public final class FreebieSystem {
     public String pollNow(String actorId) {
         requireOwner(actorId);
         discovery.pollNow();
-        return "Checking GamerPower now; new giveaways will appear in the review channel.";
+        if (epicDiscovery != null) epicDiscovery.pollNow();
+        return "Source checks requested; any active failure backoff is respected. New giveaways will appear in the review channel.";
     }
 
     private void requireOwner(String actorId) {
@@ -309,5 +403,9 @@ public final class FreebieSystem {
         };
     }
 }
+
+
+
+
 
 

@@ -16,12 +16,12 @@ public final class FreebieDeliveryButtons extends BunnyButton {
         if (system == null || !system.config().isOwner(event.getUser().getId())) {
             event.reply("Only freebie owners can use this.").setEphemeral(true).queue(); return;
         }
-        if (args.length < 4 || args.length > 5 || !args[2].matches("[0-9]{1,20}")
+        if (args.length < 4 || args.length > 5 || !args[2].matches("(?:[0-9]{1,20}|e[0-9a-f]{16})")
                 || !args[3].matches("[0-9]{17,20}")) {
             event.reply("Invalid delivery control.").setEphemeral(true).queue(); return;
         }
         event.deferReply(true).complete();
-        String offer = "gamerpower:" + args[2], actor = event.getUser().getId();
+        String offer = (args[2].startsWith("e") ? "epic:" + args[2].substring(1) : "gamerpower:" + args[2]), actor = event.getUser().getId();
         var view = args.length == 5 && args[1].equals("retry")
                 ? system.deliveryAdmin().confirm(actor, offer, args[3], args[4])
                 : system.deliveryAdmin().history(actor, offer, offer + "|" + args[3]);
@@ -29,3 +29,4 @@ public final class FreebieDeliveryButtons extends BunnyButton {
                 .setComponents(view.rows()).setAllowedMentions(List.of()).queue();
     }
 }
+

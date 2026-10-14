@@ -40,6 +40,7 @@ public final class FreebieAdminCommands {
         return new Action("resume", "Resume alert sending", (s, u) -> s.setPaused(u, false));
     }
     public static BunnySubcommand check() {
-        return new Action("check", "Check GamerPower for new giveaways right now", FreebieSystem::pollNow);
+        return new Action("check", "Check each discovery source, respecting its retry deadline", FreebieSystem::pollNow);
     }
 }
+

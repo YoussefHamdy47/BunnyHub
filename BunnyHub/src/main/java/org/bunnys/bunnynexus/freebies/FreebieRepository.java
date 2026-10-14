@@ -26,13 +26,21 @@ public final class FreebieRepository {
     private static final int INSERT_BATCH = 500;
 
     public enum DeliveryState { PENDING, SENDING, SENT, FAILED, BLOCKED, CANCELLED }
+    /** {@code catchUp}: planned for a channel that subscribed later; claimed only after fresh first posts. */
     public record Claimed(String id, String offerId, String guildId, String channelId, Optional<String> roleId,
-                          int attempts, boolean verifyFirst, String token) {}
+                          int attempts, boolean verifyFirst, String token, boolean catchUp) {
+        public Claimed(String id, String offerId, String guildId, String channelId, Optional<String> roleId,
+                       int attempts, boolean verifyFirst, String token) {
+            this(id, offerId, guildId, channelId, roleId, attempts, verifyFirst, token, false);
+        }
+    }
     public record Counts(long sent, long failed, long cancelled, long open) {}
     public record FailedDelivery(String guildId, String channelId, FreebieFailure reason, boolean serverNotified) {}
     public record Overview(long pendingReviews, long sending, long queuedDeliveries, long retrying) {}
 
     private final MongoCollection<Document> offers, deliveries, notices, control;
+    private final FreebieSourceStore sources;
+    FreebieSourceStore sources() { return sources; }
     private final FreebieSummaryStore summaries;
     private final FreebieHealth health;
     private final FreebieNoticeStore noticeStore;
@@ -43,22 +51,40 @@ public final class FreebieRepository {
     FreebieSummaryStore summaries() { return summaries; }
     private final FreebieDeliveryStore deliveryStore;
     FreebieDeliveryStore deliveries() { return deliveryStore; }
+    private final FreebieRetention retention;
+    FreebieRetention retention() { return retention; }
+    private final FreebieLifecycleStore lifecycle;
+    FreebieLifecycleStore lifecycle() { return lifecycle; }
+    private final FreebieDmSubscribers dmSubscribers;
+    FreebieDmSubscribers dmSubscribers() { return dmSubscribers; }
+    private final FreebieDmJobs dmJobs;
+    FreebieDmJobs dmJobs() { return dmJobs; }
 
     public FreebieRepository(MongoDatabase db) {
         offers = db.getCollection(OFFERS); deliveries = db.getCollection(DELIVERIES);
+        sources = new FreebieSourceStore(offers);
         notices = db.getCollection(NOTICES); control = db.getCollection(CONTROL);
         summaries = new FreebieSummaryStore(offers);
         reviews = new FreebieReviewStore(offers);
         health = new FreebieHealth(db);
         noticeStore = new FreebieNoticeStore(notices, deliveries);
         deliveryStore = new FreebieDeliveryStore(deliveries);
+        retention = new FreebieRetention(db);
+        lifecycle = new FreebieLifecycleStore(db);
+        dmSubscribers = new FreebieDmSubscribers(db);
+        dmJobs = new FreebieDmJobs(db);
     }
 
     public void installIndexes() {
+        sources.installIndexes();
         summaries.installIndexes();
         health.installIndexes();
         noticeStore.installIndexes();
         deliveryStore.installIndexes();
+        retention.installIndexes();
+        lifecycle.installIndexes();
+        dmSubscribers.installIndexes();
+        dmJobs.installIndexes();
         offers.createIndex(Indexes.ascending("state", "reviewMessageId"), new IndexOptions().name("offer_state"));
         deliveries.createIndex(Indexes.ascending("state", "nextAttemptAt"), new IndexOptions().name("delivery_due"));
         deliveries.createIndex(Indexes.ascending("state", "leaseUntil"), new IndexOptions().name("delivery_lease"));
@@ -69,30 +95,25 @@ public final class FreebieRepository {
 
     /** True only for the call that first records this giveaway. */
     public boolean recordSeen(GamerPowerIntake.Candidate candidate, Instant now) {
-        Document fresh = FreebieOffer.newDocument(candidate, now);
-        fresh.remove("lastSeenAt"); fresh.remove("missingPolls");
-        String id = fresh.getString("_id"); fresh.remove("_id");
-        var result = offers.updateOne(eq("_id", id), combine(new Document("$setOnInsert", fresh),
-                set("lastSeenAt", Date.from(now)), set("missingPolls", 0), set("gone", false)), new UpdateOptions().upsert(true));
-        return result.getUpsertedId() != null;
+        return recordSeen(FreebieFeed.Candidate.from(candidate), now);
+    }
+    boolean recordSeen(FreebieFeed.Candidate candidate, Instant now) { return sources.record(candidate, now); }
+    List<FreebieOffer> markMissing(FreebieFeed.Provider provider, Set<String> presentIds) {
+        if (!sources.backfill()) throw new IllegalStateException("Source identity migration is still running");
+        return sources.missing(provider, presentIds);
     }
 
     /**
-     * After a complete feed, count consecutive polls in which a live offer was absent. The second miss marks it
+     * After a complete GamerPower feed, count consecutive polls in which its live offers were absent. The second miss marks it
      * gone (ended) and returns it once, so callers can close its review or stop its sends.
      */
     public List<FreebieOffer> markMissing(Set<String> presentIds) {
-        Bson absentLive = and(in("state", "PENDING", "APPROVED", "COMPLETED"), nin("_id", presentIds), ne("gone", true));
-        offers.updateMany(absentLive, inc("missingPolls", 1));
-        List<String> gone = offers.find(and(absentLive, gte("missingPolls", 2))).projection(Projections.include("_id")).limit(200)
-                .map(d -> d.getString("_id")).into(new ArrayList<>());
-        if (gone.isEmpty()) return List.of();
-        offers.updateMany(and(in("_id", gone), ne("gone", true)), set("gone", true));
-        return offers.find(in("_id", gone)).map(FreebieOffer::read).into(new ArrayList<>());
+        return markMissing(FreebieFeed.Provider.GAMERPOWER, presentIds);
     }
 
+    /** Empty for unknown IDs and for purged offers, whose tombstone only blocks re-discovery. */
     public Optional<FreebieOffer> offer(String id) {
-        return Optional.ofNullable(offers.find(eq("_id", id)).first()).map(FreebieOffer::read);
+        return Optional.ofNullable(offers.find(and(eq("_id", id), ne("state", FreebieRetention.PURGED))).first()).map(FreebieOffer::read);
     }
 
     public List<FreebieOffer> offersIn(FreebieOffer.State state, int limit) {
@@ -106,6 +127,17 @@ public final class FreebieRepository {
         List<Bson> changes = new ArrayList<>(List.of(set("state", to.name()), inc("revision", 1L), set("updatedAt", Date.from(now))));
         if (actorId != null) { changes.add(set("decidedBy", actorId)); changes.add(set("decidedAt", Date.from(now))); }
         return update(and(eq("_id", offerId), eq("state", from.name())), combine(changes));
+    }
+
+    /** Owner stop: also records {@code stoppedByOwner}, in the same update, so posted cards read "withdrawn". */
+    public Optional<FreebieOffer> stopByOwner(String offerId, FreebieOffer.State from, String actorId, Instant now) {
+        return update(and(eq("_id", offerId), eq("state", from.name())), combine(set("state", FreebieOffer.State.STOPPED.name()),
+                set("stoppedByOwner", true), inc("revision", 1L), set("updatedAt", Date.from(now)),
+                set("decidedBy", actorId), set("decidedAt", Date.from(now))));
+    }
+
+    boolean stoppedByOwner(String offerId) {
+        return offers.countDocuments(and(eq("_id", offerId), eq("stoppedByOwner", true))) == 1;
     }
 
     /** Owner correction of the auto-detected launcher; only while the offer is still awaiting review. */
@@ -206,16 +238,22 @@ public final class FreebieRepository {
                         unset("leaseToken"), unset("leaseUntil"))).getModifiedCount();
     }
 
-    public Optional<Claimed> claim(Instant now, Duration lease) {
+    /** The next due first post of a fresh approval (or its recovery); catch-up rows wait for {@link #claimCatchUp}. */
+    public Optional<Claimed> claim(Instant now, Duration lease) { return claim(now, lease, ne("catchUp", true)); }
+
+    /** The next due catch-up row; the sender only asks once no fresh first post is due. */
+    public Optional<Claimed> claimCatchUp(Instant now, Duration lease) { return claim(now, lease, eq("catchUp", true)); }
+
+    private Optional<Claimed> claim(Instant now, Duration lease, Bson priority) {
         String token = UUID.randomUUID().toString();
-        var doc = deliveries.findOneAndUpdate(and(in("state", "PENDING", "BLOCKED"), lte("nextAttemptAt", Date.from(now))),
+        var doc = deliveries.findOneAndUpdate(and(in("state", "PENDING", "BLOCKED"), lte("nextAttemptAt", Date.from(now)), priority),
                 combine(set("state", "SENDING"), set("leaseToken", token), set("leaseUntil", Date.from(now.plus(lease))),
                         inc("attempts", 1), set("lastAttemptAt", Date.from(now))),
                 new FindOneAndUpdateOptions().sort(Sorts.ascending("nextAttemptAt")).returnDocument(ReturnDocument.AFTER));
         if (doc == null) return Optional.empty();
         return Optional.of(new Claimed(doc.getString("_id"), doc.getString("offerId"), doc.getString("guildId"),
                 doc.getString("channelId"), Optional.ofNullable(doc.getString("roleId")), doc.getInteger("attempts"),
-                doc.getBoolean("verifyFirst", false), token));
+                doc.getBoolean("verifyFirst", false), token, doc.getBoolean("catchUp", false)));
     }
 
     private boolean finish(Claimed c, Instant now, Bson... changes) {

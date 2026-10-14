@@ -14,6 +14,42 @@ import static org.mockito.Mockito.*;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 class SessionMenuTest {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"pause", "resume"})
+    void breakNotesAreEphemeralWithoutScheduledDeletion(String action) {
+        var event = mock(ButtonInteractionEvent.class, RETURNS_DEEP_STUBS);
+        when(event.getUser().getId()).thenReturn("123");
+        when(event.getMessageId()).thenReturn("current");
+        var card = new net.dv8tion.jda.api.EmbedBuilder().setDescription("Session").build();
+        when(event.getMessage().getEmbeds()).thenReturn(java.util.List.of(card));
+        var hook = mock(InteractionHook.class);
+        when(event.getHook()).thenReturn(hook);
+        var edit = mock(WebhookMessageEditAction.class, RETURNS_SELF);
+        var response = mock(WebhookMessageCreateAction.class, RETURNS_SELF);
+        when(hook.editOriginalEmbeds(any(MessageEmbed.class))).thenReturn(edit);
+        when(hook.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(response);
+        doAnswer(invocation -> {
+            java.util.function.Consumer callback = invocation.getArgument(0);
+            callback.accept(null);
+            return null;
+        }).when(edit).queue(any(java.util.function.Consumer.class));
+        var timer = new TimerData();
+        timer.getSessionData().setMessageID("current");
+        timer.getSessionData().setSessionStartTime(new java.util.Date());
+        try (var service = mockStatic(TimerSessionService.class);
+             var timers = mockConstruction(org.bunnys.bunnynexus.timers.Timers.class, (mock, context) -> {
+                 when(mock.session()).thenReturn(timer.getSessionData());
+                 when(mock.refreshMainEmbed(card)).thenReturn(card);
+             })) {
+            service.when(() -> TimerSessionService.getTimerDataOrThrow("123")).thenReturn(timer);
+            SessionMenuManager.handle(event, action, "123");
+            verify(response).setEphemeral(true);
+            verify(response).queue();
+            verify(response, never()).queue(any(java.util.function.Consumer.class));
+            assertEquals(1, timers.constructed().size());
+        }
+    }
+
     @Test void oldPendingMenuCannotConsumeReplacement() {
         InteractionHook hook = mock(InteractionHook.class);
         when(hook.editOriginalComponents()).thenReturn(mock(WebhookMessageEditAction.class));

@@ -37,11 +37,10 @@ public class FreebieCatchUpButtons extends BunnyButton {
         var store = all ? null : FreebieStore.byId(args[3]).orElse(null);
         var channel = guild.getChannelById(StandardGuildMessageChannel.class, args[2]);
         // Re-read the saved settings: the role and channel come from the database, not from the button.
-        var subscriptions = system.subscriptions().forGuild(args[1]).stream()
-                .filter(s -> s.channelId().equals(args[2]) && (all || s.store() == store)).toList();
-        if (channel == null || subscriptions.isEmpty()) { followUp(event, "That alert setting no longer exists."); return; }
-        int queued = 0;
-        for (var subscription : subscriptions) queued += system.catchUp(subscription);
+        boolean saved = system.subscriptions().forGuild(args[1]).stream()
+                .anyMatch(s -> s.channelId().equals(args[2]) && (all || s.store() == store));
+        if (channel == null || !saved) { followUp(event, "That alert setting no longer exists."); return; }
+        int queued = system.catchUpChannel(args[1], args[2], s -> all || s == store).queued();
         followUp(event, queued == 0 ? "Nothing new to post; " + channel.getAsMention() + " already has them."
                 : "Posting " + queued + " current free game(s) in " + channel.getAsMention() + " shortly.");
     }

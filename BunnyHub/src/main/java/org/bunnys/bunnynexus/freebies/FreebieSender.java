@@ -25,6 +25,11 @@ import java.util.function.Supplier;
  */
 final class FreebieSender {
     static final int MAX_IN_FLIGHT = 8;
+    /**
+     * Catch-up alerts, personal DMs and card edits/reminders together never hold more than this, so a newly
+     * approved game's first posts always find free slots.
+     */
+    static final int BACKGROUND_SLOTS = MAX_IN_FLIGHT / 2;
     private static final Duration LEASE = Duration.ofMinutes(3), SEND_TIMEOUT = Duration.ofSeconds(45);
 
     private final FreebieRepository repository;
@@ -32,8 +37,10 @@ final class FreebieSender {
     private final ScheduledExecutorService executor;
     private final Clock clock;
     private final FreebieNotifier notifier;
-    private final AtomicInteger inFlight = new AtomicInteger();
+    private final AtomicInteger inFlight = new AtomicInteger(), background = new AtomicInteger();
     private FreebieSubscriptions subscriptions;
+    private FreebieLifecycleWorker lifecycle;
+    private FreebieDmWorker dms;
     private volatile boolean closed;
 
     FreebieSender(FreebieRepository repository, Supplier<JDA> jda, ScheduledExecutorService executor, Clock clock, FreebieNotifier notifier) {
@@ -41,6 +48,9 @@ final class FreebieSender {
     }
 
     FreebieSender withSubscriptions(FreebieSubscriptions value) { subscriptions = value; return this; }
+    FreebieSender withLifecycle(FreebieLifecycleWorker value) { lifecycle = value; return this; }
+    FreebieSender withDms(FreebieDmWorker value) { dms = value; return this; }
+    int background() { return background.get(); }
 
     int inFlight() { return inFlight.get(); }
     void close() { closed = true; }
@@ -52,20 +62,52 @@ final class FreebieSender {
         if (repository.sendingPaused()) return; // Global kill switch: queued work waits, nothing is lost.
 
         repository.recoverExpiredLeases(clock.instant());
+        boolean drained = false;
         while (!closed && inFlight.get() < MAX_IN_FLIGHT) {
             var claimed = repository.claim(clock.instant(), LEASE);
-            if (claimed.isEmpty()) return;
-            inFlight.incrementAndGet();
-            // Exactly one release per claim: here for synchronous outcomes, in the callback otherwise.
-            boolean handedOff = false;
-            try { handedOff = start(client, claimed.get()); }
-            finally { if (!handedOff) done(); }
+            if (claimed.isEmpty()) { drained = true; break; }
+            launch(client, claimed.get());
+        }
+        if (!drained) return;
+        // Lower priority, only in slots no due first post is waiting for and together within BACKGROUND_SLOTS.
+        // Time-sensitive work first: reminders by due time, then ended-card edits (one queue, see
+        // FreebieLifecycleStore.claim). Then catch-up alerts and personal DMs take turns, so neither backlog
+        // starves the other. Reminders are offered first on every tick, so a backlog only delays one until a
+        // slot frees up (at most one request timeout), never indefinitely.
+        if (lifecycle != null) lifecycle.prepare();
+        if (dms != null) dms.prepare();
+        while (lifecycle != null && lifecycle.claimOne(client, inFlight, background)) { /* Fill with due card work. */ }
+        boolean more = true;
+        while (more && !closed) {
+            boolean catchUp = claimCatchUpOne(client);
+            boolean dm = dms != null && dms.claimOne(client, inFlight, background);
+            more = catchUp || dm;
         }
     }
 
-    private void done() { inFlight.decrementAndGet(); }
+    private boolean claimCatchUpOne(JDA client) {
+        if (closed || inFlight.get() >= MAX_IN_FLIGHT || background.get() >= BACKGROUND_SLOTS) return false;
+        var claimed = repository.claimCatchUp(clock.instant(), LEASE);
+        if (claimed.isEmpty()) return false;
+        launch(client, claimed.get());
+        return true;
+    }
 
-    /** @return true when a Discord request is in flight and its callback will call {@link #done()} */
+    private void launch(JDA client, FreebieRepository.Claimed job) {
+        inFlight.incrementAndGet();
+        if (job.catchUp()) background.incrementAndGet();
+        // Exactly one release per claim: here for synchronous outcomes, in the callback otherwise.
+        boolean handedOff = false;
+        try { handedOff = start(client, job); }
+        finally { if (!handedOff) done(job); }
+    }
+
+    private void done(FreebieRepository.Claimed job) {
+        inFlight.decrementAndGet();
+        if (job.catchUp()) background.decrementAndGet();
+    }
+
+    /** @return true when a Discord request is in flight and its callback will call {@link #done} */
     private boolean start(JDA client, FreebieRepository.Claimed job) {
         Instant now = clock.instant();
         FreebieOffer offer = repository.offer(job.offerId()).orElse(null);
@@ -86,6 +128,11 @@ final class FreebieSender {
         Guild guild = client.getGuildById(job.guildId());
         if (guild == null) return failed(job, offer, FreebieFailure.BOT_REMOVED, "guild not in cache");
         var channel = guild.getChannelById(StandardGuildMessageChannel.class, job.channelId());
+        if (channel == null && guild.getGuildChannelById(job.channelId()) == null) {
+            // Connected, loaded and available guild without the channel: it was deleted. End it so the summary can finish.
+            repository.deliveries().cancelDeleted(job, now);
+            return false;
+        }
         if (channel == null) return failed(job, offer, FreebieFailure.CHANNEL_MISSING, "channel not found");
         var self = guild.getSelfMember();
         if (!self.hasPermission(channel, Permission.VIEW_CHANNEL, Permission.MESSAGE_SEND, Permission.MESSAGE_EMBED_LINKS))
@@ -110,7 +157,7 @@ final class FreebieSender {
             repository.deliveries().block(job, FreebieDeliveryStore.Block.HISTORY_FAILED, now);
             return false;
         }
-        existing.whenComplete((found, error) -> dispatch(() -> {
+        existing.whenComplete((found, error) -> dispatch(job, () -> {
             boolean submitted = false;
             try {
                 if (error != null) {
@@ -128,12 +175,12 @@ final class FreebieSender {
                                     .setNonce(FreebieMessages.nonce(job.id()))
                                     .timeout(SEND_TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit();
                             submitted = true;
-                            request.whenComplete((message, sendError) -> dispatch(() -> {
+                            request.whenComplete((message, sendError) -> dispatch(job, () -> {
                                 try {
                                     if (sendError == null) repository.markSent(job, message.getId(), clock.instant());
                                     else outcome(job, offer, FreebieFailure.classify(sendError), FailureDiagnostics.describe(sendError));
                                 } catch (RuntimeException storage) { log(storage); }
-                                finally { done(); }
+                                finally { done(job); }
                             }));
                         }
                     } else repository.deliveries().block(job, FreebieDeliveryStore.Block.EXHAUSTED, clock.instant());
@@ -141,7 +188,7 @@ final class FreebieSender {
             } catch (RuntimeException failure) {
                 // Submission may have happened; the durable marker survives every storage failure.
                 log(failure);
-            } finally { if (!submitted) done(); }
+            } finally { if (!submitted) done(job); }
         }));
         return true;
     }
@@ -177,9 +224,9 @@ final class FreebieSender {
         return repository.deliveries().owns(job, clock.instant());
     }
 
-    private void dispatch(Runnable action) {
+    private void dispatch(FreebieRepository.Claimed job, Runnable action) {
         try { executor.execute(action); }
-        catch (RejectedExecutionException rejected) { done(); } // Lease remains recoverable after shutdown.
+        catch (RejectedExecutionException rejected) { done(job); } // Lease remains recoverable after shutdown.
     }
 
     private static void log(RuntimeException failure) {

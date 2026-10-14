@@ -5,6 +5,7 @@ import java.util.Date;
 public class SessionBreak {
     private double sessionBreakTime = 0.0;
     private Date sessionBreakStart = null;
+    private Date lastBreakEnd = null;
 
     public SessionBreak() {
     }
@@ -23,5 +24,13 @@ public class SessionBreak {
 
     public void setSessionBreakStart(Date sessionBreakStart) {
         this.sessionBreakStart = sessionBreakStart;
+    }
+
+    public Date getLastBreakEnd() {
+        return lastBreakEnd;
+    }
+
+    public void setLastBreakEnd(Date lastBreakEnd) {
+        this.lastBreakEnd = lastBreakEnd;
     }
 }

@@ -77,6 +77,20 @@ class HelpMenuTest {
         assertTrue(HelpMenu.lookup(bot, commands, member, "freebie-admin").embed().getDescription().contains("No command matches"));
     }
 
+    @Test void freeGamesListsItsSubcommandsUnderTheFreeGamesCategory() {
+        var paths = HelpMenu.paths(commands, false);
+        assertTrue(paths.containsAll(List.of("free-games list", "free-games subscribe", "free-games unsubscribe")), paths.toString());
+        String parent = describe(HelpMenu.render(bot, commands, member, HelpMenu.detailKey("free-games")));
+        assertTrue(parent.contains("list") && parent.contains("subscribe") && parent.contains("unsubscribe"), parent);
+        String category = describe(HelpMenu.render(bot, commands, member, "c=Free Games"));
+        assertTrue(category.contains("/free-games list") && category.contains("/free-games subscribe")
+                && category.contains("/free-games unsubscribe"), category);
+        String detail = describe(HelpMenu.render(bot, commands, member, HelpMenu.detailKey("free-games list")));
+        assertTrue(detail.contains("/free-games list launcher:epic"), detail);
+        assertFalse(detail.contains("/free-games launcher:"), "no example of the old form");
+        assertEquals("📘 /free-games list", HelpMenu.lookup(bot, commands, member, "/free-games list launcher:epic").embed().getTitle());
+    }
+
     @Test void staleViewsFallBackToTheOverview() {
         assertTrue(HelpMenu.render(bot, commands, member, "d=removed").embed().getTitle().endsWith(" Bunny Help"));
         assertTrue(HelpMenu.render(bot, commands, member, "c=Owner").embed().getTitle().endsWith(" Bunny Help"));

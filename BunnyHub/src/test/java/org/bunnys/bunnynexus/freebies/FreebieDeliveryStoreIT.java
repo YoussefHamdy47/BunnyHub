@@ -17,6 +17,10 @@ import static org.mockito.Mockito.*;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class FreebieDeliveryStoreIT {
+    /** These rows are planned through the catch-up path, which the fresh-first claim leaves for last. */
+    java.util.Optional<FreebieRepository.Claimed> claimAny(java.time.Instant at, java.time.Duration lease) {
+        return repository.claim(at, lease).or(() -> repository.claimCatchUp(at, lease));
+    }
     LocalReplicaSet replica;
     MongoDatabase db;
     FreebieRepository repository;
@@ -45,8 +49,9 @@ class FreebieDeliveryStoreIT {
     FreebieRepository.Claimed claim() {
         repository.recordSeen(FreebieRepositoryIT.candidate("1", "PC, Epic Games Store"), now);
         var offer = repository.transition("gamerpower:1", FreebieOffer.State.PENDING, FreebieOffer.State.APPROVED, owner, now).orElseThrow();
-        repository.planDelivery(offer, new FreebieSubscriptions.Subscription(guildId, channelId, FreebieStore.EPIC, Optional.empty()), now);
-        return repository.claim(now, Duration.ofMinutes(3)).orElseThrow();
+        // A fan-out row (not catch-up), so every claim below takes the first-post path.
+        repository.planDeliveries(offer, java.util.List.of(new FreebieSubscriptions.Subscription(guildId, channelId, FreebieStore.EPIC, Optional.empty())), now);
+        return claimAny(now, Duration.ofMinutes(3)).orElseThrow();
     }
     Document row(String id) { return db.getCollection(FreebieRepository.DELIVERIES).find(eq("_id", id)).first(); }
     String failed() {
@@ -83,7 +88,7 @@ class FreebieDeliveryStoreIT {
         assertEquals("BLOCKED", row(c.id()).getString("state"));
         assertEquals(1, repository.counts(c.offerId()).open());
         assertEquals(1, repository.health().snapshot(now).deliveries().total());
-        assertTrue(repository.claim(now.plusSeconds(119), Duration.ofMinutes(3)).isEmpty());
+        assertTrue(claimAny(now.plusSeconds(119), Duration.ofMinutes(3)).isEmpty());
         var next = new FreebieRepository(db).claim(now.plusSeconds(120), Duration.ofMinutes(3)).orElseThrow();
         assertTrue(next.verifyFirst());
         assertFalse(repository.markFailed(c, FreebieFailure.REJECTED, "old", now.plusSeconds(121)));
@@ -138,7 +143,7 @@ class FreebieDeliveryStoreIT {
         var c = claim(); repository.deliveries().block(c, FreebieDeliveryStore.Block.UNCERTAIN, now);
         String token = preview(c.id());
         assertFalse(repository.deliveries().retry(row(c.id()), "someone-else", token, now));
-        var next = repository.claim(now.plusSeconds(120), Duration.ofMinutes(3)).orElseThrow();
+        var next = claimAny(now.plusSeconds(120), Duration.ofMinutes(3)).orElseThrow();
         repository.deliveries().block(next, FreebieDeliveryStore.Block.HISTORY_FAILED, now.plusSeconds(120));
         assertFalse(repository.deliveries().retry(row(c.id()), owner, token, now.plusSeconds(121)));
     }
@@ -148,7 +153,7 @@ class FreebieDeliveryStoreIT {
         db.getCollection(FreebieRepository.OFFERS).updateOne(eq("_id", c.offerId()), combine(set("summaryPosted", true), set("summaryMessageId", "original")));
         String token = preview(c.id());
         assertTrue(admin(now).confirm(owner, c.offerId(), channelId, token).text().startsWith("Retry queued"));
-        assertTrue(repository.claim(now, Duration.ofMinutes(3)).orElseThrow().verifyFirst());
+        assertTrue(claimAny(now, Duration.ofMinutes(3)).orElseThrow().verifyFirst());
         var offer = db.getCollection(FreebieRepository.OFFERS).find(eq("_id", c.offerId())).first();
         assertTrue(offer.getBoolean("summaryPosted")); assertEquals("original", offer.getString("summaryMessageId"));
     }
@@ -179,7 +184,7 @@ class FreebieDeliveryStoreIT {
         repository.deliveries().block(c, FreebieDeliveryStore.Block.EXHAUSTED, now);
         String token = preview(c.id());
         assertTrue(admin(now).confirm(owner, c.offerId(), channelId, token).text().startsWith("Retry queued"));
-        var next = repository.claim(now, Duration.ofMinutes(3)).orElseThrow();
+        var next = claimAny(now, Duration.ofMinutes(3)).orElseThrow();
         assertTrue(next.verifyFirst()); assertTrue(repository.deliveries().submitting(next, now));
         assertEquals(6, row(c.id()).getInteger("sendAttempts"));
     }
@@ -188,7 +193,7 @@ class FreebieDeliveryStoreIT {
         db.getCollection(FreebieRepository.DELIVERIES).updateOne(eq("_id", id), combine(set("failure", "TRANSIENT"), set("verifyFirst", false)));
         String token = preview(id);
         assertTrue(admin(now).confirm(owner, "gamerpower:1", channelId, token).text().startsWith("Retry queued"));
-        assertTrue(repository.claim(now, Duration.ofMinutes(3)).orElseThrow().verifyFirst());
+        assertTrue(claimAny(now, Duration.ofMinutes(3)).orElseThrow().verifyFirst());
         assertTrue(row(id).getList("retryAudit", Document.class).getFirst().getBoolean("uncertain"));
     }
     @Test void permissionLossAndMissingApprovalInvalidateConfirmation() {

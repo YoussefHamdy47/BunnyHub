@@ -24,9 +24,11 @@ public final class FreebieAdmin extends BunnyCommand {
         addSubcommand(FreebieAdminCommands.pause());
         addSubcommand(FreebieAdminCommands.resume());
         addSubcommand(FreebieAdminCommands.check());
+        addSubcommand(new org.bunnys.bunnynexus.commands.freebies.FreebieSourceCommand());
         addSubcommand(new org.bunnys.bunnynexus.commands.freebies.FreebieHistoryCommands(false));
         addSubcommand(new org.bunnys.bunnynexus.commands.freebies.FreebieHistoryCommands(true));
     }
 
     @Override public boolean defaultEphemeral(CommandContext context) { return true; }
 }
+
