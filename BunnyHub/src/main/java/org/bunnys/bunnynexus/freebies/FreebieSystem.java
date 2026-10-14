@@ -156,8 +156,11 @@ public final class FreebieSystem {
             if (offer.isEmpty()) break;
             reviews.post(client, offer.get());
         }
-        for (var offer : repository.offersIn(FreebieOffer.State.PENDING, 200))
+        for (var offer : repository.offersIn(FreebieOffer.State.PENDING, 200)) {
             if (offer.ended(now)) ended(offer, "ended before review");
+            // Once its review message is up (the audit trail and the Stop button), an auto-send launcher goes out.
+            else if (config.autoSends(offer.store()) && offer.reviewMessageId().isPresent()) autoApprove(offer);
+        }
         for (var offer : repository.offersIn(FreebieOffer.State.APPROVED, 200)) {
             if (offer.ended(now)) { ended(offer, "the giveaway ended"); continue; }
             if (!offer.fanoutDone()) { fanOut(offer); continue; }
@@ -187,6 +190,21 @@ public final class FreebieSystem {
             repository.cancelPending(offer.id(), "stopped while sending was being planned", now);
             repository.dmJobs().cancelForOffer(offer.id(), now);
         }
+    }
+
+    /** Recorded as the approver of auto-sent offers; never a real user ID, so it is never mentioned. */
+    public static final String AUTO_ACTOR = "auto";
+
+    /** Approval without an owner, for launchers on the auto-send list. Same path as a confirmed approval. */
+    void autoApprove(FreebieOffer offer) {
+        Instant now = clock.instant();
+        var approved = repository.transition(offer.id(), FreebieOffer.State.PENDING, FreebieOffer.State.APPROVED, AUTO_ACTOR, now);
+        if (approved.isEmpty()) return;
+        fanOut(approved.get());
+        var refreshed = repository.offer(offer.id()).orElse(approved.get());
+        var counts = repository.counts(offer.id());
+        reviews.edit(refreshed, "Sent automatically (" + offer.store().label() + " is on the auto-send list) — sending to "
+                + counts.open() + " channel(s).", FreebieMessages.stopControls(refreshed));
     }
 
     /** The giveaway ended (or vanished from the feed): close review or stop remaining sends. */
@@ -321,7 +339,7 @@ public final class FreebieSystem {
         return "Launcher changed to **" + store.label() + "**.";
     }
 
-    /** Approved giveaways that a newly configured channel can still claim. Owner approval is never bypassed. */
+    /** Approved (or auto-sent) giveaways that a newly configured channel can still claim. */
     public List<FreebieOffer> liveFor(FreebieStore store) { return repository.liveApproved(store, clock.instant()); }
 
     /** What anyone can claim right now, for {@code /free-games}; empty store means every launcher. */
