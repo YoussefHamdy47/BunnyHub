@@ -61,7 +61,8 @@ final class FreebieReviewChannel {
             }
             var audience = subscriptions.audience(offer.store());
             if (!repository.reviews().owns(job, clock.instant())) return;
-            var message = destination.sendMessage(FreebieMessages.review(offer, audience.channels(), audience.guilds(), config.ownerIds()))
+            var message = destination.sendMessage(FreebieMessages.review(offer, audience.channels(), audience.guilds(), config.ownerIds(),
+                            config.autoSends(offer.store())))
                     .setNonce(FreebieMessages.nonce("review|" + offer.id())).timeout(45, TimeUnit.SECONDS).submit().get(50, TimeUnit.SECONDS);
             repository.reviews().sent(job, channelId, message.getId(), clock.instant());
         } catch (InterruptedException interrupted) {

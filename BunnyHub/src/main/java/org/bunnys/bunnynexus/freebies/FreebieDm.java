@@ -95,7 +95,7 @@ public final class FreebieDm {
     /** The consent DM; the subscription is only saved once Discord accepts it. */
     public static MessageCreateData consent(Set<FreebieSection> sections) {
         var embed = Embeds.of("📬", "Free-game DMs are on")
-                .setDescription("You'll get a DM when the bot owner approves a free game in: **" + labels(sections) + "**.\n"
+                .setDescription("You'll get a DM when a new free game is posted in: **" + labels(sections) + "**.\n"
                         + "At most " + DAILY_CAP + " a day. Use the button below to stop.")
                 .setTimestamp(null).build();
         return new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(unsubscribeButton()))

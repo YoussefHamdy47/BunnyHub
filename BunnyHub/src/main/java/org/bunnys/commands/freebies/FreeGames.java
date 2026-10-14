@@ -25,6 +25,7 @@ public final class FreeGames extends BunnyCommand {
         addSubcommand(new FreeGamesCommand.ListGames());
         addSubcommand(new FreeGamesCommand.Dms());
         addSubcommand(new FreeGamesCommand.Setup());
+        addSubcommand(new FreeGamesCommand.Help());
         setDefaultSubcommand("list");
     }
 

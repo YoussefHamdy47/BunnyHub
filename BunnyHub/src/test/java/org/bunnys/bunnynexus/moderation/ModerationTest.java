@@ -6,8 +6,7 @@ import net.dv8tion.jda.api.entities.SelfMember;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.requests.ErrorResponse;
 import org.bunnys.bunnynexus.moderation.Moderation.Action;
-import org.bunnys.commands.moderation.*;
-import org.bunnys.handler.commands.BunnyCommand;
+import org.bunnys.commands.ModerationCommand;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -82,15 +81,17 @@ class ModerationTest {
         assertTrue(Moderation.auditReason(user(MOD), "x".repeat(600)).length() <= 512);
     }
 
-    @Test void commandsAreServerOnlyAndHiddenFromMembersWithoutThePermission() {
-        List<BunnyCommand> commands = List.of(new Ban(null), new Unban(null), new Kick(null), new Mute(null), new Unmute(null));
-        for (BunnyCommand command : commands) {
-            assertFalse(command.isDmEnabled(), command.getName());
-            assertEquals(1, command.getUserPermissions().size(), command.getName());
-            assertEquals("Moderation", command.getCategory());
-            assertNotNull(command.buildCommandData().toData());
-        }
-        assertEquals(Permission.MODERATE_MEMBERS, new Mute(null).getUserPermissions().getFirst());
+    @Test void everyActionIsASubcommandOfModeration() {
+        var command = new ModerationCommand(null);
+        assertEquals(List.of("ban", "unban", "kick", "mute", "unmute"), List.copyOf(command.getSubcommands().keySet()));
+        assertFalse(command.isDmEnabled());
+        assertTrue(command.getUserPermissions().isEmpty(), "each action checks its own permission");
+        var data = command.buildCommandData();
+        assertEquals(Permission.MODERATE_MEMBERS.getRawValue(), data.getDefaultPermissions().getPermissionsRaw(),
+                "hidden from members who can't moderate");
+        assertNotNull(data.toData());
+        assertEquals(List.of("user", "duration", "reason"),
+                command.getSubcommands().get("mute").getOptions().stream().map(o -> o.getName()).toList());
     }
 
     private static String problem(Action action, Member moderator, SelfMember self, Member target) {

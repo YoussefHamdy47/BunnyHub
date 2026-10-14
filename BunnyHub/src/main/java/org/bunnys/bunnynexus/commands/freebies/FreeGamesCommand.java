@@ -70,7 +70,7 @@ public final class FreeGamesCommand {
             if (!dms.enabled()) { ctx.reply(SystemEmbeds.notice("Free-game DMs", "Personal DM alerts are turned off right now."), true); return; }
             String user = ctx.getUser().getId();
             var current = dms.current(user);
-            String rules = "At most " + FreebieDm.DAILY_CAP + " a day; every game is checked by the bot owner first.";
+            String rules = "At most " + FreebieDm.DAILY_CAP + " a day. `/free-games help` explains how games are checked.";
             var embed = Embeds.of(null, current.isPresent() ? "Change your free-game DMs" : "Free-game DMs")
                     .setDescription(current.isPresent()
                             ? "You get DMs for **" + FreebieDm.labels(current.get()) + "**. Pick different sections below, "
@@ -97,6 +97,20 @@ public final class FreeGamesCommand {
         }
 
         @Override public void execute(BunnyHub client, CommandContext ctx) { FreebieSettingsCommands.openDashboard(ctx); }
+    }
+
+    /** How the whole free-game system works, for members and admins alike. */
+    public static final class Help extends BunnySubcommand {
+        public Help() {
+            setName("help");
+            setDescription("How free games work here: the list, DMs, server setup and pings.");
+            setExample("/free-games help");
+        }
+
+        @Override public void execute(BunnyHub client, CommandContext ctx) {
+            var autoSend = FreebieSystem.current().map(system -> system.config().autoSend()).orElse(Set.of());
+            ctx.reply(FreebieGuide.embed(autoSend), true);
+        }
     }
 
     private static void unavailable(CommandContext ctx) {

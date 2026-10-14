@@ -6,7 +6,7 @@ import net.dv8tion.jda.api.components.selections.StringSelectMenu;
 import org.bunnys.commands.Avatar;
 import org.bunnys.commands.Help;
 import org.bunnys.commands.Timer;
-import org.bunnys.commands.moderation.*;
+import org.bunnys.commands.ModerationCommand;
 import org.bunnys.commands.freebies.FreebieAdmin;
 import org.bunnys.commands.info.Info;
 import org.bunnys.handler.commands.BunnyCommand;
@@ -22,7 +22,7 @@ import org.bunnys.commands.freebies.FreeGames;
 class HelpMenuTest {
     private final List<BunnyCommand> commands = List.of(new Avatar(null), new Timer(null), new Info(null),
             new FreebieAdmin(null), new Help(null), new FreeGames(null),
-            new Ban(null), new Unban(null), new Kick(null), new Mute(null), new Unmute(null));
+            new ModerationCommand(null));
     private final HelpMenu.Bot bot = new HelpMenu.Bot("Bunny", null, Map.of("timer", "111", "avatar", "222"));
     private final HelpMenu.Viewer member = new HelpMenu.Viewer("42", false);
     private final HelpMenu.Viewer developer = new HelpMenu.Viewer("7", true);
@@ -80,7 +80,7 @@ class HelpMenuTest {
 
     @Test void freeGamesIsOneCommandWithEveryFreeGameFeature() {
         var paths = HelpMenu.paths(commands, false);
-        assertTrue(paths.containsAll(List.of("free-games list", "free-games dms", "free-games setup")), paths.toString());
+        assertTrue(paths.containsAll(List.of("free-games list", "free-games dms", "free-games setup", "free-games help")), paths.toString());
         assertTrue(paths.stream().noneMatch(p -> p.equals("freebie") || p.startsWith("freebie ")), paths.toString());
         String parent = describe(HelpMenu.render(bot, commands, member, HelpMenu.detailKey("free-games")));
         assertTrue(parent.contains("/free-games dms") && parent.contains("/free-games setup"), parent);
@@ -104,9 +104,9 @@ class HelpMenuTest {
         assertTrue(picker.getOptions().stream().anyMatch(o -> o.getLabel().equals("↳ /free-games setup")), picker.getOptions().toString());
 
         String moderation = describe(HelpMenu.render(bot, commands, member, "c=Moderation"));
-        for (String command : List.of("/ban", "/unban", "/kick", "/mute", "/unmute"))
+        for (String command : List.of("/moderation ban", "/moderation unban", "/moderation kick", "/moderation mute", "/moderation unmute"))
             assertTrue(moderation.contains(command), moderation);
-        for (String view : List.of(HelpMenu.OVERVIEW, "c=Moderation", "d=mute", "d=timer start", "d=timer")) {
+        for (String view : List.of(HelpMenu.OVERVIEW, "c=Moderation", "d=moderation mute", "d=timer start", "d=timer")) {
             String text = describe(HelpMenu.render(bot, commands, member, view));
             assertTrue(text.codePoints().noneMatch(c -> Character.getType(c) == Character.OTHER_SYMBOL && c >= 0x2600),
                     view + " has emoji: " + text);
