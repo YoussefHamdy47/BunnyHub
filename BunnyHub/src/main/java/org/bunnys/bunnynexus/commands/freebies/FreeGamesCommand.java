@@ -55,11 +55,12 @@ public final class FreeGamesCommand {
     }
 
     /** Opens the section picker; the picker ({@code FreebieDmSubscribeSelect}) does the consent DM and the save. */
-    public static final class Subscribe extends BunnySubcommand {
-        public Subscribe() {
-            setName("subscribe");
+    public static final class Dms extends BunnySubcommand {
+        public Dms() {
+            setName("dms");
+            addAliases("subscribe", "dm");
             setDescription("Get free games by DM for the sections you choose, or turn DMs off.");
-            setExample("/free-games subscribe");
+            setExample("/free-games dms");
         }
 
         @Override public void execute(BunnyHub client, CommandContext ctx) {
@@ -81,6 +82,21 @@ public final class FreeGamesCommand {
             if (current.isPresent()) rows.add(ActionRow.of(FreebieDm.unsubscribeButton()));
             ctx.reply(embed, rows, true);
         }
+    }
+
+    /**
+     * The server's alert dashboard. Discord can only hide a whole command from members, so this branch is visible
+     * to everyone and checks Manage Server itself.
+     */
+    public static final class Setup extends BunnySubcommand {
+        public Setup() {
+            setName("setup");
+            setDescription("Server admins: choose which channels get free-game alerts (needs Manage Server).");
+            setExample("/free-games setup");
+            setMentionEnabled(false);
+        }
+
+        @Override public void execute(BunnyHub client, CommandContext ctx) { FreebieSettingsCommands.openDashboard(ctx); }
     }
 
     private static void unavailable(CommandContext ctx) {

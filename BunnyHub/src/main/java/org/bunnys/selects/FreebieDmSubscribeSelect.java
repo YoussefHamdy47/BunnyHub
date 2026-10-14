@@ -15,7 +15,7 @@ import org.bunnys.utils.FailureDiagnostics;
 import java.util.List;
 
 /**
- * The section picker from {@code /free-games subscribe}: {@code freebie_dmsub:<userId>}. Only that user may use it.
+ * The section picker from {@code /free-games dms}: {@code freebie_dmsub:<userId>}. Only that user may use it.
  * A new subscription is saved only once the consent DM was accepted by Discord.
  */
 @SuppressWarnings("unused") // Discovered reflectively by SelectRouter.
@@ -27,7 +27,7 @@ public class FreebieDmSubscribeSelect extends BunnySelect {
         var system = FreebieSystem.current().orElse(null);
         var sections = FreebieSection.decode(String.join("", event.getValues()));
         if (system == null || args.length != 2 || !args[1].equals(event.getUser().getId()) || sections.isEmpty()) {
-            event.reply("Use `/free-games subscribe` to choose your own free-game DMs.").setEphemeral(true)
+            event.reply("Use `/free-games dms` to choose your own free-game DMs.").setEphemeral(true)
                     .setAllowedMentions(List.of()).queue();
             return;
         }

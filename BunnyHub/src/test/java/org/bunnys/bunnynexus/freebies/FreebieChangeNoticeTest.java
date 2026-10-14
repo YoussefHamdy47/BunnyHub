@@ -59,7 +59,7 @@ class FreebieChangeNoticeTest {
         var embed = channel.getEmbeds().getFirst();
         assertEquals("A free-game alert channel was deleted", embed.getTitle().replaceAll("^\\S+\\s", ""));
         String all = embed.getDescription() + embed.getFields().stream().map(f -> f.getValue()).toList();
-        assertTrue(all.contains("#epic-games") && all.contains("Epic Games Store, Steam") && all.contains("`/freebie`"), all);
+        assertTrue(all.contains("#epic-games") && all.contains("Epic Games Store, Steam") && all.contains("`/free-games setup`"), all);
         assertTrue(channel.getAllowedMentions().isEmpty());
         var role = FreebieMessages.changeNotice("My Server", new FreebieNoticeStore.Change(FreebieNoticeStore.ROLE_DELETED,
                 ROLE, Optional.empty(), List.of("gog"), List.of(KEPT)));
