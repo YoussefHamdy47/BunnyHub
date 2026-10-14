@@ -51,6 +51,9 @@ public final class FreebieSystem {
         sendingThread = Executors.newSingleThreadScheduledExecutor(daemon("FreebieSender"));
         reviews = new FreebieReviewChannel(config, repository, subscriptions, jda, sendingThread, clock);
         discovery = new FreebieDiscovery(config, repository, feed, clock, reviews, this::ended);
+        // Only GamerPower links go through a redirect; Epic's feed already gives the store page.
+        if (feed.provider() == FreebieFeed.Provider.GAMERPOWER)
+            discovery.afterPoll(new FreebieClaimLinks(repository, new GamerPowerLinks(), clock));
         notifier = new FreebieNotifier(repository, jda, clock, sendingThread);
         lifecycle = new FreebieLifecyclePlanner(repository, subscriptions);
         lifecycleWorker = new FreebieLifecycleWorker(repository, subscriptions, sendingThread, clock);

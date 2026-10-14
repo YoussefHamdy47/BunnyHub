@@ -29,6 +29,8 @@ final class FreebieDiscovery {
     private final BiConsumer<FreebieOffer, String> ended;
     private final Instant startedAt;
     private ScheduledExecutorService executor;
+    /** Runs on the discovery thread after every poll that reached the feed; failures never affect polling. */
+    private volatile Runnable afterPoll = () -> {};
 
     // Written on the discovery thread only; the volatile ones are also read by /freebie-admin status.
     private int failures;
@@ -43,6 +45,8 @@ final class FreebieDiscovery {
         this.reviews = reviews; this.ended = ended;
         startedAt = clock.instant();
     }
+
+    void afterPoll(Runnable task) { afterPoll = task; }
 
     void start(ScheduledExecutorService discoveryThread, long initialDelaySeconds) {
         executor = discoveryThread;
@@ -103,6 +107,10 @@ final class FreebieDiscovery {
         // Only a complete, valid feed may be used as evidence that an offer ended.
         if (fetch.complete()) for (var gone : repository.markMissing(feed.provider(), present)) ended.accept(gone, "no longer listed as active");
         if (fresh > 0) BunnyLog.info("[Freebies] " + fresh + " new giveaway(s) queued for review.");
+        try { afterPoll.run(); }
+        catch (RuntimeException failure) {
+            BunnyLog.warning("[Freebies] Post-poll task failed | " + FailureDiagnostics.describe(failure));
+        }
         if (!fetch.complete()) {
             failures++;
             lastProblem = fetch.problem();

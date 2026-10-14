@@ -111,6 +111,32 @@ public final class FreebieRepository {
         return markMissing(FreebieFeed.Provider.GAMERPOWER, presentIds);
     }
 
+    // ------------------------------------------------------------------ direct claim links (see GamerPowerLinks)
+
+    static final int MAX_CLAIM_LINK_ATTEMPTS = 3;
+    private static final Bson GAMERPOWER_CLAIM = regex("claimUrl", "^https://www\\.gamerpower\\.com/open/");
+
+    /** Live offers whose claim button still goes through GamerPower and may be tried again, newest first. */
+    List<FreebieOffer> unresolvedClaimLinks(int limit) {
+        return offers.find(and(GAMERPOWER_CLAIM, in("state", "PENDING", "APPROVED", "COMPLETED"), ne("gone", true),
+                        or(exists("claimLinkAttempts", false), lt("claimLinkAttempts", MAX_CLAIM_LINK_ATTEMPTS))))
+                .sort(Sorts.descending("discoveredAt")).limit(limit).map(FreebieOffer::read).into(new ArrayList<>());
+    }
+
+    /** The store link replaces GamerPower's; the original is kept for reference. Only ever replaces a GamerPower link. */
+    void claimLinkResolved(String offerId, java.net.URI store, Instant now) {
+        var offer = offers.find(and(eq("_id", offerId), GAMERPOWER_CLAIM)).first();
+        if (offer == null) return;
+        offers.updateOne(and(eq("_id", offerId), GAMERPOWER_CLAIM), combine(set("claimUrl", store.toASCIIString()),
+                set("gamerPowerClaimUrl", offer.getString("claimUrl")), inc("claimLinkAttempts", 1),
+                set("claimLinkResolvedAt", Date.from(now))));
+    }
+
+    /** No usable store link this time; after {@link #MAX_CLAIM_LINK_ATTEMPTS} the GamerPower link stays for good. */
+    void claimLinkUnresolved(String offerId) {
+        offers.updateOne(and(eq("_id", offerId), GAMERPOWER_CLAIM), inc("claimLinkAttempts", 1));
+    }
+
     /** Empty for unknown IDs and for purged offers, whose tombstone only blocks re-discovery. */
     public Optional<FreebieOffer> offer(String id) {
         return Optional.ofNullable(offers.find(and(eq("_id", id), ne("state", FreebieRetention.PURGED))).first()).map(FreebieOffer::read);
