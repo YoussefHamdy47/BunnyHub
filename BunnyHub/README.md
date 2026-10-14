@@ -1,105 +1,173 @@
-# BunnyHub
+# BunnyNexus
 
-Java 21 Discord bot for study sessions, semesters, academic records and GPA tracking, plus owner-reviewed free-game alerts for servers.
+A Discord bot for study tracking, free-game alerts and server moderation, built on the **BunnyHub** command
+framework. Java 21, JDA 6 and MongoDB.
 
-- **Free-game alerts** (`/freebie`, `/free-games list|subscribe|unsubscribe`, `/freebie-admin`) are live: GamerPower discovery, owner review in a private channel, durable per-channel delivery with retries, and optional personal DMs.
-- **Handler 2.0**: commands, routers, cooldowns and bounded executors.
+## Commands
 
-## Build and run
+Run `/help` in Discord for the full, always-current list with options and examples. `/help command:<name>`
+jumps straight to one command.
 
-Install JDK 21 or newer and set `JAVA_HOME`. The Maven wrapper downloads Maven 3.9.16 on first use.
+### Study
 
-```powershell
-.\mvnw.cmd clean verify
+| Command | What it does |
+| --- | --- |
+| `/timer register` | Start a semester and begin tracking study time |
+| `/timer start` | Start a study session for a course, with pause, resume and stop controls |
+| `/timer switch` | Switch course without stopping the timer |
+| `/timer end-session` | End a session even if its menu is gone |
+| `/timer stats` | Study statistics, streaks and progress |
+| `/timer gpa` | Academic record and cumulative GPA |
+| `/timer add-subject`, `remove-subject`, `update-subject` | Manage courses and grades (retakes keep study history) |
+| `/timer end_semester` | Archive the current semester |
+
+### Free games
+
+| Command | Who | What it does |
+| --- | --- | --- |
+| `/free-games list` | Everyone | Games that are free right now, optionally for one launcher |
+| `/free-games dms` | Everyone | Get free games by DM for chosen sections, or unsubscribe |
+| `/free-games setup` | Manage Server | The server dashboard (see below) |
+| `/free-games help` | Everyone | How the free-game system works |
+
+**Server setup** (`/free-games setup`):
+
+- **Quick setup:** pick a channel, what to post and an optional ping role in one form.
+- **Create channels for me:** creates a channel per section (or one shared channel), with a ping role each.
+- **Sections:** Major PC, Indie & other PC, Console and Mobile. Each has its own channel, launchers, ping role
+  and optional ending-soon reminder.
+- **Launcher pings:** give each launcher its own role, for example @Epic for Epic Games Store only.
+- **Post role picker:** buttons that let members opt in to the ping roles themselves.
+
+**Where games come from:**
+
+- Epic Games Store is read from Epic's own promotions feed, and everything else from GamerPower.
+- GamerPower claim links are resolved to the store page where possible, so the claim button opens Steam, GOG
+  and so on directly. If a link can't be resolved, the GamerPower link is kept and the button still works.
+- Launchers on the auto-send list (Epic, Steam and GOG by default) are posted as soon as they are found.
+  Everything else waits for an owner to approve it in the private review channel.
+
+### Moderation
+
+`/moderation ban | unban | kick | mute | unmute`. Mute uses Discord's built-in timeout, from 1 minute to 28 days.
+
+- Shown to members with **Timeout Members**. Each action checks its own permission (Ban, Kick or Timeout
+  Members).
+- Refusals are private and explain why, for example a role equal to or above yours, the server owner, or an
+  administrator (who can't be muted).
+- Successful actions are confirmed in the channel, and the audit log records which moderator used them.
+
+### Information
+
+| Command | What it does |
+| --- | --- |
+| `/info user`, `/info server` | Account, membership and server details |
+| `/avatar` | Global and server avatars, up to 4096px, with download links. Also under **Apps → Avatar** when you right-click a user |
+| `/help` | Every command, grouped by category |
+
+Most commands also work by mentioning the bot, for example `@BunnyNexus avatar` or `@BunnyNexus info server`.
+Timer, moderation and free-game setup commands are slash-only.
+
+### Owner only
+
+`/freebie-admin status | pause | resume | check | sources | history | retry`: health, pausing sends, forcing a
+source check, resolving duplicate offers between sources, and delivery history and retries. Only the IDs in
+`FREEBIE_OWNER_IDS` can use it.
+
+## Running it
+
+You need **JDK 21** and a **MongoDB replica set or sharded cluster** (transactions are required; for example
+MongoDB Atlas). A standalone MongoDB is refused at startup.
+
+```bash
+cp .env.example .env      # then fill in TOKEN and MongoURI
+./mvnw clean verify       # Windows: .\mvnw.cmd clean verify
 java -jar target/BunnyHub-4.00.jar
 ```
 
-On macOS/Linux use `./mvnw clean verify`. The Windows launcher `start_server.bat` resolves its own directory. Run `stop` or `exit` in the bot console for shutdown.
+On Windows, `start_server.bat` does the same. Type `stop` or `exit` in the console to shut down cleanly.
 
-If the current JAR is running and locked on Windows, build separately with `./mvnw clean verify -Dbunny.build.directory=target-upgrade` (use `mvnw.cmd` on Windows). Stop the old process before launching the new JAR. The upgrade validation uses this separate directory and does not restart the running bot.
+The bot uses only the standard guild and direct-message intents. No privileged intent (Message Content, Server
+Members or Presence) has to be enabled.
 
-Copy `.env.example` to `.env` in the working directory and set `TOKEN` and `MongoURI`, or supply those environment variables directly. Existing development configuration in `src/main/resources/.env` is supported as a fallback when a root `.env` is absent. Neither location is included in new JARs. Logging is configured through `src/main/resources/logback.xml`; the unused `application.yml` was removed.
+### Configuration
 
-MongoDB must be a replica set or sharded cluster supporting transactions (for example, an Atlas cluster). Standalone MongoDB is rejected at startup. The database name remains `GBF` for compatibility. The bot creates unique indexes on `BunnyUsers.userID` and `TimerData.account.userID`; if existing duplicate accounts prevent index creation, startup stops without deleting or merging records. Resolve those duplicates before restarting.
+Settings come from environment variables or a `.env` file in the working directory. Credentials are never
+packaged into the jar.
 
-The application supports slash commands, user context menus, and leading bot mentions, using ordinary guild/direct-message intents. No privileged Message Content or Guild Members intent is required. Developer and test-guild IDs remain configured in `Main`.
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `TOKEN` | Yes | Discord bot token |
+| `MongoURI` | Yes | MongoDB connection string |
+| `MONGO_DB_NAME` | No | Database name (default `GBF`) |
+| `FREEBIE_REVIEW_CHANNEL_ID` | For free games | Private channel where new giveaways are reviewed |
+| `FREEBIE_OWNER_IDS` | For free games | Comma-separated user IDs allowed to approve, reject and stop alerts |
+| `FREEBIE_OTHER_REVIEW_CHANNEL_ID` | No | Separate review channel for non-major sections (defaults to the main one) |
+| `FREEBIE_AUTO_SEND` | No | Launchers posted without review: comma-separated ids, default `epic,steam,gog`, or `none` |
+| `FREEBIE_POLL_MINUTES` | No | GamerPower poll interval, 5–120 (default 10) |
+| `FREEBIE_RETENTION_DAYS` | No | How long finished alerts are kept, 30–3650 (default 90) |
+| `FREEBIE_DM_MAX_SUBSCRIBERS` | No | Cap on personal DM subscribers, 0–100000 (default 100; 0 turns DMs off) |
+| `FREEBIE_ENABLED` | No | `false` turns free-game alerts off entirely |
 
-## Handler migration (2026-09-12)
+Launcher ids for `FREEBIE_AUTO_SEND`: `epic`, `steam`, `gog`, `ubisoft`, `ea`, `battlenet`, `itchio`,
+`drm-free`, `playstation`, `xbox`, `switch`, `android`, `ios`, `other`.
 
-BunnyNexus now uses the newer BunnyHub command framework from the local BeastarsBot project. Commands share `CommandContext`, with `SlashContext` and `MentionContext` entry points, aliases, subcommand groups, default mention subcommands, and a shared permission/cooldown gate. The unused separate prefix-command registry was removed.
+Developer and test-server IDs are set in `Main.java`.
 
-Try `@BunnyNexus avatar`, `@BunnyNexus av`, or `@BunnyNexus pfp show_both:true size:4096`. Replace the bot name with a real mention. Mention options support `name:value`, quoted values, and positional arguments. Mention replies are public; use `/avatar ephemeral:true` for a private response. Timer commands remain slash-only because they depend on interaction hooks and interactive study menus; mentioning them points to the slash command.
+### Test instance
 
-Buttons, modals, and string selects use the newer routers. Button/select handlers can declare their own cooldowns. Session buttons and semester submissions declare that they need an edit acknowledgement before work is scheduled; buttons opening modals do not defer. Timer and avatar slash commands acknowledge before entering the worker queue. Autocomplete retains the existing null, length, duplicate, and 25-choice safeguards.
+`start_test_server.bat` starts a second, separate bot for live testing. It reads `.env.test` instead of `.env`
+and must use its own bot token and its own database (`MONGO_DB_NAME`). It refuses to start against the
+production `GBF` database or with the production token.
 
-The worker pool is configurable through `setCommandPool(workers, queueCapacity)` (24 workers plus 100 additional admission slots in `Main`, at most 124 unfinished tasks). Per-user FIFO queues preserve timer safety without occupying workers waiting on user locks. Ready users take turns, and idle queues are removed. Autocomplete uses a separate bounded pool configured with `setAutocompletePool` (default 4 workers plus 32 slots). Workload snapshots expose activity, queue age, rejection, and completion metrics.
+## Deployment
 
-Mongo's pool size includes command and autocomplete workers plus eight connections per server. `setDatabaseTimeout(Duration)` sets a finite driver operation budget (default 10 seconds), with bounded connection, selection, and checkout waits. These explicit budgets override corresponding URI timeouts; deployments with long-running index builds or higher latency should review the settings. `setDatabaseName` and `setMongoUriKey` preserve this deployment's existing `GBF` database and `MongoURI` key.
+Production runs on Railway from the `Dockerfile`, deploying automatically when `main` changes. The image builds
+the jar with Maven and runs it on a slim Java 21 runtime.
 
-Beastars's domain services, custom admin-role policies, audit service, and application-emoji rewriting were not imported. The shared admin gate uses Discord's Administrator permission. BunnyNexus keeps its own styling, shutdown cleanup, transactional persistence and revision checks. JDA stays on 6.6.0; no dependencies were downgraded to Beastars's older versions. Caffeine 3.2.4 was added for the new handler's bounded cooldown caches and cache metrics.
+Memory is capped in `JAVA_OPTS`: a 384 MB heap with the Serial garbage collector, which hands freed memory back.
+If the bot ever runs out of memory it exits, and Railway's restart policy brings it back. In normal use it sits
+around 300 MB.
 
-## Dependency refresh
+## Project layout
 
-Stable releases verified against Maven Central on 2026-09-10:
-
-| Dependency | Version |
+| Path (under `src/main/java/org/bunnys`) | Contents |
 | --- | --- |
-| JDA | 6.6.0 |
-| dotenv-java | 3.2.0 |
-| MongoDB sync driver | 5.11.0 |
-| Logback | 1.6.3 |
-| SLF4J | 2.0.19 |
-| Reflections | 0.10.2 (latest published) |
-| jfiglet | 0.0.9 (latest published) |
-| JUnit Jupiter, tests only | 6.1.3 |
-| Mockito, tests only | 5.23.0 |
+| `handler/` | The BunnyHub framework: lifecycle, command discovery, slash and mention routing, cooldowns, bounded worker pools, MongoDB access |
+| `commands/` | Thin registration classes: names, options and permissions for each command |
+| `bunnynexus/commands/` | Command implementations (timer, free games, info, help) |
+| `bunnynexus/freebies/` | Free-game discovery, review, delivery, lifecycle and DMs |
+| `bunnynexus/moderation/` | Ban, kick and mute logic and checks |
+| `bunnynexus/timers/` | Study sessions, semesters, GPA and their Discord views |
+| `bunnynexus/help/` | The `/help` menu |
+| `buttons/`, `selects/`, `modals/` | Component handlers, routed by the prefix of each component id |
+| `events/`, `services/` | Gateway listeners and long-running background services |
+| `database/models/` | Stored MongoDB documents |
 
-Caffeine 3.2.4 was added on 2026-09-12 to match the newer Beastars handler.
+Commands, events, components and services are discovered automatically from these packages, so a new command
+only needs a class in `commands/`.
 
-Maven plugins are pinned to stable versions. Maven 4 and compiler-plugin 4 prereleases were intentionally excluded. JDA's compatible transitive dependencies are resolved through its published POM rather than independently overriding them.
+### Data safety
 
-JDA 6 migration covers component packages, explicit action rows, component-tree queries, command interaction contexts, and modal `Label` components. See the official [JDA 6 migration notes](https://github.com/discord-jda/JDA/releases/tag/v6.0.0) and [6.6.0 release](https://github.com/discord-jda/JDA/releases/tag/v6.6.0). This bot has no voice features; no DAVE integration is required for its current functionality.
+- Account and timer writes are revision-checked, so a concurrent edit fails instead of overwriting.
+- Finishing a session and archiving a semester update everything in one transaction.
+- Free-game deliveries are durable and retried. Each message carries a reference that stops a retry from
+  posting twice.
 
-## Structure and behavior
+## Testing
 
-### User and server information
+```bash
+./mvnw clean verify
+```
 
-`/info user` shows your profile; `/info user user:@someone` looks up another account. Cards include account creation, badges, profile/avatar links, and available server membership details such as join date, roles, boosting, display colour, and key permissions. Missing membership data is retrieved asynchronously; nonmembers and DM lookups receive an account-only card.
+The test suite covers the command definitions, the help menu, Discord payload limits, free-game parsing
+(including captured GamerPower and Epic responses), delivery and review logic, timers, and moderation checks. It
+doesn't log in to Discord.
 
-`/info server` shows the current server's owner, creation date, member count, roles, channels, boosts, verification, age restriction, language, features, and available artwork. It explains that a server is required if used in DMs. Neither lookup needs privileged member or presence intents.
+The MongoDB integration tests (`*IT`) need a local `mongod` and run only when given one:
 
-Mention equivalents include `@BunnyNexus info user user:@someone` and `@BunnyNexus info server`. `whois`/`about` alias `info`, `member` aliases `user`, and `guild` aliases `server`, matching Beastars. These commands register automatically when the updated bot starts.
+```bash
+./mvnw verify -Dtest='*IT' -Dbunny.test.mongod=/path/to/mongod
+```
 
-### Course editing and avatars
-
-Right-click a user (or open their user actions on mobile), then choose **Apps → Avatar**. This is a Discord **USER** context-menu command. It shows the selected user's server and global avatars at 2048px, with the server avatar first when available, and replies privately. Global fallback and original/PNG download links work as in `/avatar`. `/avatar` and its mention aliases remain available for choosing resolution, ordering, and visibility. Both entry points share the same implementation and caller cooldown.
-
-`/timer remove-subject` and `/timer update-subject` suggest course codes from the selected destination. Codes containing hyphens and older records with surrounding whitespace are handled correctly. Academic-record removal does not require an active semester or a timer document.
-
-Use `/timer update-subject destination:ACCOUNT code:CS-101 grade:A credits:4` to update a retake grade. Optional fields are `new-code`, `name`, `credits`, `grade`, `marks-lost`, and `clear-grade`. Only supplied details change; study time and study counts remain intact. A replacement grade updates the existing course rather than adding a second attempt, so cumulative GPA uses its current grade and credit hours. Changes affect only the selected destination, not archived semesters or a second copy of the course. Course-code changes are blocked during an active semester session. `clear-grade:true` removes the grade; it cannot be combined with `grade`.
-
-`/avatar` supports `user`, `priority`, `show_both`, `size`, and `ephemeral`. Resolution defaults to 2048 and can be selected up to 4096. Both avatars are displayed at full size when requested, in the selected priority order. Download buttons provide animated originals (when present) and PNG images. Server-avatar requests fall back explicitly to the global avatar in DMs or when no server avatar is available. A missing member in the interaction payload is retrieved asynchronously after acknowledgment.
-
-- `handler`: application lifecycle, bounded background interaction execution, command discovery/routing, and persistence.
-- `commands`: thin registration classes for `Avatar`, `Help`, `Timer`, `Info` and (in `commands/freebies`) `Freebie`, `FreebieAdmin` and `FreeGames`. They declare options and connect named implementation classes; Avatar registers both slash and USER command definitions.
-- `bunnynexus/commands/info`: `AvatarCommand`, `UserInfo`, and `ServerInfo` implementations.
-- `bunnynexus/commands/timer`: one named class per timer action (`Stats`, `Register`, `Gpa`, `AddSubject`, `RemoveSubject`, `UpdateSubject`, `Start`, `SwitchSubject`, `EndSession`, `EndSemester`), sharing `TimerSubcommand` for error handling.
-- `bunnynexus/freebies`: the free-game pipeline; `bunnynexus/help` and `bunnynexus/info`: help menu and info cards.
-- `buttons`, `modals`: Discord component entry points. Timer commands defer their responses before database work; session buttons and semester submissions defer edits.
-- `bunnynexus/timers/services`: timer, subject, and semester mutations (`TimerStore` holds the multi-document transactions; `SessionClock` computes live session timings). `Timers`, `TimerEmbeds` and `SessionEmbeds` build the Discord presentation. The former `nexus` package was renamed to `bunnynexus`; database model packages and stored documents are unchanged.
-- `database/models`: existing MongoDB documents and their optional revision fields.
-- `src/test`: regression tests for progression, legacy BSON decoding, persistence calls, JDA payloads, concurrent work, and menu ownership.
-
-Writes to existing account/timer documents compare a nullable `revision` field and reject stale updates. Existing records acquire a revision on their next successful write. Session completion and semester archival update both documents in one transaction. New accounts use insert-only upserts to recover a partial registration without replacing existing history.
-
-Every newly archived semester is saved in `SemesterHistory`; the longest-semester snapshot is also retained. Existing semesters that were already discarded by the older implementation cannot be reconstructed. Lifetime study time is counted when a session finishes, not again at archival. Account RP now uses BSON int64; older BSON int32 values remain readable.
-
-Course codes containing hyphens, such as `CS-101`, are supported. Autocomplete labels separate code and name with ` - `. New courses validate code/name lengths and credit hours. Streaks use UTC calendar days. Statistics show up to 12 courses to respect Discord embed limits; the GPA menu lists all courses.
-
-Pending sessions and GPA menus remain in memory and expire automatically. Pending menus do not survive a restart; active timers are persisted and their message IDs remain valid. Old menus cannot operate a replacement session. Only one bot process should own the same Discord application; optimistic writes protect data conflicts but do not coordinate in-memory menus across processes.
-
-Timer pause/resume confirmations are ephemeral. Live Telemetry shows elapsed time since the latest completed break when its end timestamp is available; see [Timer break responses and telemetry](docs/TIMER_BREAKS.md).
-
-## Validation limits
-
-Automated tests do not log in to Discord. The default suite uses mocked database boundaries; `FreebieRepositoryIT` runs against a real, test-owned three-node MongoDB when given `-Dtest=FreebieRepositoryIT -Dbunny.test.mongod=<mongod executable>`. They exercise actual JDA serialization and BSON codecs, plus mocked database/interaction boundaries. A deployment smoke test should cover registering, starting, pausing, resuming, switching courses, stopping, and archiving on the intended Discord server and MongoDB cluster.
+Made by .Bunnys
