@@ -119,8 +119,8 @@ public final class Moderation {
     // ------------------------------------------------------------------ running
 
     /**
-     * Checks, acts and replies. Runs on a command worker without a deferral, so a refusal can still be private
-     * while a success is public; the checks are local and the one Discord request is quick.
+     * Checks, acts and replies. Runs on a command worker without a deferral, so a refusal from the local checks
+     * is private while a success is public.
      */
     public static void run(Action action, CommandContext ctx) {
         Guild guild = ctx.getGuild();
@@ -146,6 +146,9 @@ public final class Moderation {
             case MUTE -> guild.timeoutFor(user, minutes >= MAX_MUTE.toMinutes() ? MAX_MUTE.minusMinutes(1) : Duration.ofMinutes(minutes));
             case UNMUTE -> guild.removeTimeout(user);
         };
+        // Acknowledge before the request: a rate-limited ban can outlast Discord's three-second window. Every
+        // refusal above was private; a failure from here on is shown briefly and then deleted.
+        ctx.defer(false);
         try {
             request.reason(audit).complete();
         } catch (ErrorResponseException failed) {
@@ -153,6 +156,9 @@ public final class Moderation {
             return;
         } catch (HierarchyException | InsufficientPermissionException failed) {
             refuse(ctx, action, "Discord refused: I don't have the permission or a high enough role to do that.");
+            return;
+        } catch (RuntimeException failed) {
+            refuse(ctx, action, "Discord couldn't " + action.verb() + " " + name(user) + " right now. Please try again.");
             return;
         }
         ctx.reply(done(action, user, ctx.getUser(), reason, minutes, deleteHours));
@@ -207,7 +213,7 @@ public final class Moderation {
     }
 
     private static void refuse(CommandContext ctx, Action action, String text) {
-        ctx.reply(Embeds.error("Couldn't " + action.verb(), text), true);
+        ctx.replyTransient(Embeds.error("Couldn't " + action.verb(), text));
     }
 
     private static String name(User user) {
