@@ -46,7 +46,7 @@ public final class HelpMenu {
 
     static final int MAX_MENU_OPTIONS = 25;
 
-    private static final String TAGLINE = "Study timers, free-game alerts and server setup tools.";
+    private static final String TAGLINE = "Study timers, free-game alerts and moderation tools.";
 
     private HelpMenu() {}
 
@@ -142,9 +142,11 @@ public final class HelpMenu {
         } else {
             for (Map.Entry<String, List<BunnyCommand>> entry : catalog.categories().entrySet()) {
                 StringBuilder lines = new StringBuilder();
-                for (BunnyCommand command : entry.getValue())
+                for (BunnyCommand command : entry.getValue()) {
                     lines.append(rootReference(bot, command)).append(" ")
                             .append(shorten(command.getDescription(), 60)).append("\n");
+                    if (command.hasBranches()) lines.append(branchList(bot, command)).append("\n");
+                }
                 field(embed, entry.getKey(), lines.toString());
             }
         }
@@ -167,9 +169,9 @@ public final class HelpMenu {
             StringBuilder body = new StringBuilder();
             body.append(describe(command.getDescription())).append("\n");
             if (command.hasBranches()) {
-                List<String> refs = new ArrayList<>();
-                for (Branch branch : branches(command)) refs.add(reference(bot, branch.path()));
-                body.append(String.join(" · ", refs));
+                for (Branch branch : branches(command))
+                    body.append(reference(bot, branch.path())).append(" ")
+                            .append(shorten(branch.subcommand().getDescription(), 70)).append("\n");
             } else {
                 body.append(reference(bot, command.getName()));
                 String args = syntax(command.getOptions());
@@ -325,6 +327,13 @@ public final class HelpMenu {
         String root = path.contains(" ") ? path.substring(0, path.indexOf(' ')) : path;
         String id = bot.commandIds().get(root);
         return id == null ? "`/" + path + "`" : "</" + path + ":" + id + ">";
+    }
+
+    /** A branched command's subcommands on one indented line, each clickable, for the overview. */
+    private static String branchList(Bot bot, BunnyCommand command) {
+        List<String> refs = new ArrayList<>();
+        for (Branch branch : branches(command)) refs.add(reference(bot, branch.path()));
+        return "\u2003" + String.join("  ", refs);
     }
 
     /** Overview entry: clickable when runnable, bold code for a command that needs a subcommand. */

@@ -25,7 +25,7 @@ import org.bunnys.utils.Embeds;
 import java.util.*;
 
 /**
- * {@code /freebie}: one ephemeral panel showing every section (major PC, indie PC, console, mobile) with
+ * {@code /free-games setup}: one ephemeral panel showing every section (major PC, indie PC, console, mobile) with
  * its channel, ping role and launchers, plus buttons to edit a section, auto-setup the server or post a role picker.
  * Pure builders; the handlers in {@code buttons}, {@code selects} and {@code modals} do the work and re-check access.
  *

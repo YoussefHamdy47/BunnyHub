@@ -191,7 +191,7 @@ public final class FreebieMessages {
                 .setAuthor("BunnyNexus • THE FREE GAMES COLLECTION").setTimestamp(null);
         if (offers.isEmpty()) {
             embed.setDescription("Nothing is free on " + scope + " right now. New games are checked every few minutes."
-                    + "\n\nSet up your next discovery with `/freebie`.");
+                    + "\n\nSet up your next discovery with `/free-games setup`.");
             return new MessageCreateBuilder().setEmbeds(embed.build()).setAllowedMentions(List.of()).build();
         }
         var lines = new StringBuilder();
@@ -219,7 +219,7 @@ public final class FreebieMessages {
         var embed = Embeds.of("⚠️", "A free-game alert could not be delivered")
                 .setDescription("Alerts need attention in **" + text(guildName, 100) + "** · <#" + channelId + ">")
                 .addField("WHAT HAPPENED", reason.explanation(), false)
-                .addField("NEXT STEP", "Check channel access and permissions, or choose a new destination in `/freebie`."
+                .addField("NEXT STEP", "Check channel access and permissions, or choose a new destination in `/free-games setup`."
                         + "\nTo stop alerts, open a section there and untick its launchers.", false)
                 .addField("VIEW THE OFFER", "[" + text(title(offer.title()), 200) + "](" + offer.claimUrl() + ")", false);
         Embeds.footer(embed, "You get at most one of these notices per day.");
@@ -237,14 +237,14 @@ public final class FreebieMessages {
                     + "that received free-game alerts no longer exists.")
                     .addField("WHAT CHANGED", "I stopped posting **" + text(launchers, 900) + "** there and removed those settings. "
                             + "Alerts that were still queued for it were cancelled.", false)
-                    .addField("NEXT STEP", "Pick a new channel in `/freebie` to keep getting these games.", false);
+                    .addField("NEXT STEP", "Pick a new channel in `/free-games setup` to keep getting these games.", false);
         } else {
             String where = String.join(", ", change.channels().stream().distinct().map(id -> "<#" + id + ">").toList());
             embed.setDescription("In **" + text(guildName, 100) + "**, the role " + (name == null ? "" : "**@" + name + "** ")
                     + "pinged for free games no longer exists.")
                     .addField("WHAT CHANGED", "Alerts for **" + text(launchers, 900) + "** still post"
                             + (where.isEmpty() ? "" : " in " + where) + ", but without a ping.", false)
-                    .addField("NEXT STEP", "Choose a new ping role in `/freebie`, then post a new role picker if you use one.", false);
+                    .addField("NEXT STEP", "Choose a new ping role in `/free-games setup`, then post a new role picker if you use one.", false);
         }
         Embeds.footer(embed, "Sent once for this change.");
         return new MessageCreateBuilder().setEmbeds(embed.build()).setAllowedMentions(List.of()).build();

@@ -5,9 +5,8 @@ import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.components.selections.StringSelectMenu;
 import org.bunnys.commands.Avatar;
 import org.bunnys.commands.Help;
-import org.bunnys.commands.Setup;
 import org.bunnys.commands.Timer;
-import org.bunnys.commands.freebies.Freebie;
+import org.bunnys.commands.moderation.*;
 import org.bunnys.commands.freebies.FreebieAdmin;
 import org.bunnys.commands.info.Info;
 import org.bunnys.handler.commands.BunnyCommand;
@@ -22,21 +21,22 @@ import org.bunnys.commands.freebies.FreeGames;
 
 class HelpMenuTest {
     private final List<BunnyCommand> commands = List.of(new Avatar(null), new Timer(null), new Info(null),
-            new Freebie(null), new FreebieAdmin(null), new Help(null), new FreeGames(null), new Setup(null));
+            new FreebieAdmin(null), new Help(null), new FreeGames(null),
+            new Ban(null), new Unban(null), new Kick(null), new Mute(null), new Unmute(null));
     private final HelpMenu.Bot bot = new HelpMenu.Bot("Bunny", null, Map.of("timer", "111", "avatar", "222"));
     private final HelpMenu.Viewer member = new HelpMenu.Viewer("42", false);
     private final HelpMenu.Viewer developer = new HelpMenu.Viewer("7", true);
 
     @Test void overviewHidesOwnerCommandsFromMembers() {
         String text = describe(HelpMenu.render(bot, commands, member, HelpMenu.OVERVIEW));
-        assertTrue(text.contains("/freebie"));
+        assertTrue(text.contains("/free-games"));
         assertFalse(text.contains("freebie-admin"));
         assertFalse(HelpMenu.paths(commands, false).contains("freebie-admin"));
         assertTrue(describe(HelpMenu.render(bot, commands, developer, HelpMenu.OVERVIEW)).contains("freebie-admin"));
     }
 
     @Test void everyViewRendersWithinDiscordLimits() {
-        List<String> views = new ArrayList<>(List.of(HelpMenu.OVERVIEW, "c=Study", "c=Free Games", "c=Server", "c=Information", "c=Owner"));
+        List<String> views = new ArrayList<>(List.of(HelpMenu.OVERVIEW, "c=Study", "c=Free Games", "c=Moderation", "c=Information", "c=Owner"));
         for (String path : HelpMenu.paths(commands, true)) views.add(HelpMenu.detailKey(path));
         for (String view : views) {
             HelpMenu.Rendered rendered = HelpMenu.render(bot, commands, developer, view);
@@ -78,27 +78,35 @@ class HelpMenuTest {
         assertTrue(HelpMenu.lookup(bot, commands, member, "freebie-admin").embed().getDescription().contains("No command matches"));
     }
 
-    @Test void freeGamesListsItsSubcommandsUnderTheFreeGamesCategory() {
+    @Test void freeGamesIsOneCommandWithEveryFreeGameFeature() {
         var paths = HelpMenu.paths(commands, false);
-        assertTrue(paths.containsAll(List.of("free-games list", "free-games subscribe")), paths.toString());
-        assertFalse(paths.contains("free-games unsubscribe"), "turning DMs off lives in the subscribe panel");
+        assertTrue(paths.containsAll(List.of("free-games list", "free-games dms", "free-games setup")), paths.toString());
+        assertTrue(paths.stream().noneMatch(p -> p.equals("freebie") || p.startsWith("freebie ")), paths.toString());
         String parent = describe(HelpMenu.render(bot, commands, member, HelpMenu.detailKey("free-games")));
-        assertTrue(parent.contains("list") && parent.contains("subscribe"), parent);
+        assertTrue(parent.contains("/free-games dms") && parent.contains("/free-games setup"), parent);
         String category = describe(HelpMenu.render(bot, commands, member, "c=Free Games"));
-        assertTrue(category.contains("/free-games list") && category.contains("/free-games subscribe"), category);
+        assertTrue(category.contains("/free-games list") && category.contains("/free-games dms"), category);
         String detail = describe(HelpMenu.render(bot, commands, member, HelpMenu.detailKey("free-games list")));
         assertTrue(detail.contains("/free-games list launcher:epic"), detail);
         assertFalse(detail.contains("/free-games launcher:"), "no example of the old form");
         assertEquals("/free-games list", HelpMenu.lookup(bot, commands, member, "/free-games list launcher:epic").embed().getTitle());
     }
 
-    @Test void serverToolsAreSingleCommandsWithoutEmojiClutter() {
-        var paths = HelpMenu.paths(commands, false);
-        assertTrue(paths.contains("setup") && paths.contains("freebie"), paths.toString());
-        assertTrue(paths.stream().noneMatch(p -> p.startsWith("freebie ")), "the dashboard replaced the freebie subcommands: " + paths);
-        String server = describe(HelpMenu.render(bot, commands, member, "c=Server"));
-        assertTrue(server.contains("/setup") && server.contains("/freebie"), server);
-        for (String view : List.of(HelpMenu.OVERVIEW, "c=Server", "d=setup", "d=timer start")) {
+    @Test void subcommandsAreListedEverywhereWithoutEmojiClutter() {
+        // Overview: each branch is listed (and clickable once deployed) under its command.
+        String overview = describe(HelpMenu.render(bot, commands, member, HelpMenu.OVERVIEW));
+        assertTrue(overview.contains("</timer start:111>") && overview.contains("`/free-games setup`"), overview);
+        // Category page: one line per branch, with what it does.
+        String study = describe(HelpMenu.render(bot, commands, member, "c=Study"));
+        assertTrue(study.contains("</timer stats:111> "), study);
+        // Category picker lists every subcommand, not just the commands.
+        var picker = HelpMenu.render(bot, commands, member, "c=Free Games").rows().get(1).getComponents().getFirst().asStringSelectMenu();
+        assertTrue(picker.getOptions().stream().anyMatch(o -> o.getLabel().equals("↳ /free-games setup")), picker.getOptions().toString());
+
+        String moderation = describe(HelpMenu.render(bot, commands, member, "c=Moderation"));
+        for (String command : List.of("/ban", "/unban", "/kick", "/mute", "/unmute"))
+            assertTrue(moderation.contains(command), moderation);
+        for (String view : List.of(HelpMenu.OVERVIEW, "c=Moderation", "d=mute", "d=timer start", "d=timer")) {
             String text = describe(HelpMenu.render(bot, commands, member, view));
             assertTrue(text.codePoints().noneMatch(c -> Character.getType(c) == Character.OTHER_SYMBOL && c >= 0x2600),
                     view + " has emoji: " + text);
