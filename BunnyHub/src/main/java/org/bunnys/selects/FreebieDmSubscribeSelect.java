@@ -51,12 +51,12 @@ public class FreebieDmSubscribeSelect extends BunnySelect {
 
     public static String reply(FreebieDmService.Subscribed result, java.util.Set<FreebieSection> sections) {
         return switch (result) {
-            case SUBSCRIBED -> "✅ You're subscribed to free-game DMs for **" + FreebieDm.labels(sections) + "**. I sent you a confirmation DM.";
-            case EDITED -> "✅ Your free-game DMs now cover **" + FreebieDm.labels(sections) + "**.";
-            case FULL -> "⚠️ Free-game DMs are full right now. Try again later, or follow a server's free-games channel instead.";
+            case SUBSCRIBED -> "You're subscribed to free-game DMs for **" + FreebieDm.labels(sections) + "**. I sent you a confirmation DM.";
+            case EDITED -> "Your free-game DMs now cover **" + FreebieDm.labels(sections) + "**.";
+            case FULL -> "Free-game DMs are full right now. Try again later, or follow a server's free-games channel instead.";
             case DISABLED -> "Personal DM alerts are turned off right now.";
-            case BUSY -> "⏳ Your subscription is still being set up. Try again in a minute.";
-            case DM_REFUSED -> "⚠️ I couldn't DM you, so nothing was saved. Allow **direct messages from server members** "
+            case BUSY -> "Your subscription is still being set up. Try again in a minute.";
+            case DM_REFUSED -> "I couldn't DM you, so nothing was saved. Allow **direct messages from server members** "
                     + "(Privacy Settings for a server we share) and try again.";
         };
     }

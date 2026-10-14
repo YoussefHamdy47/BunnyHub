@@ -2,6 +2,8 @@ package org.bunnys.handler;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import org.bunnys.handler.commands.CommandLoader;
 import org.bunnys.handler.commands.CommandRegistry;
 import org.bunnys.handler.database.DB;
@@ -97,6 +99,9 @@ public class BunnyHub implements AutoCloseable {
             MessageRequest.setDefaultMentions(
                     EnumSet.of(Message.MentionType.USER));
             JDABuilder jdaBuilder = JDABuilder.createLight(token, config.getIntents());
+            // Members stay uncached, except those still on the rules screen, so accepting it raises a pending update.
+            if (config.getIntents().contains(GatewayIntent.GUILD_MEMBERS))
+                jdaBuilder.setMemberCachePolicy(MemberCachePolicy.PENDING);
 
             if (config.getButtonPackage() != null)
                 ButtonRouter.loadButtons(scanner, config.getButtonPackage());

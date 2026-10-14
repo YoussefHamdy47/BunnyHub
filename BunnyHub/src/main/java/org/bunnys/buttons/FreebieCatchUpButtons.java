@@ -11,7 +11,7 @@ import org.bunnys.handler.router.buttons.BunnyButton;
 import java.util.List;
 
 /**
- * "Also post the games free right now" after /freebie setup. Only already owner-approved, still-live
+ * "Also post the games free right now" after a channel is set up. Only already owner-approved, still-live
  * giveaways are queued, each at most once per channel. The clicker must still have Manage Server here.
  */
 @SuppressWarnings("unused") // Discovered reflectively by ButtonRouter.
