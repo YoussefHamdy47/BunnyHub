@@ -160,7 +160,7 @@ class FreebieUnitTest {
         var select = menu.asStringSelectMenu();
         assertEquals(FreebieStore.values().length, select.getOptions().size());
         assertEquals(List.of("steam"), select.getOptions().stream().filter(SelectOption::isDefault).map(SelectOption::getValue).toList());
-        var catchUp = FreebieMessages.catchUpControls("12345678901234567890", "12345678901234567890", FreebieStore.PLAYSTATION, 3);
+        var catchUp = FreebieMessages.catchUpAllControls("12345678901234567890", "12345678901234567890", 3);
         var button = catchUp.getFirst().getComponents().getFirst().asButton();
         assertTrue(button.getCustomId().length() <= 100);
         assertEquals(4, button.getCustomId().split(":").length);
