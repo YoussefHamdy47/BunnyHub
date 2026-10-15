@@ -90,11 +90,6 @@ public final class FreebieMessages {
                 ActionRow.of(menu.build()));
     }
 
-    /** Offered after a channel is set up when approved games for that launcher are still claimable. */
-    public static List<ActionRow> catchUpControls(String guildId, String channelId, FreebieStore store, int live) {
-        return catchUp(guildId, channelId, store.id(), live);
-    }
-
     /** Catch-up for every launcher the channel is set up for (after a multi-launcher setup). */
     public static List<ActionRow> catchUpAllControls(String guildId, String channelId, int live) {
         return catchUp(guildId, channelId, CATCH_UP_ALL, live);
