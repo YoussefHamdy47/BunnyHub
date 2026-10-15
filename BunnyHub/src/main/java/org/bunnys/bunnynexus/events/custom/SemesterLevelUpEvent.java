@@ -6,6 +6,7 @@ import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
 import org.bunnys.database.models.timers.TimerData;
 import org.jetbrains.annotations.NotNull;
 
+/** Fired when finished study time raises a semester's rank; announced by {@code SemesterLevelUp}. */
 public class SemesterLevelUpEvent extends Event {
     private final IReplyCallback interaction;
     private final int levelUps;

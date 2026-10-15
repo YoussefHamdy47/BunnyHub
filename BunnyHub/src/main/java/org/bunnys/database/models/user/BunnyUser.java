@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.bunnys.handler.database.VersionedDocument;
 
+/** A user's levels, XP, rank and RP. Writes are revision-checked. */
 public class BunnyUser implements VersionedDocument {
     private Long revision;
     public Long getRevision() { return revision; }

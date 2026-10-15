@@ -14,6 +14,7 @@ import org.bunnys.utils.Embeds;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/** {@code /timer start}: starts a study session for a course and opens its pause, resume and stop menu. */
 public final class Start extends TimerSubcommand {
     public Start() {
         setName("start");

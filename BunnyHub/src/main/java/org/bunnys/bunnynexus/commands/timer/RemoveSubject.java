@@ -9,6 +9,7 @@ import org.bunnys.bunnynexus.timers.services.SubjectTopics;
 import org.bunnys.handler.BunnyHub;
 import java.util.List;
 
+/** {@code /timer remove-subject}: removes a course from the current semester or the academic record. */
 public final class RemoveSubject extends TimerSubcommand {
     public RemoveSubject() {
         setName("remove-subject");

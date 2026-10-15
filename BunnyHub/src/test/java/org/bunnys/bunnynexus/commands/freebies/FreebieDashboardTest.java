@@ -53,7 +53,7 @@ class FreebieDashboardTest {
         String[] args = id.split(":", -1);
         assertEquals(List.of(FreebieDashboard.NAV_PREFIX, FreebieDashboard.OPEN_SECTION, GUILD, "m", CHANNEL, ROLE), List.of(args).subList(0, 6));
 
-        var form = FreebieDashboard.sectionForm(args).orElseThrow();
+        var form = FreebieDashboardForms.sectionForm(args).orElseThrow();
         assertEquals(FreebieDashboard.SECTION_MODAL_PREFIX + ":" + GUILD + ":m", form.getId());
         var labels = form.getComponents().stream().map(c -> (Label) c).toList();
         assertEquals(5, labels.size(), "Discord's limit is five");
@@ -73,16 +73,16 @@ class FreebieDashboardTest {
         String[] args = FreebieDashboard.sectionButton(guild(), state).getCustomId().split(":", -1);
         assertEquals("-", args[4]);
         assertEquals("-", args[5]);
-        var labels = FreebieDashboard.sectionForm(args).orElseThrow().getComponents().stream().map(c -> (Label) c).toList();
+        var labels = FreebieDashboardForms.sectionForm(args).orElseThrow().getComponents().stream().map(c -> (Label) c).toList();
         assertTrue(labels.get(0).getChild().asEntitySelectMenu().getDefaultValues().isEmpty());
         assertEquals(Set.of("playstation", "xbox", "switch"), ticked(labels.get(2).getChild().asStringSelectMenu().getOptions()));
     }
 
     @Test void malformedSectionIdsAreRefused() {
-        assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "z", "-", "-", "0"}).isEmpty());
-        assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "zz"}).isEmpty());
-        assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD}).isEmpty());
-        assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "99999999999999999999", "-", "1"}).isEmpty());
+        assertTrue(FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "z", "-", "-", "0"}).isEmpty());
+        assertTrue(FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "zz"}).isEmpty());
+        assertTrue(FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD}).isEmpty());
+        assertTrue(FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "99999999999999999999", "-", "1"}).isEmpty());
     }
 
     @Test void theSectionReminderRidesInTheButtonAndDefaultsTheForm() {
@@ -93,7 +93,7 @@ class FreebieDashboardTest {
         assertTrue(id.length() <= 100, id.length() + " chars");
         String[] args = id.split(":", -1);
         assertEquals("24", args[7]);
-        var labels = FreebieDashboard.sectionForm(args).orElseThrow().getComponents().stream().map(c -> (Label) c).toList();
+        var labels = FreebieDashboardForms.sectionForm(args).orElseThrow().getComponents().stream().map(c -> (Label) c).toList();
         assertEquals(Set.of("24"), ticked(labels.get(3).getChild().asStringSelectMenu().getOptions()));
         assertEquals(List.of("0", "24", "6"), labels.get(3).getChild().asStringSelectMenu().getOptions().stream()
                 .map(o -> o.getValue()).toList());
@@ -104,11 +104,11 @@ class FreebieDashboardTest {
     }
 
     @Test void olderDashboardButtonsStillOpenAndUnknownRemindersAreRefused() {
-        var legacy = FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1"}).orElseThrow();
+        var legacy = FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1"}).orElseThrow();
         var labels = legacy.getComponents().stream().map(c -> (Label) c).toList();
         assertEquals(Set.of("0"), ticked(labels.get(3).getChild().asStringSelectMenu().getOptions()));
-        assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "12"}).isEmpty());
-        assertTrue(FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "x"}).isEmpty());
+        assertTrue(FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "12"}).isEmpty());
+        assertTrue(FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "x"}).isEmpty());
     }
 
     @Test void launcherPingsKeepTheirOwnRolesThroughTheSectionForm() {
@@ -119,7 +119,7 @@ class FreebieDashboardTest {
         assertTrue(state.mixedPings());
         String[] args = FreebieDashboard.sectionButton(guild(), state).getCustomId().split(":", -1);
         assertEquals(FreebieDashboard.MIXED, args[5]);
-        var form = FreebieDashboard.sectionForm(args).orElseThrow();
+        var form = FreebieDashboardForms.sectionForm(args).orElseThrow();
         assertEquals(FreebieDashboard.SECTION_MODAL_PREFIX + ":" + GUILD + ":m:k", form.getId(), "empty role = keep the pings");
         assertTrue(((Label) form.getComponents().get(1)).getChild().asEntitySelectMenu().getDefaultValues().isEmpty());
         assertEquals(Map.of(FreebieStore.EPIC, Set.of(Optional.of(epicRole)), FreebieStore.STEAM, Set.of(Optional.of(ROLE))),
@@ -128,7 +128,7 @@ class FreebieDashboardTest {
 
     @Test void pingsViewOffersEveryEnabledLauncherAndOpensItsForm() {
         var guild = guild();
-        var view = FreebieDashboard.pings(guild, List.of(new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.of(ROLE)),
+        var view = FreebieLauncherPings.view(guild, List.of(new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.of(ROLE)),
                 new Subscription(GUILD, CHANNEL, FreebieStore.STEAM, Optional.empty())), null);
         assertTrue(view.embed().getDescription().contains("**Epic Games Store** · <@&" + ROLE + ">"), view.embed().getDescription());
         assertTrue(view.embed().getDescription().contains("**Steam** · nobody"));
@@ -136,16 +136,16 @@ class FreebieDashboardTest {
         assertEquals(FreebieDashboard.PING_SELECT_PREFIX + ":" + GUILD, menu.getCustomId());
         assertEquals(List.of("epic:" + ROLE, "steam:-"), menu.getOptions().stream().map(SelectOption::getValue).toList());
 
-        var form = FreebieDashboard.pingForm(GUILD, "epic:" + ROLE).orElseThrow();
+        var form = FreebieLauncherPings.form(GUILD, "epic:" + ROLE).orElseThrow();
         assertEquals(FreebieDashboard.PING_MODAL_PREFIX + ":" + GUILD + ":epic", form.getId());
         assertEquals(ROLE, ((Label) form.getComponents().getFirst()).getChild().asEntitySelectMenu().getDefaultValues().getFirst().getId());
-        assertTrue(FreebieDashboard.pingForm(GUILD, "nope:-").isEmpty());
-        assertTrue(FreebieDashboard.pingForm(GUILD, "epic").isEmpty());
-        assertEquals(1, FreebieDashboard.pings(guild, List.of(), null).rows().size(), "nothing on: just Back");
+        assertTrue(FreebieLauncherPings.form(GUILD, "nope:-").isEmpty());
+        assertTrue(FreebieLauncherPings.form(GUILD, "epic").isEmpty());
+        assertEquals(1, FreebieLauncherPings.view(guild, List.of(), null).rows().size(), "nothing on: just Back");
     }
 
     @Test void quickSetupAsksForEverythingInOneForm() {
-        var form = FreebieDashboard.quickForm(GUILD);
+        var form = FreebieDashboardForms.quickForm(GUILD);
         assertEquals(FreebieDashboard.QUICK_MODAL_PREFIX + ":" + GUILD, form.getId());
         var labels = form.getComponents().stream().map(c -> (Label) c).toList();
         assertEquals(4, labels.size());

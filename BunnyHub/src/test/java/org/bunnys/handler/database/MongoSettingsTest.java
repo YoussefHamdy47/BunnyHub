@@ -11,6 +11,9 @@ class MongoSettingsTest {
         assertEquals(10000L, settings.getTimeout(TimeUnit.MILLISECONDS));
         assertEquals(36, settings.getConnectionPoolSettings().getMaxSize());
         assertEquals(2000, settings.getConnectionPoolSettings().getMaxWaitTime(TimeUnit.MILLISECONDS));
+        assertEquals(MongoManager.IDLE_CONNECTION_MINUTES, settings.getConnectionPoolSettings().getMaxConnectionIdleTime(TimeUnit.MINUTES),
+                "idle connections are released");
+        assertEquals(0, settings.getConnectionPoolSettings().getMinSize());
         assertEquals(5000, settings.getClusterSettings().getServerSelectionTimeout(TimeUnit.MILLISECONDS));
         assertEquals(5000, settings.getSocketSettings().getConnectTimeout(TimeUnit.MILLISECONDS));
         assertEquals(10000, settings.getSocketSettings().getReadTimeout(TimeUnit.MILLISECONDS));

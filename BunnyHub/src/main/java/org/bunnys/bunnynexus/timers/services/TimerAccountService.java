@@ -17,6 +17,7 @@ import org.bunnys.utils.Durations;
 import java.util.Comparator;
 import java.util.Objects;
 
+/** Account and semester lifecycle: registering, starting a semester and archiving it in one transaction. */
 public final class TimerAccountService {
     private TimerAccountService() {}
 

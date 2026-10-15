@@ -11,6 +11,7 @@ import org.bunnys.utils.Embeds;
 
 import java.time.Instant;
 
+/** Congratulates a user when their semester ranks up (see {@code SemesterLevelUpEvent}). */
 @SuppressWarnings("unused") // Discovered reflectively by EventLoader.
 public class SemesterLevelUp extends BunnyEvent {
 

@@ -7,6 +7,7 @@ import org.bunnys.database.models.timers.Semester;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+/** Fired when a session or semester beats the user's previous record; announced by {@code RecordBroken}. */
 public class RecordBrokenEvent extends Event {
 
     public enum RecordType {

@@ -13,6 +13,10 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.Locale;
 import org.bunnys.handler.router.ComponentLoader;
 
+/**
+ * Routes modal submissions to their {@link BunnyModal} by id prefix, acknowledging first when the handler asks for
+ * it.
+ */
 public class ModalRouter {
     // Complete immutable table, replaced only after successful discovery.
     private static volatile Map<String, BunnyModal> MODALS = Map.of();

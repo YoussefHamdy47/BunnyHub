@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
+/**
+ * Sessions picked in {@code /timer start} but not yet confirmed. Held in memory and dropped when they time out.
+ */
 public final class PendingSessionManager {
     public static final int MAX_SESSIONS = 1024;
     private PendingSessionManager() {}

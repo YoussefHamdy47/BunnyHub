@@ -14,6 +14,10 @@ import java.util.concurrent.*;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import org.bunnys.handler.utils.InteractionErrors;
 
+/**
+ * In-memory page state for {@code /timer gpa} menus. Menus expire on their own and are bound to the user who
+ * opened them.
+ */
 public final class GPAPaginator {
 
     private static final String PREFIX = "gpa";

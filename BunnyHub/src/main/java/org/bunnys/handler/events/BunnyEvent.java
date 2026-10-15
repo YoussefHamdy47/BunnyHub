@@ -3,6 +3,7 @@ package org.bunnys.handler.events;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import org.bunnys.handler.BunnyHub;
 
+/** Base class for discovered gateway listeners; gives each one the running {@link BunnyHub}. */
 public abstract class BunnyEvent extends ListenerAdapter {
     protected final BunnyHub client;
 

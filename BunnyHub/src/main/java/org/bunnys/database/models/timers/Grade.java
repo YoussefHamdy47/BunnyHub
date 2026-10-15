@@ -1,5 +1,6 @@
 package org.bunnys.database.models.timers;
 
+/** A course grade and the GPA points it is worth. */
 public enum Grade {
     A_PLUS("A+", 4.0), A("A", 4.0), A_MINUS("A-", 3.7),
     B_PLUS("B+", 3.3), B("B", 3.0), B_MINUS("B-", 2.7),

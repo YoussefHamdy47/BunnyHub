@@ -23,6 +23,10 @@ import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.utils.messages.MessageRequest;
 import org.bunnys.handler.router.selects.SelectRouter;
 
+/**
+ * The running bot: owns the JDA connection, the database, the worker pools, discovery of commands, events,
+ * components and services, and an orderly shutdown.
+ */
 public class BunnyHub implements AutoCloseable {
     private volatile JDA jda;
     private final BunnyHubConfig config;

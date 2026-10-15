@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 
+/** Read-only study statistics derived from a user's timer and account documents, for {@code /timer stats}. */
 public record TimerStats(TimerData timerData, BunnyUser userData) {
 
     public double getTotalStudyTime() {

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
+/** Course changes on a semester or the academic record: add, remove, update, and code suggestions. */
 public class TimerSubjectService {
 
     public record SubjectUpdate(String code, String name, Integer credits, String grade,

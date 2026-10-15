@@ -5,6 +5,7 @@ import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.buttons.BunnyButton;
 import org.bunnys.bunnynexus.timers.buttons.GPAPaginator;
 
+/** Page buttons on {@code /timer gpa} menus; see {@link org.bunnys.bunnynexus.timers.buttons.GPAPaginator}. */
 @SuppressWarnings("unused") // Discovered reflectively by ButtonRouter.
 public class GPAMenuButtons extends BunnyButton {
 

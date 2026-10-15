@@ -1,5 +1,6 @@
 package org.bunnys.database.models.timers;
 
+/** Lifetime study totals and records for one user, embedded in their {@link TimerData}. */
 public class Account {
     private String userID;
     private double lifetimeTime = 0.0;

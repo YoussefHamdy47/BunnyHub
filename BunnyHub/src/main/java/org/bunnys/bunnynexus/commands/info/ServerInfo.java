@@ -6,6 +6,7 @@ import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.commands.BunnySubcommand;
 import org.bunnys.handler.commands.context.CommandContext;
 
+/** {@code /info server}: the current server's owner, age, members, roles, channels, boosts and artwork. */
 public final class ServerInfo extends BunnySubcommand {
     public ServerInfo() {
         setName("server");
