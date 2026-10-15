@@ -63,6 +63,8 @@ jumps straight to one command.
 | --- | --- |
 | `/info user`, `/info server` | Account, membership and server details |
 | `/avatar` | Global and server avatars, up to 4096px, with download links. Also under **Apps → Avatar** when you right-click a user |
+| `/ping` | Latency to Discord (gateway and API) |
+| `/uptime` | When the bot came online and how long it has been up |
 | `/help` | Every command, grouped by category |
 
 Most commands also work by mentioning the bot, for example `@BunnyNexus avatar` or `@BunnyNexus info server`.
