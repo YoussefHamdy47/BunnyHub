@@ -42,6 +42,15 @@ class EpicIntakeTest {
         var root = root(); promotion(active(root)).get("discountSetting", Document.class).put("discountPercentage", 50);
         assertEquals(1, decode(root).candidates().size());
     }
+    @Test void epicGamesCarryTheirListPrice() throws Exception {
+        var candidates = decode(root()).candidates();
+        assertFalse(candidates.isEmpty());
+        candidates.forEach(c -> assertTrue(c.worth().orElse("").matches("\\$[0-9]+\\.[0-9]{2}"), c.title() + " " + c.worth()));
+        assertEquals("$19.99", EpicIntake.usd(1999));
+        assertEquals("$3.99", EpicIntake.usd(399));
+        assertEquals("$0.05", EpicIntake.usd(5));
+        assertEquals("$1000.00", EpicIntake.usd(100000));
+    }
     @Test void dlcBundlesAndCodeRedemptionAreExcluded() throws Exception {
         for (String type : List.of("DLC", "ADD_ON", "BUNDLE", "EDITION")) {
             var root = root(); active(root).put("offerType", type); assertEquals(1, decode(root).candidates().size());

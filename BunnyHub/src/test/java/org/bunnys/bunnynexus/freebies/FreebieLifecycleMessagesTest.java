@@ -37,7 +37,12 @@ class FreebieLifecycleMessagesTest {
         assertTrue(ended.getFields().stream().anyMatch(f -> f.getName().equals("CLAIM WINDOW") && "Ended".equals(f.getValue())));
         assertTrue(ended.getFields().stream().noneMatch(f -> f.getValue().contains("<t:")), "no countdown left");
 
-        var before = buttons(alert.getComponents()).stream().map(Button::getLabel).toList();
+        var row = buttons(alert.getComponents());
+        assertEquals(3, row.size(), "claim centered between two spacers");
+        assertTrue(row.get(1).getLabel().startsWith("Claim"));
+        assertTrue(row.get(0).isDisabled() && row.get(2).isDisabled());
+        assertNotEquals(row.get(0).getCustomId(), row.get(2).getCustomId());
+        var before = row.stream().map(Button::getLabel).toList();
         var after = buttons(edit.getComponents()).stream().map(Button::getLabel).toList();
         assertTrue(before.stream().anyMatch(l -> l.startsWith("Claim")));
         assertEquals(List.of(), after, "only the claim button was there, so an ended card has none");

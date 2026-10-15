@@ -1,5 +1,7 @@
 package org.bunnys.bunnynexus.freebies;
 
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import net.dv8tion.jda.api.components.actionrow.ActionRowChildComponent;
 import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
@@ -18,6 +20,27 @@ final class FreebieCards {
             case STEAM -> AppDesign.Emojis.STEAM;
             default -> "🎁";
         };
+    }
+
+    /** Prefix of the two disabled spacer buttons that center the claim button; they never route anywhere. */
+    static final String SPACER_PREFIX = "freebie_pad";
+    /** Hangul filler: renders as nothing, but unlike a space Discord accepts it as a button label. */
+    private static final String INVISIBLE = "\u3164";
+
+    /**
+     * The claim button between two empty, disabled buttons. Discord always left-aligns buttons, so this is the
+     * only way to show it centered on desktop.
+     */
+    static ActionRow claimRow(FreebieOffer offer) {
+        return ActionRow.of(spacer("l"), claimButton(offer), spacer("r"));
+    }
+
+    private static Button spacer(String side) {
+        return Button.secondary(SPACER_PREFIX + ":" + side, INVISIBLE).asDisabled();
+    }
+
+    static boolean isSpacer(ActionRowChildComponent component) {
+        return component instanceof Button button && button.getCustomId() != null && button.getCustomId().startsWith(SPACER_PREFIX + ":");
     }
 
     static Button claimButton(FreebieOffer offer) {

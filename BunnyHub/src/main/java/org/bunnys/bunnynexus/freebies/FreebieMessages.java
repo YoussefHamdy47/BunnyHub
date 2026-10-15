@@ -44,7 +44,7 @@ public final class FreebieMessages {
     /** The public alert. Only {@code roleId} may be pinged - never @everyone/@here or users. */
     public static MessageCreateData alert(FreebieOffer offer, Optional<String> roleId, String reference) {
         var builder = new MessageCreateBuilder().setEmbeds(alertEmbed(offer, reference))
-                .setComponents(ActionRow.of(FreebieCards.claimButton(offer)))
+                .setComponents(FreebieCards.claimRow(offer))
                 .setAllowedMentions(List.of()).mentionRepliedUser(false);
         roleId.ifPresent(role -> builder.setContent("<@&" + role + ">").mentionRoles(role));
         return builder.build();

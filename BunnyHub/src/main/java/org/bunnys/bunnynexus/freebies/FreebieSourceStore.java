@@ -79,6 +79,9 @@ final class FreebieSourceStore {
                 offers.updateOne(and(eq("_id", existing.getString("_id")), ne("state", "PURGED")), combine(
                         set("lastSeenAt", Date.from(now)), set("missingPolls", 0), set("gone", false),
                         set("evidence." + c.provider().id, new Document("missing", 0).append("seenAt", Date.from(now)).append("identity", c.identity()))));
+                // Offers stored before a source reported a price get it the next time they are seen.
+                if (c.worth().isPresent() && existing.getString("worth") == null)
+                    offers.updateOne(and(eq("_id", existing.getString("_id")), eq("worth", null)), set("worth", c.worth().get()));
                 return false;
             }
             Document possible = key == null ? null : offers.find(eq("matchKey", key)).first();
