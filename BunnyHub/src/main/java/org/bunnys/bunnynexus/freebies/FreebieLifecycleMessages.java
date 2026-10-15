@@ -86,7 +86,8 @@ final class FreebieLifecycleMessages {
         List<ActionRow> kept = new ArrayList<>();
         for (var row : rows(components)) {
             List<ActionRowChildComponent> children = new ArrayList<>();
-            for (var child : row.getComponents()) if (!isClaim(child)) children.add(child);
+            // The spacers only exist to center the claim button, so they go with it.
+            for (var child : row.getComponents()) if (!isClaim(child) && !FreebieCards.isSpacer(child)) children.add(child);
             if (!children.isEmpty()) kept.add(children.size() == row.getComponents().size() ? row : ActionRow.of(children));
         }
         return kept;
