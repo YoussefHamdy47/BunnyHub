@@ -30,8 +30,11 @@ class FreebiePresentationTest {
                 assertTrue(card.getDescription().contains("[Example](" + offer.claimUrl() + ")"));
                 assertEquals("Powered by GamerPower • ref same-reference", card.getFooter().getText());
                 assertTrue(message.getAllowedMentions().isEmpty());
-                var button = message.getComponents().getFirst().asActionRow().getComponents().getFirst().asButton();
+                var row = message.getComponents().getFirst().asActionRow().getComponents();
+                assertEquals(3, row.size(), "claim centered between two spacers");
+                var button = row.get(1).asButton();
                 assertEquals(offer.claimUrl().toString(), button.getUrl());
+                assertTrue(row.get(0).asButton().isDisabled() && row.get(2).asButton().isDisabled());
                 if (store == FreebieStore.EPIC || store == FreebieStore.STEAM) {
                     assertTrue(button.getEmoji().getFormatted().contains(store == FreebieStore.EPIC
                             ? "824679104220626954" : "705062577817780315"));
