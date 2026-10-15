@@ -4,6 +4,7 @@ import org.bson.codecs.pojo.annotations.BsonId;
 import org.bson.types.ObjectId;
 import org.bunnys.handler.database.VersionedDocument;
 
+/** A user's timer document: the active session, current semester and account. Writes are revision-checked. */
 public class TimerData implements VersionedDocument {
     private Long revision;
     public Long getRevision() { return revision; }

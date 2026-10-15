@@ -9,6 +9,7 @@ import org.bunnys.bunnynexus.timers.buttons.GPAPaginator;
 import org.bunnys.utils.Embeds;
 import java.util.concurrent.TimeUnit;
 
+/** {@code /timer gpa}: the academic record and cumulative GPA, paged when it does not fit one embed. */
 public final class Gpa extends TimerSubcommand {
     public Gpa() {
         setName("gpa");

@@ -10,6 +10,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+/**
+ * Configures a {@link BunnyHub}: token and database keys, discovery packages, intents, worker pools, developer and
+ * test-server IDs.
+ */
 public class BunnyHubBuilder {
     // Default feature states
     private boolean logActions = true;

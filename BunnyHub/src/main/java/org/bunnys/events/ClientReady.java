@@ -11,6 +11,7 @@ import org.bunnys.utils.BunnyLog;
 import java.io.IOException;
 import java.util.Arrays;
 
+/** Logs the startup banner and registers the slash commands once Discord reports the bot ready. */
 @SuppressWarnings("unused") // Discovered reflectively by EventLoader.
 public class ClientReady extends BunnyEvent {
 

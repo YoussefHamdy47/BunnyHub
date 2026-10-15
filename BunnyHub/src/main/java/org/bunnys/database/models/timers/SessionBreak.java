@@ -2,6 +2,7 @@ package org.bunnys.database.models.timers;
 
 import java.util.Date;
 
+/** A pause inside a study session, with its start and end times. */
 public class SessionBreak {
     private double sessionBreakTime = 0.0;
     private Date sessionBreakStart = null;

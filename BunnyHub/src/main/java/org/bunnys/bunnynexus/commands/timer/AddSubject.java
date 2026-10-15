@@ -7,6 +7,7 @@ import org.bunnys.bunnynexus.timers.Timers;
 import org.bunnys.database.models.timers.Grade;
 import org.bunnys.database.models.timers.Subject;
 
+/** {@code /timer add-subject}: adds a course to the current semester or the academic record. */
 public final class AddSubject extends TimerSubcommand {
     public AddSubject() {
         setName("add-subject");

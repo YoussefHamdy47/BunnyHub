@@ -39,6 +39,7 @@ public final class FreebieSystem {
     private final FreebieLifecyclePlanner lifecycle;
     private final FreebieLifecycleWorker lifecycleWorker;
     private final FreebieDmWorker dmWorker;
+    private final FreebieReviewDecisions decisions;
     private Instant nextSweep = Instant.MIN; // Discovery thread only.
     static final Duration SWEEP_EVERY = Duration.ofMinutes(10);
 
@@ -60,6 +61,8 @@ public final class FreebieSystem {
         dmWorker = new FreebieDmWorker(repository, sendingThread, clock);
         sender = new FreebieSender(repository, jda, sendingThread, clock, notifier).withSubscriptions(subscriptions)
                 .withLifecycle(lifecycleWorker).withDms(dmWorker);
+        decisions = new FreebieReviewDecisions(config, repository, subscriptions, reviews, clock, this::fanOut,
+                offerId -> background("withdrawn cards", () -> markEnded(offerId)));
     }
 
     public static Optional<FreebieSystem> current() { return Optional.ofNullable(instance); }
@@ -162,7 +165,7 @@ public final class FreebieSystem {
         for (var offer : repository.offersIn(FreebieOffer.State.PENDING, 200)) {
             if (offer.ended(now)) ended(offer, "ended before review");
             // Once its review message is up (the audit trail and the Stop button), an auto-send launcher goes out.
-            else if (config.autoSends(offer.store()) && offer.reviewMessageId().isPresent()) autoApprove(offer);
+            else if (config.autoSends(offer.store()) && offer.reviewMessageId().isPresent()) decisions.autoApprove(offer);
         }
         for (var offer : repository.offersIn(FreebieOffer.State.APPROVED, 200)) {
             if (offer.ended(now)) { ended(offer, "the giveaway ended"); continue; }
@@ -197,18 +200,6 @@ public final class FreebieSystem {
 
     /** Recorded as the approver of auto-sent offers; never a real user ID, so it is never mentioned. */
     public static final String AUTO_ACTOR = "auto";
-
-    /** Approval without an owner, for launchers on the auto-send list. Same path as a confirmed approval. */
-    void autoApprove(FreebieOffer offer) {
-        Instant now = clock.instant();
-        var approved = repository.transition(offer.id(), FreebieOffer.State.PENDING, FreebieOffer.State.APPROVED, AUTO_ACTOR, now);
-        if (approved.isEmpty()) return;
-        fanOut(approved.get());
-        var refreshed = repository.offer(offer.id()).orElse(approved.get());
-        var counts = repository.counts(offer.id());
-        reviews.edit(refreshed, "Sent automatically (" + offer.store().label() + " is on the auto-send list) — sending to "
-                + counts.open() + " channel(s).", FreebieMessages.stopControls(refreshed));
-    }
 
     /** The giveaway ended (or vanished from the feed): close review or stop remaining sends. */
     private void ended(FreebieOffer offer, String why) {
@@ -280,67 +271,13 @@ public final class FreebieSystem {
     }
 
     /** First click: show exactly how many channels will be messaged and ask for a second confirmation. */
-    public Reply requestApproval(String actorId, String offerId) {
-        requireOwner(actorId);
-        var offer = repository.offer(offerId).orElse(null);
-        if (offer == null) return new Text("That offer no longer exists.");
-        if (offer.state() != FreebieOffer.State.PENDING) return new Text("Already handled: " + offer.state().name().toLowerCase(Locale.ROOT) + ".");
-        if (offer.ended(clock.instant())) return new Text("This giveaway has already ended.");
-        var audience = subscriptions.audience(offer.store());
-        return new Prompt(FreebieMessages.confirm(offer, audience.channels(), audience.guilds()));
-    }
-
-    public String confirmApproval(String actorId, String offerId) {
-        requireOwner(actorId);
-        Instant now = clock.instant();
-        var current = repository.offer(offerId).orElse(null);
-        if (current == null) return "That offer no longer exists.";
-        if (current.ended(now)) return "This giveaway has already ended; nothing was sent.";
-        var approved = repository.transition(offerId, FreebieOffer.State.PENDING, FreebieOffer.State.APPROVED, actorId, now);
-        if (approved.isEmpty()) return "Already handled by someone else (or expired). Nothing changed.";
-        fanOut(approved.get());
-        var refreshed = repository.offer(offerId).orElse(approved.get());
-        var counts = repository.counts(offerId);
-        reviews.edit(refreshed, "Approved by <@" + actorId + "> — sending to " + counts.open() + " channel(s).",
-                FreebieMessages.stopControls(refreshed));
-        return "Approved. Sending to " + counts.open() + " channel(s); a summary will be posted here when it finishes.";
-    }
-
-    public String reject(String actorId, String offerId) {
-        requireOwner(actorId);
-        var rejected = repository.transition(offerId, FreebieOffer.State.PENDING, FreebieOffer.State.REJECTED, actorId, clock.instant());
-        if (rejected.isEmpty()) return "Already handled. Nothing changed.";
-        reviews.edit(rejected.get(), "Rejected by <@" + actorId + ">. Nothing was sent.", List.of());
-        return "Rejected. Nothing was sent.";
-    }
-
+    public Reply requestApproval(String actorId, String offerId) { return decisions.requestApproval(actorId, offerId); }
+    public String confirmApproval(String actorId, String offerId) { return decisions.confirmApproval(actorId, offerId); }
+    public String reject(String actorId, String offerId) { return decisions.reject(actorId, offerId); }
     /** Kill switch for one offer: messages already sent stay, everything not yet sent is cancelled. */
-    public String stop(String actorId, String offerId) {
-        requireOwner(actorId);
-        Instant now = clock.instant();
-        var stopped = repository.stopByOwner(offerId, FreebieOffer.State.APPROVED, actorId, now);
-        if (stopped.isEmpty()) stopped = repository.stopByOwner(offerId, FreebieOffer.State.COMPLETED, actorId, now);
-        if (stopped.isEmpty()) return "This offer is not currently sending.";
-        long cancelled = repository.cancelPending(offerId, "stopped by owner", now);
-        repository.dmJobs().cancelForOffer(offerId, now);
-        background("withdrawn cards", () -> markEnded(offerId));
-        reviews.edit(stopped.get(), "Stopped by <@" + actorId + ">. " + cancelled + " pending message(s) cancelled; summary follows.",
-                List.of());
-        return "Stopped. " + cancelled + " pending message(s) cancelled. Up to " + FreebieSender.MAX_IN_FLIGHT
-                + " already in flight may still arrive.";
-    }
-
+    public String stop(String actorId, String offerId) { return decisions.stop(actorId, offerId); }
     /** Owner fixes a wrongly detected launcher before approving; the confirmation then counts the new audience. */
-    public String changeStore(String actorId, String offerId, String storeId) {
-        requireOwner(actorId);
-        var store = FreebieStore.byId(storeId).orElse(null);
-        if (store == null) return "Unknown launcher.";
-        var changed = repository.changeStore(offerId, store, clock.instant());
-        if (changed.isEmpty()) return "Only offers still waiting for review can change launcher.";
-        reviews.edit(changed.get(), "Waiting for review (launcher set to " + store.label() + " by <@" + actorId + ">)",
-                FreebieMessages.reviewControls(changed.get()));
-        return "Launcher changed to **" + store.label() + "**.";
-    }
+    public String changeStore(String actorId, String offerId, String storeId) { return decisions.changeStore(actorId, offerId, storeId); }
 
     /** Approved (or auto-sent) giveaways that a newly configured channel can still claim. */
     public List<FreebieOffer> liveFor(FreebieStore store) { return repository.liveApproved(store, clock.instant()); }
@@ -424,9 +361,4 @@ public final class FreebieSystem {
         };
     }
 }
-
-
-
-
-
 

@@ -4,6 +4,10 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.utils.TokenLoader;
 
+/**
+ * Entry point: picks the database (refusing the production one for a test instance) and starts BunnyNexus on the
+ * BunnyHub framework.
+ */
 public class Main {
     public static void main(String[] args) {
         // MONGO_DB_NAME overrides the database (default GBF); a test instance refuses to run on GBF.

@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.entities.channel.middleman.StandardGuildMessageChanne
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.interactions.modals.ModalMapping;
 import org.bunnys.bunnynexus.commands.freebies.FreebieDashboard;
+import org.bunnys.bunnynexus.commands.freebies.FreebieLauncherPings;
 import org.bunnys.bunnynexus.commands.freebies.FreebieSettingsCommands;
 import org.bunnys.bunnynexus.freebies.FreebieStore;
 import org.bunnys.bunnynexus.freebies.FreebieSystem;
@@ -55,6 +56,6 @@ public class FreebiePingModal extends BunnyModal {
                     : "**" + store.label() + "** now " + role.map(r -> "pings " + r.getAsMention()).orElse("posts without a ping") + ".";
             saved = subscriptions.forGuild(guild.getId());
         }
-        event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieDashboard.pings(guild, saved, notice))).queue();
+        event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieLauncherPings.view(guild, saved, notice))).queue();
     }
 }

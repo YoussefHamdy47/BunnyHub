@@ -9,6 +9,7 @@ import org.bunnys.bunnynexus.timers.services.SubjectAutocomplete;
 import org.bunnys.handler.BunnyHub;
 import java.util.List;
 
+/** {@code /timer switch}: moves the running session to another course without stopping the clock. */
 public final class SwitchSubject extends TimerSubcommand {
     public SwitchSubject() {
         setName("switch");

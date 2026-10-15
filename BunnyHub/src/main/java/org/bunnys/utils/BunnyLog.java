@@ -1,5 +1,6 @@
 package org.bunnys.utils;
 
+/** Coloured console logging used across the bot; exceptions are reduced to a safe one-line description. */
 public class BunnyLog {
     public static void error(String message, Throwable error) {
         org.slf4j.LoggerFactory.getLogger(BunnyLog.class).error("{} | {}", message, FailureDiagnostics.describe(error));

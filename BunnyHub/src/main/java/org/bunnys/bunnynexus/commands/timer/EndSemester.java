@@ -10,6 +10,7 @@ import org.bunnys.bunnynexus.timers.Timers;
 import org.bunnys.utils.AppDesign;
 import java.util.concurrent.TimeUnit;
 
+/** {@code /timer end_semester}: archives the current semester after a confirmation, keeping it in the history. */
 public final class EndSemester extends TimerSubcommand {
     private static final String WARNING_TITLE = AppDesign.Emojis.STOP + " Semester Termination Protocol";
     private static final long PROMPT_SECONDS = 60;

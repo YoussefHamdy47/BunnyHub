@@ -2,6 +2,7 @@ package org.bunnys.selects;
 
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import org.bunnys.bunnynexus.commands.freebies.FreebieDashboard;
+import org.bunnys.bunnynexus.commands.freebies.FreebieLauncherPings;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.selects.BunnySelect;
 
@@ -21,7 +22,7 @@ public class FreebiePingSelect extends BunnySelect {
             event.reply("You need **Manage Server** in this server to do that.").setEphemeral(true).setAllowedMentions(List.of()).queue();
             return;
         }
-        FreebieDashboard.pingForm(args[1], event.getValues().getFirst()).ifPresentOrElse(
+        FreebieLauncherPings.form(args[1], event.getValues().getFirst()).ifPresentOrElse(
                 form -> event.replyModal(form).queue(),
                 () -> event.reply("This menu is out of date. Run `/free-games setup` again.").setEphemeral(true).queue());
     }

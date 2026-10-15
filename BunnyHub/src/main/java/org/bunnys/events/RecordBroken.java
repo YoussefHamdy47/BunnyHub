@@ -12,6 +12,7 @@ import org.bunnys.utils.Embeds;
 
 import java.time.Instant;
 
+/** Congratulates a user when they break a study record (see {@code RecordBrokenEvent}). */
 @SuppressWarnings("unused") // Discovered reflectively by EventLoader.
 public class RecordBroken extends BunnyEvent {
 

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+/** One semester: its courses, sessions, study time and rank. Archived to {@code SemesterHistory} when it ends. */
 public class Semester {
     private String semesterName = null;
     private int semesterLevel = 1;

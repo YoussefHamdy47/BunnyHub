@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
+/** One finished study session: course, length and breaks. */
 public class Session {
     private String guildID;
     private String channelID;
