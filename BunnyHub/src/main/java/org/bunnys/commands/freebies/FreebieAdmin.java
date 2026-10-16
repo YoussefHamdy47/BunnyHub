@@ -1,12 +1,15 @@
 package org.bunnys.commands.freebies;
 
-import net.dv8tion.jda.api.Permission;
+import net.dv8tion.jda.api.interactions.IntegrationType;
 import org.bunnys.bunnynexus.commands.freebies.FreebieAdminCommands;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.commands.BunnyCommand;
 import org.bunnys.handler.commands.context.CommandContext;
 
-/** Registration only. Developer-only, hidden from non-admins, and re-checked against FREEBIE_OWNER_IDS. */
+/**
+ * Registration only. Installed to the developers' own accounts rather than to servers, so it shows up in their
+ * slash menu everywhere and in nobody else's. Developer-only, and re-checked against FREEBIE_OWNER_IDS.
+ */
 @SuppressWarnings("unused") // Discovered reflectively by CommandLoader.
 public final class FreebieAdmin extends BunnyCommand {
     public FreebieAdmin(BunnyHub client) {
@@ -15,10 +18,9 @@ public final class FreebieAdmin extends BunnyCommand {
         setCategory("Owner");
         setDescription("Bot owner controls for free-game alerts.");
         setDeveloperOnly(true);
-        setDmEnabled(false);
+        setInstallTypes(IntegrationType.USER_INSTALL);
         setMentionEnabled(false);
         setDeferBeforeDispatch(true);
-        addUserPermissions(Permission.ADMINISTRATOR);
         setCooldown(5);
         addSubcommand(FreebieAdminCommands.status());
         addSubcommand(FreebieAdminCommands.pause());
