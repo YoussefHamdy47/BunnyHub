@@ -25,7 +25,10 @@ final class FreebieCards {
     /** Prefix of the two disabled spacer buttons that center the claim button; they never route anywhere. */
     static final String SPACER_PREFIX = "freebie_pad";
     /** Hangul filler: renders as nothing, but unlike a space Discord accepts it as a button label. */
-    private static final String INVISIBLE = "\u3164";
+    /** Hangul fillers render as blank but, unlike spaces, are not trimmed, so they set the spacers' width. */
+    private static final String INVISIBLE = "\u3164".repeat(8);
+    /** Heading above the claim link. Lifecycle edits look for it to strip the link once an offer ends. */
+    static final String CLAIM_HEADING = "**Claim Game**";
 
     /**
      * The claim button between two empty, disabled buttons. Discord always left-aligns buttons, so this is the
@@ -45,9 +48,9 @@ final class FreebieCards {
 
     static Button claimButton(FreebieOffer offer) {
         String label = switch (offer.store()) {
-            case EPIC -> "Claim Epic offer";
-            case STEAM -> "Claim Steam offer";
-            default -> "Claim free game";
+            case EPIC -> "Claim Epic Offer";
+            case STEAM -> "Claim Steam Offer";
+            default -> "Claim Free Game";
         };
         return Button.link(offer.claimUrl().toString(), label).withEmoji(Emoji.fromFormatted(emoji(offer.store())));
     }
@@ -65,7 +68,7 @@ final class FreebieCards {
                 .setAuthor(heading, null, icon)
                 .setUrl(offer.claimUrl().toString())
                 .setDescription(text(offer.description(), 500)
-                        + "\n\n**Claim your game**\n[" + text(title(offer.title()), 200) + "](" + offer.claimUrl().toASCIIString() + ")")
+                        + "\n\n" + CLAIM_HEADING + "\n[" + text(title(offer.title()), 200) + "](" + offer.claimUrl().toASCIIString() + ")")
                 .addField(featured ? "THE DEAL" : "PRICE", offer.worth()
                         .map(w -> "~~" + text(w, 40) + "~~ → **FREE**\nListed value")
                         .orElse("**FREE**\nNo price listed"), true)
