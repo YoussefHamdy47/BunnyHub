@@ -76,8 +76,7 @@ final class FreebieCards {
             card.addField(epic ? "GET STARTED ON EPIC" : steam ? "GET STARTED ON STEAM" : "HOW TO CLAIM",
                     text(offer.instructions(), 650), false);
         if (offer.id().startsWith("epic:")) card.addField("REGION", offer.region(), false);
-        // The small corner thumbnail keeps the card compact; the full-width image made every alert very tall.
-        offer.image().ifPresent(image -> card.setThumbnail(image.toString()));
+        offer.image().ifPresent(image -> card.setImage(image.toString()));
         return card.setFooter(footer).setTimestamp(null).build();
     }
 

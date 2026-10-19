@@ -1,5 +1,6 @@
 package org.bunnys.commands.freebies;
 
+import net.dv8tion.jda.api.interactions.IntegrationType;
 import org.bunnys.bunnynexus.commands.freebies.FreeGamesCommand;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.commands.BunnyCommand;
@@ -16,6 +17,7 @@ public final class FreeGames extends BunnyCommand {
     public FreeGames(BunnyHub client) {
         super(client);
         setName("free-games");
+        setInstallTypes(IntegrationType.GUILD_INSTALL, IntegrationType.USER_INSTALL);
         setCategory("Free Games");
         setDescription("Free games: see what's free now, get them by DM, or set up alerts for your server.");
         addAliases("freegames", "free");

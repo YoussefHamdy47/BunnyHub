@@ -25,6 +25,10 @@ public final class FreebieSettingsCommands {
         if (!ctx.isFromGuild() || ctx.getMember() == null) {
             ctx.reply(Embeds.error("Free-game alerts", "Use this inside a server."), true); return;
         }
+        // Run from someone's account install in a server the bot hasn't joined: nothing to set up there yet.
+        if (ctx.getGuild().isDetached()) {
+            ctx.reply(Embeds.error("Free-game alerts", "Add me to this server first, then run this again."), true); return;
+        }
         if (!ctx.getMember().hasPermission(Permission.MANAGE_SERVER)) {
             ctx.reply(Embeds.error("Free-game alerts", "You need **Manage Server** to change free-game alerts."), true); return;
         }
