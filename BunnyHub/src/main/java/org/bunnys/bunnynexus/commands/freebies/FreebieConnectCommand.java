@@ -22,14 +22,12 @@ import java.util.Optional;
  * whose admins can't run {@code /free-games setup} themselves. Same checks and save path as the dashboard.
  */
 public final class FreebieConnectCommand extends BunnySubcommand {
-    static final String DEFAULT_ROLE = "Free Games";
-
     public FreebieConnectCommand() {
         setName("connect");
         setDescription("Send every section to one channel of any server the bot is in");
         addOption(new OptionData(OptionType.STRING, "server", "Server ID", true).setMaxLength(20));
         addOption(new OptionData(OptionType.STRING, "channel", "Channel ID in that server", true).setMaxLength(20));
-        addOption(new OptionData(OptionType.STRING, "role", "Role ID or exact name to ping (default: " + DEFAULT_ROLE + ")", false).setMaxLength(100));
+        addOption(new OptionData(OptionType.STRING, "role", "Role ID or exact name to ping; leave empty to post without a ping", false).setMaxLength(100));
         addOption(new OptionData(OptionType.BOOLEAN, "post-current", "Also post the games that are free right now", false));
     }
 
@@ -42,7 +40,7 @@ public final class FreebieConnectCommand extends BunnySubcommand {
         ctx.defer(true);
         String serverId = slash.event().getOption("server").getAsString().trim();
         String channelId = slash.event().getOption("channel").getAsString().trim();
-        String roleQuery = slash.event().getOption("role") == null ? DEFAULT_ROLE : slash.event().getOption("role").getAsString().trim();
+        String roleQuery = slash.event().getOption("role") == null ? "" : slash.event().getOption("role").getAsString().trim();
         boolean postCurrent = slash.event().getOption("post-current") != null && slash.event().getOption("post-current").getAsBoolean();
         if (!serverId.matches("[0-9]{17,20}") || !channelId.matches("[0-9]{17,20}")) {
             reply(ctx, "Use numeric server and channel IDs."); return;
@@ -51,8 +49,8 @@ public final class FreebieConnectCommand extends BunnySubcommand {
         if (guild == null) { reply(ctx, "I'm not in a server with ID `" + serverId + "`."); return; }
         var channel = guild.getChannelById(StandardGuildMessageChannel.class, channelId);
         if (channel == null) { reply(ctx, "**" + guild.getName() + "** has no text or announcement channel with ID `" + channelId + "`."); return; }
-        var role = findRole(guild, roleQuery);
-        if (role.isEmpty()) { reply(ctx, "**" + guild.getName() + "** has no role matching `" + roleQuery + "`."); return; }
+        Optional<Role> role = roleQuery.isEmpty() ? Optional.empty() : findRole(guild, roleQuery);
+        if (!roleQuery.isEmpty() && role.isEmpty()) { reply(ctx, "**" + guild.getName() + "** has no role matching `" + roleQuery + "`."); return; }
 
         var text = new StringBuilder("**" + guild.getName() + "** → #" + channel.getName() + "\n");
         for (FreebieSection section : FreebieSection.values()) {
