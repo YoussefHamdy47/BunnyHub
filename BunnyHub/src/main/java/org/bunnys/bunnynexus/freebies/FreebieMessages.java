@@ -54,23 +54,25 @@ public final class FreebieMessages {
         return FreebieCards.embed(offer, "Powered by " + offer.sourceLabel() + " • ref " + reference);
     }
 
-    /** Major PC launchers ping the owners; the other sections wait quietly to be reviewed in bulk. */
+    /** Every review pings the owners, whatever the section. */
     public static MessageCreateData review(FreebieOffer offer, int channels, int guilds, Set<String> ownerIds) {
         return review(offer, channels, guilds, ownerIds, false);
     }
 
-    /** {@code automatic}: the launcher is on the auto-send list, so nobody is pinged and it goes out on its own. */
+    /**
+     * {@code automatic}: the launcher is on the auto-send list, so it goes out on its own. The owners are still pinged
+     * for every game, so nothing reaches the servers unnoticed.
+     */
     public static MessageCreateData review(FreebieOffer offer, int channels, int guilds, Set<String> ownerIds, boolean automatic) {
         boolean priority = offer.store().section().priority();
-        Set<String> pinged = priority && !automatic ? ownerIds : Set.of();
-        String pings = String.join(" ", pinged.stream().sorted().map(id -> "<@" + id + ">").toList());
+        String pings = String.join(" ", ownerIds.stream().sorted().map(id -> "<@" + id + ">").toList());
         String headline = automatic ? "**Found · " + offer.store().label() + " is sent automatically**"
                 : priority ? "**Ready for review · Major PC**"
                 : "**Ready for review · " + offer.store().section().label().toLowerCase(Locale.ROOT) + "**";
         String hint = automatic ? "It goes out within a minute. Use **Stop** afterwards if something is wrong."
                 : "Public preview below. Review the launcher and audience before approving.";
         return new MessageCreateBuilder().setContent((pings.isEmpty() ? "" : pings + " ") + headline + "\n" + hint)
-                .setAllowedMentions(List.of()).mentionUsers(pinged)
+                .setAllowedMentions(List.of()).mentionUsers(ownerIds)
                 .setEmbeds(alertEmbed(offer, "preview"), reviewEmbed(offer, channels, guilds, "Waiting for review"))
                 .setComponents(reviewControls(offer))
                 .build();
@@ -86,7 +88,7 @@ public final class FreebieMessages {
         for (FreebieStore store : FreebieStore.values()) menu.addOption(store.label(), store.id(), Emoji.fromFormatted(FreebieCards.emoji(store)));
         menu.setDefaultValues(offer.store().id());
         return List.of(ActionRow.of(Button.success(BUTTON_PREFIX + ":approve:" + offer.id(), "Approve"),
-                        Button.danger(BUTTON_PREFIX + ":reject:" + offer.id(), "Reject")),
+                        Button.danger(BUTTON_PREFIX + ":reject:" + offer.id(), "Reject"), clearButton()),
                 ActionRow.of(menu.build()));
     }
 
@@ -126,7 +128,43 @@ public final class FreebieMessages {
     }
 
     public static List<ActionRow> stopControls(FreebieOffer offer) {
-        return List.of(ActionRow.of(Button.danger(BUTTON_PREFIX + ":stop:" + offer.id(), "Stop sending")));
+        return List.of(ActionRow.of(Button.danger(BUTTON_PREFIX + ":stop:" + offer.id(), "Stop sending"), clearButton()));
+    }
+
+    public static final String CLEAR_ACTION = "clear";
+
+    /** Deletes the bot's review messages that no longer need an owner. See {@link FreebieReviewCleanup}. */
+    public static Button clearButton() {
+        return Button.secondary(BUTTON_PREFIX + ":" + CLEAR_ACTION + ":finished", "Clear finished");
+    }
+
+    /** The rows plus a Clear finished button, so every review message can tidy the channel, even a decided one. */
+    public static List<ActionRow> withClear(List<ActionRow> rows) {
+        if (rows.isEmpty()) return List.of(ActionRow.of(clearButton()));
+        boolean present = rows.stream().flatMap(row -> row.getComponents().stream())
+                .anyMatch(c -> c instanceof Button b && clearButton().getCustomId().equals(b.getCustomId()));
+        if (present || rows.size() >= 5) return rows;
+        List<ActionRow> withButton = new ArrayList<>(rows);
+        withButton.add(ActionRow.of(clearButton()));
+        return withButton;
+    }
+
+    /**
+     * Whether a review message still has something for an owner to do: an Approve, Reject, Stop or confirm button,
+     * or the launcher picker. Clear finished alone doesn't count.
+     */
+    public static boolean needsOwner(List<? extends net.dv8tion.jda.api.components.MessageTopLevelComponent> rows) {
+        for (var top : rows) {
+            if (!(top instanceof ActionRow row)) continue;
+            for (var component : row.getComponents()) {
+                if (component instanceof StringSelectMenu) return true;
+                if (component instanceof Button button && button.getCustomId() != null
+                        && button.getCustomId().startsWith(BUTTON_PREFIX + ":")
+                        && !button.getCustomId().startsWith(BUTTON_PREFIX + ":" + CLEAR_ACTION + ":")
+                        && !button.isDisabled()) return true;
+            }
+        }
+        return false;
     }
 
     public static MessageCreateData summary(FreebieOffer offer, FreebieRepository.Counts counts, List<FreebieRepository.FailedDelivery> failures,

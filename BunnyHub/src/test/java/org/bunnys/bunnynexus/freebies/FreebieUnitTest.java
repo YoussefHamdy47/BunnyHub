@@ -166,6 +166,24 @@ class FreebieUnitTest {
         assertEquals(4, button.getCustomId().split(":").length);
     }
 
+    @Test void clearFinishedKeepsAnythingThatStillNeedsAnOwner() {
+        var offer = offer("X", FreebieStore.STEAM);
+        assertTrue(FreebieMessages.needsOwner(FreebieMessages.reviewControls(offer)), "approve, reject and the launcher picker");
+        assertTrue(FreebieMessages.needsOwner(FreebieMessages.stopControls(offer)), "stop sending");
+        assertFalse(FreebieMessages.needsOwner(List.of()), "a decided review or a notice");
+        assertFalse(FreebieMessages.needsOwner(FreebieMessages.withClear(List.of())), "the clear button alone");
+        assertFalse(FreebieMessages.needsOwner(FreebieMessages.catchUpAllControls("12345678901234567890", "12345678901234567890", 1)),
+                "other features' buttons don't hold a message");
+
+        var first = FreebieMessages.reviewControls(offer).getFirst().getComponents();
+        assertEquals("Clear finished", first.getLast().asButton().getLabel());
+        assertEquals(FreebieMessages.reviewControls(offer), FreebieMessages.withClear(FreebieMessages.reviewControls(offer)), "never added twice");
+        var decided = FreebieMessages.withClear(List.of());
+        assertEquals(1, decided.size());
+        assertEquals(FreebieMessages.clearButton().getCustomId(), decided.getFirst().getComponents().getFirst().asButton().getCustomId());
+        assertEquals(3, FreebieMessages.clearButton().getCustomId().split(":").length, "parsed like the other review buttons");
+    }
+
     @Test void textIsBoundedWithoutBrokenEscapes() {
         String long_ = "*".repeat(5000);
         String cut = FreebieMessages.text(long_, 100);

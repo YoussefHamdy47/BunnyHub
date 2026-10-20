@@ -77,9 +77,10 @@ class FreebieAutoSendTest {
         assertEquals(Set.of(), new FreebieConfig(CHANNEL, Set.of(OWNER), 10).autoSend(), "built in code: everything reviewed");
     }
 
-    @Test void anAutoSendReviewPingsNobody() {
+    @Test void anAutoSendReviewStillPingsTheOwners() {
         var message = FreebieMessages.review(pending(FreebieStore.EPIC, false), 3, 2, Set.of(OWNER), true);
-        assertTrue(message.getMentionedUsers().isEmpty());
+        assertEquals(Set.of(OWNER), message.getMentionedUsers());
+        assertTrue(message.getContent().startsWith("<@" + OWNER + ">"), message.getContent());
         assertTrue(message.getContent().contains("sent automatically"), message.getContent());
         var reviewed = FreebieMessages.review(pending(FreebieStore.EPIC, false), 3, 2, Set.of(OWNER), false);
         assertEquals(Set.of(OWNER), reviewed.getMentionedUsers());

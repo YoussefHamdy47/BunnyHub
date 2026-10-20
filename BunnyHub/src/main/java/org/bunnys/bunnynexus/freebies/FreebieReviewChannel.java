@@ -77,7 +77,7 @@ final class FreebieReviewChannel {
         var audience = subscriptions.audience(offer.store());
         channel.editMessageEmbedsById(offer.reviewMessageId().get(), FreebieMessages.alertEmbed(offer, "preview"),
                         FreebieMessages.reviewEmbed(offer, audience.channels(), audience.guilds(), status))
-                .setComponents(components).queue(null,
+                .setComponents(FreebieMessages.withClear(components)).queue(null,
                         error -> BunnyLog.warning("[Freebies] Could not update review " + offer.id() + " | " + FailureDiagnostics.describe(error)));
     }
 
