@@ -59,8 +59,8 @@ class FreebiePresentationTest {
             assertTrue(review.getEmbeds().stream().allMatch(MessageEmbed::isSendable));
             assertTrue(review.getEmbeds().stream().mapToInt(MessageEmbed::getLength).sum() <= 6000);
             var alert = review.getEmbeds().getFirst();
-            assertEquals("https://example.com/game.jpg", alert.getThumbnail().getUrl());
-            assertNull(alert.getImage(), "the game art is the small thumbnail, not the full-width image");
+            assertEquals("https://example.com/game.jpg", alert.getImage().getUrl());
+            assertNull(alert.getThumbnail(), "the game art is the full-width image, not a corner thumbnail");
             var instructions = alert.getFields().stream().filter(f -> f.getName().equals("GET STARTED ON EPIC")).findFirst().orElseThrow();
             assertTrue(instructions.getValue().contains("\\*\\*Step\\*\\*"));
             assertTrue(review.getAllowedMentions().isEmpty());

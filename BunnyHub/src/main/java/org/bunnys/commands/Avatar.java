@@ -1,5 +1,6 @@
 package org.bunnys.commands;
 
+import net.dv8tion.jda.api.interactions.IntegrationType;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import org.bunnys.handler.BunnyHub;
@@ -17,6 +18,7 @@ public final class Avatar extends BunnyCommand {
     public Avatar(BunnyHub client) {
         super(client);
         setName("avatar");
+        setInstallTypes(IntegrationType.GUILD_INSTALL, IntegrationType.USER_INSTALL);
         setCategory("Information");
         setUserContextName("Avatar");
         addAliases("av", "pfp");

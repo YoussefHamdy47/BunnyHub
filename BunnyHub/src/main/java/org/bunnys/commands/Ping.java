@@ -1,5 +1,6 @@
 package org.bunnys.commands;
 
+import net.dv8tion.jda.api.interactions.IntegrationType;
 import org.bunnys.bunnynexus.info.StatusEmbeds;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.commands.BunnyCommand;
@@ -15,6 +16,7 @@ public final class Ping extends BunnyCommand {
     public Ping(BunnyHub client) {
         super(client);
         setName("ping");
+        setInstallTypes(IntegrationType.GUILD_INSTALL, IntegrationType.USER_INSTALL);
         setCategory("Information");
         setDescription("Show the bot's latency to Discord.");
         addAliases("latency");

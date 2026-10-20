@@ -32,7 +32,7 @@ class FreebieLifecycleMessagesTest {
         assertEquals("Ended: " + card.getTitle(), ended.getTitle());
         assertEquals(FreebieLifecycleMessages.ENDED_COLOUR, ended.getColorRaw());
         assertTrue(ended.getDescription().endsWith("**This giveaway has ended.**"), ended.getDescription());
-        assertFalse(ended.getDescription().contains("Claim your game"));
+        assertFalse(ended.getDescription().contains("Claim Game"));
         assertFalse(ended.getDescription().contains(offer.claimUrl().toString()), "no claim link left in the text");
         assertTrue(ended.getFields().stream().anyMatch(f -> f.getName().equals("CLAIM WINDOW") && "Ended".equals(f.getValue())));
         assertTrue(ended.getFields().stream().noneMatch(f -> f.getValue().contains("<t:")), "no countdown left");
@@ -71,6 +71,21 @@ class FreebieLifecycleMessagesTest {
         var ended = FreebieLifecycleMessages.ended(List.of(legacy), alert.getComponents(), reference, false).getEmbeds().getFirst();
         assertEquals("Source: GamerPower • ref " + reference, ended.getFooter().getText());
         assertTrue(ended.getTitle().startsWith("Ended: "));
+    }
+
+    @Test void cardsPostedWithTheOldClaimHeadingStillLoseTheirLink() {
+        var card = alert.getEmbeds().getFirst();
+        var legacy = new EmbedBuilder(card).setDescription(card.getDescription().replace("**Claim Game**", "**Claim your game**")).build();
+        var ended = FreebieLifecycleMessages.ended(List.of(legacy), alert.getComponents(), reference, false).getEmbeds().getFirst();
+        assertFalse(ended.getDescription().contains("Claim your game"), ended.getDescription());
+        assertFalse(ended.getDescription().contains(offer.claimUrl().toString()));
+    }
+
+    @Test void claimButtonIsTitleCasedBetweenWideSpacers() {
+        var row = buttons(alert.getComponents());
+        assertEquals(3, row.size());
+        assertTrue(row.get(1).getLabel().matches("Claim (Epic|Steam) Offer|Claim Free Game"), row.get(1).getLabel());
+        assertTrue(row.get(0).getLabel().length() >= 8 && row.get(0).getLabel().equals(row.get(2).getLabel()));
     }
 
     @Test void anEmbedWithoutTheReferenceIsNotRewritten() {
