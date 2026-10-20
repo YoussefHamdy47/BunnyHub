@@ -10,15 +10,15 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /** Opt-in, test-owned three-node replica set. No URI/environment configuration or existing database access. */
-final class LocalReplicaSet implements AutoCloseable {
+public final class LocalReplicaSet implements AutoCloseable {
     final String name = "bunny_verify_" + UUID.randomUUID().toString().replace("-", "");
     final Path directory;
     final List<Integer> ports = new ArrayList<>();
     final List<Process> processes = new ArrayList<>();
     final List<MongoClient> direct = new ArrayList<>();
-    MongoClient client;
+    public MongoClient client;
 
-    LocalReplicaSet() throws Exception {
+    public LocalReplicaSet() throws Exception {
         String executable = System.getProperty("bunny.test.mongod");
         if (executable == null || !Files.isRegularFile(Path.of(executable)))
             throw new IllegalStateException("Explicit -Dbunny.test.mongod=<local mongod executable> required; no external Mongo URI accepted.");
