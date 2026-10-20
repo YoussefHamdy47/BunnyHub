@@ -46,6 +46,9 @@ jumps straight to one command.
   and so on directly. If a link can't be resolved, the GamerPower link is kept and the button still works.
 - Launchers on the auto-send list (Epic, Steam and GOG by default) are posted as soon as they are found.
   Everything else waits for an owner to approve it in the private review channel.
+- Every game found pings the owners in the review channel, including the auto-sent ones. **Clear finished** on any
+  review message deletes the bot's messages there that no longer need anyone and keeps those with Approve,
+  Reject or Stop. It only touches the bot's own messages, so it needs Read Message History and no extra intent.
 
 ### Moderation
 

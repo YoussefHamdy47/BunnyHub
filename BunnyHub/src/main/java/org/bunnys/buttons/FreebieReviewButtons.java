@@ -1,7 +1,9 @@
 package org.bunnys.buttons;
 
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import org.bunnys.bunnynexus.freebies.FreebieMessages;
+import org.bunnys.bunnynexus.freebies.FreebieReviewCleanup;
 import org.bunnys.bunnynexus.freebies.FreebieSystem;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.buttons.BunnyButton;
@@ -9,7 +11,7 @@ import org.bunnys.utils.AppDesign;
 import java.util.List;
 
 /**
- * Approve / confirm / reject / stop controls on freebie review messages.
+ * Approve / confirm / reject / stop / clear finished controls on freebie review messages.
  * Only owners listed in FREEBIE_OWNER_IDS, clicking inside one of the review channels from .env, can use them.
  */
 @SuppressWarnings("unused") // Discovered reflectively by ButtonRouter.
@@ -36,6 +38,14 @@ public class FreebieReviewButtons extends BunnyButton {
         }
         // Runs on a command worker: acknowledge first so database work can never outlast Discord's 3 s window.
         switch (action) {
+            case FreebieMessages.CLEAR_ACTION -> {
+                event.deferReply(true).complete();
+                if (!(event.getChannel() instanceof GuildMessageChannel channel)) { followUp(event, "This only works in the review channel."); return; }
+                FreebieReviewCleanup.clear(channel).whenComplete((result, failure) -> followUp(event, failure != null
+                        ? "> " + AppDesign.Emojis.ERROR + " Couldn't read the channel history. Check that I have Read Message History here."
+                        : "Cleared **" + result.deleted() + "** finished message" + (result.deleted() == 1 ? "" : "s")
+                        + (result.kept() > 0 ? ", kept **" + result.kept() + "** that still need you." : ".")));
+            }
             case "confirm" -> {
                 event.deferEdit().complete();
                 String result = system.confirmApproval(actor, offerId);
