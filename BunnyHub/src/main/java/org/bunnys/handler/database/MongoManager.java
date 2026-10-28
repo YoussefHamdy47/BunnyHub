@@ -20,6 +20,9 @@ import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
 /** Owns the MongoDB client. Requires a replica set or sharded cluster, because account updates use transactions. */
 public final class MongoManager {
+    /** How long an unused pooled connection stays open. */
+    static final int IDLE_CONNECTION_MINUTES = 5;
+
     private MongoClient client;
     private MongoDatabase database;
     private volatile boolean connected = false;
@@ -66,7 +69,10 @@ public final class MongoManager {
                 .applyToClusterSettings(cluster -> cluster.serverSelectionTimeout(Math.min(5000, millis), TimeUnit.MILLISECONDS))
                 .applyToSocketSettings(socket -> socket.connectTimeout((int) Math.min(5000, millis), TimeUnit.MILLISECONDS)
                         .readTimeout((int) Math.min(Integer.MAX_VALUE, millis), TimeUnit.MILLISECONDS))
-                .applyToConnectionPoolSettings(pool -> pool.maxSize(poolSize)
+                // Idle connections are closed after a few minutes: a bot is quiet most of the time, and each open
+                // connection holds a socket and buffers. The pool grows back on demand, up to poolSize.
+                .applyToConnectionPoolSettings(pool -> pool.maxSize(poolSize).minSize(0)
+                        .maxConnectionIdleTime(IDLE_CONNECTION_MINUTES, TimeUnit.MINUTES)
                         .maxWaitTime(Math.min(2000, millis), TimeUnit.MILLISECONDS))
                 .codecRegistry(fromRegistries(MongoClientSettings.getDefaultCodecRegistry(),
                         fromProviders(PojoCodecProvider.builder().automatic(true).build())))

@@ -145,18 +145,8 @@ class FreebieUnitTest {
         assertTrue(list.getMentionedUsers().isEmpty() && list.getMentionedRoles().isEmpty());
     }
 
-    @Test void launcherChecklistFitsDiscordLimitsAndTicksCurrentSet() {
+    @Test void catchUpAllControlFitsDiscordLimits() {
         String snowflake = "12345678901234567890";
-        var rows = FreebieMessages.launcherPicker(snowflake, snowflake, Optional.of(snowflake), EnumSet.of(FreebieStore.EPIC, FreebieStore.GOG));
-        var menu = rows.getFirst().getComponents().getFirst().asStringSelectMenu();
-        assertTrue(menu.getCustomId().length() <= 100);
-        assertEquals(List.of(FreebieMessages.LAUNCHERS_PREFIX, snowflake, snowflake, snowflake), List.of(menu.getCustomId().split(":")));
-        assertEquals(1, menu.getMinValues());
-        assertEquals(FreebieStore.values().length, menu.getMaxValues());
-        assertEquals(Set.of("epic", "gog"), new HashSet<>(menu.getOptions().stream().filter(SelectOption::isDefault).map(SelectOption::getValue).toList()));
-        var noRole = FreebieMessages
-                .launcherPicker(snowflake, snowflake, Optional.empty(), Set.of()).getFirst().getComponents().getFirst().asStringSelectMenu();
-        assertTrue(noRole.getCustomId().endsWith(":-"));
         var all = FreebieMessages.catchUpAllControls(snowflake, snowflake, 4)
                 .getFirst().getComponents().getFirst().asButton();
         assertTrue(all.getCustomId().endsWith(":" + FreebieMessages.CATCH_UP_ALL));
@@ -170,10 +160,28 @@ class FreebieUnitTest {
         var select = menu.asStringSelectMenu();
         assertEquals(FreebieStore.values().length, select.getOptions().size());
         assertEquals(List.of("steam"), select.getOptions().stream().filter(SelectOption::isDefault).map(SelectOption::getValue).toList());
-        var catchUp = FreebieMessages.catchUpControls("12345678901234567890", "12345678901234567890", FreebieStore.PLAYSTATION, 3);
+        var catchUp = FreebieMessages.catchUpAllControls("12345678901234567890", "12345678901234567890", 3);
         var button = catchUp.getFirst().getComponents().getFirst().asButton();
         assertTrue(button.getCustomId().length() <= 100);
         assertEquals(4, button.getCustomId().split(":").length);
+    }
+
+    @Test void clearFinishedKeepsAnythingThatStillNeedsAnOwner() {
+        var offer = offer("X", FreebieStore.STEAM);
+        assertTrue(FreebieMessages.needsOwner(FreebieMessages.reviewControls(offer)), "approve, reject and the launcher picker");
+        assertTrue(FreebieMessages.needsOwner(FreebieMessages.stopControls(offer)), "stop sending");
+        assertFalse(FreebieMessages.needsOwner(List.of()), "a decided review or a notice");
+        assertFalse(FreebieMessages.needsOwner(FreebieMessages.withClear(List.of())), "the clear button alone");
+        assertFalse(FreebieMessages.needsOwner(FreebieMessages.catchUpAllControls("12345678901234567890", "12345678901234567890", 1)),
+                "other features' buttons don't hold a message");
+
+        var first = FreebieMessages.reviewControls(offer).getFirst().getComponents();
+        assertEquals("Clear finished", first.getLast().asButton().getLabel());
+        assertEquals(FreebieMessages.reviewControls(offer), FreebieMessages.withClear(FreebieMessages.reviewControls(offer)), "never added twice");
+        var decided = FreebieMessages.withClear(List.of());
+        assertEquals(1, decided.size());
+        assertEquals(FreebieMessages.clearButton().getCustomId(), decided.getFirst().getComponents().getFirst().asButton().getCustomId());
+        assertEquals(3, FreebieMessages.clearButton().getCustomId().split(":").length, "parsed like the other review buttons");
     }
 
     @Test void textIsBoundedWithoutBrokenEscapes() {

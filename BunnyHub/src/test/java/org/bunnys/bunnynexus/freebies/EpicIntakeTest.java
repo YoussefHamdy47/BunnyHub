@@ -42,6 +42,15 @@ class EpicIntakeTest {
         var root = root(); promotion(active(root)).get("discountSetting", Document.class).put("discountPercentage", 50);
         assertEquals(1, decode(root).candidates().size());
     }
+    @Test void epicGamesCarryTheirListPrice() throws Exception {
+        var candidates = decode(root()).candidates();
+        assertFalse(candidates.isEmpty());
+        candidates.forEach(c -> assertTrue(c.worth().orElse("").matches("\\$[0-9]+\\.[0-9]{2}"), c.title() + " " + c.worth()));
+        assertEquals("$19.99", EpicIntake.usd(1999));
+        assertEquals("$3.99", EpicIntake.usd(399));
+        assertEquals("$0.05", EpicIntake.usd(5));
+        assertEquals("$1000.00", EpicIntake.usd(100000));
+    }
     @Test void dlcBundlesAndCodeRedemptionAreExcluded() throws Exception {
         for (String type : List.of("DLC", "ADD_ON", "BUNDLE", "EDITION")) {
             var root = root(); active(root).put("offerType", type); assertEquals(1, decode(root).candidates().size());
@@ -54,7 +63,14 @@ class EpicIntakeTest {
     }
     @Test void missingPartialTruncatedAndErrorEnvelopesCannotEndOffers() throws Exception {
         var root = root(); search(root).get("paging", Document.class).put("total", 99); assertEquals(FreebieFeed.State.FAILED, decode(root).state());
-        root = root(); root.put("errors", List.of()); assertEquals(FreebieFeed.State.FAILED, decode(root).state());
+        // Item errors next to valid data: the games are still found, but the feed is never "complete".
+        root = root(); root.put("errors", List.of(new Document("message", "price lookup failed")));
+        var degraded = decode(root);
+        assertEquals(FreebieFeed.State.PARTIAL, degraded.state());
+        assertEquals(decode(root()).candidates().size(), degraded.candidates().size(), "same games as a clean response");
+        assertFalse(degraded.candidates().isEmpty());
+        // Errors with no data at all still fail.
+        assertEquals(FreebieFeed.State.FAILED, new EpicIntake().decode("{\"errors\":[{\"message\":\"x\"}]}".getBytes(StandardCharsets.UTF_8), NOW).state());
         assertEquals(FreebieFeed.State.FAILED, new EpicIntake().decode("{}".getBytes(StandardCharsets.UTF_8), NOW).state());
         assertEquals(FreebieFeed.State.FAILED, new EpicIntake().decode(Arrays.copyOf(captured(), 500), NOW).state());
     }

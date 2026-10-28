@@ -63,7 +63,7 @@ final class FreebieReviewChannel {
             var audience = subscriptions.audience(offer.store());
             if (!repository.reviews().owns(job, clock.instant())) return;
             var message = destination.sendMessage(FreebieMessages.review(offer, facts(offer), groupPending(offer),
-                            audience.channels(), audience.guilds(), config.ownerIds(), clock.instant()))
+                            audience.channels(), audience.guilds(), config.ownerIds(), config.autoSends(offer.store()), clock.instant()))
                     .setNonce(FreebieMessages.nonce("review|" + offer.id())).timeout(45, TimeUnit.SECONDS).submit().get(50, TimeUnit.SECONDS);
             repository.reviews().sent(job, channelId, message.getId(), clock.instant());
         } catch (InterruptedException interrupted) {
@@ -79,7 +79,7 @@ final class FreebieReviewChannel {
         var facts = facts(offer);
         channel.editMessageEmbedsById(offer.reviewMessageId().get(), FreebieAnnouncementCards.preview(offer, facts, clock.instant()),
                         FreebieMessages.reviewEmbed(offer, facts, audience.channels(), audience.guilds(), status, clock.instant()))
-                .setComponents(components).queue(null,
+                .setComponents(FreebieMessages.withClear(components)).queue(null,
                         error -> BunnyLog.warning("[Freebies] Could not update review " + offer.id() + " | " + FailureDiagnostics.describe(error)));
     }
 

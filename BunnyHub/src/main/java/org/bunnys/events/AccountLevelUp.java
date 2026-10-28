@@ -12,6 +12,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
 
+/** Congratulates a user when their account levels up (see {@code AccountLevelUpEvent}). */
 @SuppressWarnings("unused") // Discovered reflectively by EventLoader.
 public class AccountLevelUp extends BunnyEvent {
 

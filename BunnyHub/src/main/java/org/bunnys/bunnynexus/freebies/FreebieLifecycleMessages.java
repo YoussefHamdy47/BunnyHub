@@ -29,7 +29,8 @@ final class FreebieLifecycleMessages {
     static final int ENDED_COLOUR = 0x95A5A6;
     static final String ENDED_PREFIX = "Ended: ", ENDED_TEXT = "This giveaway has ended.",
             WITHDRAWN_TEXT = "This giveaway was withdrawn.";
-    private static final String CLAIM_BLOCK = "\n\n**Claim your game**\n";
+    /** The current claim heading, plus the older wording still on cards posted before it changed. */
+    private static final List<String> CLAIM_BLOCKS = List.of("\n\n" + FreebieCards.CLAIM_HEADING + "\n", "\n\n**Claim your game**\n");
     private static final Set<String> DEADLINE_FIELDS = Set.of("CLAIM WINDOW", "OFFER ENDS");
 
     /**
@@ -54,8 +55,11 @@ final class FreebieLifecycleMessages {
         } else if (title != null) builder.setTitle(title, null);
         String sentence = "**" + (withdrawn ? WITHDRAWN_TEXT : ENDED_TEXT) + "**";
         String description = card.getDescription() == null ? "" : card.getDescription();
-        int claim = description.indexOf(CLAIM_BLOCK);
-        String kept = claim >= 0 ? description.substring(0, claim) : description;
+        String kept = description;
+        for (String block : CLAIM_BLOCKS) {
+            int claim = kept.indexOf(block);
+            if (claim >= 0) kept = kept.substring(0, claim);
+        }
         if (!kept.endsWith(sentence)) kept = kept.isBlank() ? sentence : kept + "\n\n" + sentence;
         builder.setDescription(kept);
         builder.clearFields();
@@ -77,7 +81,7 @@ final class FreebieLifecycleMessages {
         return FreebieMessages.isAlertFooter(embed, reference);
     }
 
-    /** The claim button is the link button labelled "Claim …"; "Offer details" and anything else stay. */
+    /** The claim button is the link button labelled "Claim …"; anything else (such as Unsubscribe) stays. */
     static boolean isClaim(ActionRowChildComponent component) {
         return component instanceof Button button && button.getStyle() == ButtonStyle.LINK && button.getLabel().startsWith("Claim");
     }
@@ -86,7 +90,8 @@ final class FreebieLifecycleMessages {
         List<ActionRow> kept = new ArrayList<>();
         for (var row : rows(components)) {
             List<ActionRowChildComponent> children = new ArrayList<>();
-            for (var child : row.getComponents()) if (!isClaim(child)) children.add(child);
+            // The spacers only exist to center the claim button, so they go with it.
+            for (var child : row.getComponents()) if (!isClaim(child) && !FreebieCards.isSpacer(child)) children.add(child);
             if (!children.isEmpty()) kept.add(children.size() == row.getComponents().size() ? row : ActionRow.of(children));
         }
         return kept;

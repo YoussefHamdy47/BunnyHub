@@ -6,6 +6,7 @@ import org.bunnys.utils.BunnyLog;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/** Reads settings from the environment or a {@code .env} file, never from the packaged jar. */
 public class TokenLoader {
     /** {@code -Dbunny.env.file=.env.test} reads that file (in the working directory) instead of {@code .env}. */
     public static final String ENV_FILE_PROPERTY = "bunny.env.file";

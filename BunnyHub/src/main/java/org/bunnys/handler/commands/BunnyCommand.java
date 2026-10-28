@@ -2,6 +2,7 @@ package org.bunnys.handler.commands;
 
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
+import net.dv8tion.jda.api.interactions.IntegrationType;
 import net.dv8tion.jda.api.interactions.InteractionContextType;
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
@@ -15,6 +16,7 @@ import org.bunnys.utils.SystemEmbeds;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,7 @@ public abstract class BunnyCommand {
         if (userContextName == null) throw new IllegalStateException("No user context menu configured.");
         var data = Commands.user(userContextName)
                 .setContexts(dmEnabled ? InteractionContextType.ALL : Set.of(InteractionContextType.GUILD))
+                .setIntegrationTypes(installTypes)
                 .setNSFW(nsfw);
         if (!userPermissions.isEmpty()) data.setDefaultPermissions(DefaultMemberPermissions.enabledFor(userPermissions));
         return data;
@@ -108,6 +111,7 @@ public abstract class BunnyCommand {
     private final List<OptionData> options = new ArrayList<>();
     private final List<Permission> userPermissions = new ArrayList<>();
     private final List<Permission> appPermissions = new ArrayList<>();
+    private final EnumSet<IntegrationType> installTypes = EnumSet.of(IntegrationType.GUILD_INSTALL);
 
     /** Insertion-ordered so the help menu lists subcommands the way they were written. */
     private final Map<String, BunnySubcommand> subcommands = new LinkedHashMap<>();
@@ -194,6 +198,21 @@ public abstract class BunnyCommand {
         return this;
     }
 
+    /**
+     * Where Discord offers the command. Default is {@code GUILD_INSTALL}: every server that added the bot.
+     * {@code USER_INSTALL} lists it for people who added the bot to their own account instead, in any server or
+     * DM, whether or not the bot is in that server. Server permission defaults don't apply to account installs,
+     * so pair {@code USER_INSTALL} with {@link #setDeveloperOnly} or another check that runs at execution.
+     */
+    public BunnyCommand setInstallTypes(IntegrationType... types) {
+        if (types.length == 0) throw new IllegalArgumentException("Pick at least one install type.");
+        installTypes.clear();
+        installTypes.addAll(Arrays.asList(types));
+        installTypes.remove(IntegrationType.UNKNOWN);
+        if (installTypes.isEmpty()) throw new IllegalArgumentException("Pick GUILD_INSTALL and/or USER_INSTALL.");
+        return this;
+    }
+
     public BunnyCommand setDeveloperBypass(boolean developerBypass) {
         this.developerBypass = developerBypass;
         return this;
@@ -277,6 +296,8 @@ public abstract class BunnyCommand {
     public boolean isMentionEnabled() { return mentionEnabled; }
     public int getCooldown() { return cooldown; }
     public List<Permission> getUserPermissions() { return userPermissions; }
+    public Set<IntegrationType> getInstallTypes() { return Collections.unmodifiableSet(installTypes); }
+    public boolean isUserInstallable() { return installTypes.contains(IntegrationType.USER_INSTALL); }
     public List<Permission> getAppPermissions() { return appPermissions; }
     public Map<String, BunnySubcommand> getSubcommands() { return subcommands; }
     public Map<String, BunnySubcommandGroup> getSubcommandGroups() { return subcommandGroups; }
@@ -349,6 +370,7 @@ public abstract class BunnyCommand {
         else
             data.setContexts(InteractionContextType.GUILD);
 
+        data.setIntegrationTypes(installTypes);
         data.setNSFW(nsfw);
         data.addOptions(options);
 

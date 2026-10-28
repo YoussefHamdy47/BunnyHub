@@ -37,6 +37,27 @@ final class FreebieApprovals {
         return facts == null ? Optional.empty() : facts.groupKey();
     }
 
+    boolean isRelease(String offerId) {
+        return repository.offer(offerId).flatMap(this::releaseOf).isPresent();
+    }
+
+    /**
+     * Auto-send launchers: a game of an Epic release is approved by the system through a one-game release snapshot,
+     * so it posts under the release key and later games of the release join that post silently. False when the game
+     * is not part of a release (the caller then uses the normal automatic approval).
+     */
+    boolean autoApprove(FreebieOffer offer) {
+        var release = releaseOf(offer);
+        if (release.isEmpty()) return false;
+        Instant now = clock.instant();
+        if (offer.state() != FreebieOffer.State.PENDING || offer.ended(now)) return true;
+        var token = repository.releases().preview(release.get(), List.of(offer), FreebieSystem.AUTO_ACTOR, now);
+        if (token.isEmpty()) return true; // Another writer moved the release; the next housekeeping run tries again.
+        var commit = repository.releases().commit(release.get(), token.get(), FreebieSystem.AUTO_ACTOR, List.of(offer), now);
+        commit.snapshot().ifPresent(this::reconcile);
+        return true;
+    }
+
     // ------------------------------------------------------------------ first click
 
     FreebieSystem.Reply request(String actor, String offerId, boolean wholeRelease) {

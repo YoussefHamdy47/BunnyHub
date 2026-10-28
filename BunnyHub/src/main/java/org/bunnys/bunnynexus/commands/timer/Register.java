@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import org.bunnys.bunnynexus.timers.Timers;
 
+/** {@code /timer register}: creates the account if needed and starts a new semester. */
 public final class Register extends TimerSubcommand {
     public Register() {
         setName("register");

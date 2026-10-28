@@ -24,7 +24,9 @@ final class EpicIntake {
                 if (parser.nextToken() != null) return failed();
             }
             Document root = Document.parse(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
-            if (root.containsKey("errors") || root.containsKey("extensions")) return failed();
+            // Epic often reports errors for a few items (a failed price lookup) next to valid data. The rows are still
+            // usable, but such a response is never complete, so it can't be evidence that an offer ended.
+            boolean degraded = root.containsKey("errors") || root.containsKey("extensions");
             Document search = doc(doc(root, "data"), "Catalog");
             search = doc(search, "searchStore");
             List<Document> rows = list(search, "elements");
@@ -39,8 +41,9 @@ final class EpicIntake {
                     candidate(row, now, identity).ifPresent(candidates::add);
                 } catch (RuntimeException invalid) { rejected++; }
             }
-            return new FreebieFeed.Result(rejected == 0 ? FreebieFeed.State.COMPLETE : FreebieFeed.State.PARTIAL,
-                    candidates, Optional.empty(), rejected == 0 ? "" : "partial feed: " + rejected + " rejected item(s)");
+            boolean complete = rejected == 0 && !degraded;
+            return new FreebieFeed.Result(complete ? FreebieFeed.State.COMPLETE : FreebieFeed.State.PARTIAL, candidates, Optional.empty(),
+                    complete ? "" : rejected > 0 ? "partial feed: " + rejected + " rejected item(s)" : "Epic reported errors for some items");
         } catch (Exception invalid) { return failed(); }
     }
 
@@ -87,7 +90,8 @@ final class EpicIntake {
                 .map(i -> safeImage(i.getString("url"))).flatMap(Optional::stream).findFirst();
         return Optional.of(new FreebieFeed.Candidate(FreebieFeed.Provider.EPIC, identity + ":" + start + ":" + end, FreebieStore.EPIC,
                 "PC, Epic Games Store", text(row, "title", 256), text(row, "description", 8000), "",
-                Optional.empty(), image, page, page, Optional.of(start), Optional.of(end), "US (en-US); availability elsewhere may differ"));
+                Optional.of(usd(number(price, "originalPrice"))), image, page, page, Optional.of(start), Optional.of(end),
+                "US (en-US); availability elsewhere may differ"));
     }
     private static void validatePromotion(Document promotion) {
         Instant start = Instant.parse(text(promotion, "startDate", 40)), end = Instant.parse(text(promotion, "endDate", 40));
@@ -97,6 +101,11 @@ final class EpicIntake {
         long percentage = number(discount, "discountPercentage");
         if (percentage < 0 || percentage > 100) throw new IllegalArgumentException();
     }
+    /** Epic reports prices in cents; the card shows the usual list price, e.g. {@code $19.99}. */
+    static String usd(long cents) {
+        return "$" + (cents / 100) + "." + String.format("%02d", cents % 100);
+    }
+
     static Optional<URI> safeImage(String value) {
         try {
             URI uri = URI.create(value);

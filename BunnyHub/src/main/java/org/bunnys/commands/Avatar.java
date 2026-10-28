@@ -1,5 +1,6 @@
 package org.bunnys.commands;
 
+import net.dv8tion.jda.api.interactions.IntegrationType;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import org.bunnys.handler.BunnyHub;
@@ -8,11 +9,16 @@ import org.bunnys.bunnynexus.commands.info.AvatarCommand;
 import org.bunnys.handler.commands.context.CommandContext;
 import org.bunnys.handler.commands.context.UserContext;
 
+/**
+ * Registration only; see {@link org.bunnys.bunnynexus.commands.info.AvatarCommand}. Also available as Apps →
+ * Avatar on a user.
+ */
 @SuppressWarnings("unused") // Discovered reflectively by CommandLoader.
 public final class Avatar extends BunnyCommand {
     public Avatar(BunnyHub client) {
         super(client);
         setName("avatar");
+        setInstallTypes(IntegrationType.GUILD_INSTALL, IntegrationType.USER_INSTALL);
         setCategory("Information");
         setUserContextName("Avatar");
         addAliases("av", "pfp");

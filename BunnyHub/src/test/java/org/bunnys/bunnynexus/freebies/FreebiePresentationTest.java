@@ -30,8 +30,11 @@ class FreebiePresentationTest {
                 assertTrue(card.getDescription().contains("[Example](" + offer.claimUrl() + ")"));
                 assertEquals("Powered by GamerPower • ref same-reference", card.getFooter().getText());
                 assertTrue(message.getAllowedMentions().isEmpty());
-                var button = message.getComponents().getFirst().asActionRow().getComponents().getFirst().asButton();
+                var row = message.getComponents().getFirst().asActionRow().getComponents();
+                assertEquals(3, row.size(), "claim centered between two spacers");
+                var button = row.get(1).asButton();
                 assertEquals(offer.claimUrl().toString(), button.getUrl());
+                assertTrue(row.get(0).asButton().isDisabled() && row.get(2).asButton().isDisabled());
                 if (store == FreebieStore.EPIC || store == FreebieStore.STEAM) {
                     assertTrue(button.getEmoji().getFormatted().contains(store == FreebieStore.EPIC
                             ? "824679104220626954" : "705062577817780315"));
@@ -57,6 +60,7 @@ class FreebiePresentationTest {
             assertTrue(review.getEmbeds().stream().mapToInt(MessageEmbed::getLength).sum() <= 6000);
             var alert = review.getEmbeds().getFirst();
             assertEquals("https://example.com/game.jpg", alert.getImage().getUrl());
+            assertNull(alert.getThumbnail(), "the game art is the full-width image, not a corner thumbnail");
             var instructions = alert.getFields().stream().filter(f -> f.getName().equals("GET STARTED ON EPIC")).findFirst().orElseThrow();
             assertTrue(instructions.getValue().contains("\\*\\*Step\\*\\*"));
             assertTrue(review.getAllowedMentions().isEmpty());
@@ -69,6 +73,7 @@ class FreebiePresentationTest {
             var embed = alert.getEmbeds().getFirst();
             assertTrue(embed.isSendable());
             assertNull(embed.getImage());
+            assertNull(embed.getThumbnail());
             assertNull(embed.getTimestamp());
             assertEquals(3, embed.getFields().size());
             assertTrue(embed.getFields().getFirst().getValue().startsWith("**FREE**"));

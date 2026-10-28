@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import org.bunnys.bunnynexus.timers.Timers;
 
+/** {@code /timer stats}: study time, streaks, levels and per-course progress. */
 public final class Stats extends TimerSubcommand {
     public Stats() {
         setName("stats");

@@ -12,6 +12,9 @@ import org.bunnys.handler.BunnyHub;
 import org.bunnys.utils.AppDesign;
 import java.util.List;
 
+/**
+ * {@code /timer update-subject}: edits a course or replaces its grade after a retake, keeping its study history.
+ */
 public final class UpdateSubject extends TimerSubcommand {
     public UpdateSubject() {
         setName("update-subject");

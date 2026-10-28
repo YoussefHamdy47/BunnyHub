@@ -1,105 +1,367 @@
-# BunnyHub
+# BunnyNexus
 
-Java 21 Discord bot for study sessions, semesters, academic records and GPA tracking, plus owner-reviewed free-game alerts for servers.
+A Discord bot for study tracking, free-game alerts and server moderation, built on the **BunnyHub** command
+framework. Java 21, JDA 6 and MongoDB.
 
-- **Free-game alerts** (`/freebie`, `/free-games list|subscribe|unsubscribe`, `/freebie-admin`) are live: GamerPower discovery, owner review in a private channel, durable per-channel delivery with retries, and optional personal DMs.
-- **Handler 2.0**: commands, routers, cooldowns and bounded executors.
+## Commands
 
-## Build and run
+Run `/help` in Discord for the full, always-current list with options and examples. `/help command:<name>`
+jumps straight to one command.
 
-Install JDK 21 or newer and set `JAVA_HOME`. The Maven wrapper downloads Maven 3.9.16 on first use.
+### Study
 
-```powershell
-.\mvnw.cmd clean verify
+| Command | What it does |
+| --- | --- |
+| `/timer register` | Start a semester and begin tracking study time |
+| `/timer start` | Start a study session for a course, with pause, resume and stop controls |
+| `/timer switch` | Switch course without stopping the timer |
+| `/timer end-session` | End a session even if its menu is gone |
+| `/timer stats` | Study statistics, streaks and progress |
+| `/timer gpa` | Academic record and cumulative GPA |
+| `/timer add-subject`, `remove-subject`, `update-subject` | Manage courses and grades (retakes keep study history) |
+| `/timer end_semester` | Archive the current semester |
+
+### Free games
+
+| Command | Who | What it does |
+| --- | --- | --- |
+| `/free-games list` | Everyone | Games that are free right now, optionally for one launcher |
+| `/free-games dms` | Everyone | Get free games by DM for chosen sections, or unsubscribe |
+| `/free-games setup` | Manage Server | The server dashboard (see below) |
+| `/free-games help` | Everyone | How the free-game system works |
+
+**Server setup** (`/free-games setup`):
+
+- **Quick setup:** pick a channel, what to post and an optional ping role in one form.
+- **Create channels for me:** creates a channel per section (or one shared channel), with a ping role each.
+- **Sections:** Major PC, Indie & other PC, Console and Mobile. Each has its own channel, launchers, ping role
+  and optional ending-soon reminder.
+- **Launcher pings:** give each launcher its own role, for example @Epic for Epic Games Store only.
+- **Post role picker:** buttons that let members opt in to the ping roles themselves.
+
+**Where games come from:**
+
+- Epic Games Store is read from Epic's own promotions feed, and everything else from GamerPower.
+- GamerPower claim links are resolved to the store page where possible, so the claim button opens Steam, GOG
+  and so on directly. If a link can't be resolved, the GamerPower link is kept and the button still works.
+- Launchers on the auto-send list (Epic, Steam and GOG by default) are posted as soon as they are found.
+  Everything else waits for an owner to approve it in the private review channel.
+- Every game found pings the owners in the review channel, including the auto-sent ones. **Clear finished** on any
+  review message deletes the bot's messages there that no longer need anyone and keeps those with Approve,
+  Reject or Stop. It only touches the bot's own messages, so it needs Read Message History and no extra intent.
+
+### Moderation
+
+`/moderation ban | unban | kick | mute | unmute`. Mute uses Discord's built-in timeout, from 1 minute to 28 days.
+
+- Shown to members with **Timeout Members**. Each action checks its own permission (Ban, Kick or Timeout
+  Members).
+- Refusals are private and explain why, for example a role equal to or above yours, the server owner, or an
+  administrator (who can't be muted).
+- Successful actions are confirmed in the channel, and the audit log records which moderator used them.
+
+### Information
+
+| Command | What it does |
+| --- | --- |
+| `/info user`, `/info server` | Account, membership and server details |
+| `/avatar` | Global and server avatars, up to 4096px, with download links. Also under **Apps → Avatar** when you right-click a user |
+| `/ping` | Latency to Discord (gateway and API) |
+| `/uptime` | When the bot came online and how long it has been up |
+| `/help` | Every command, grouped by category |
+
+Most commands also work by mentioning the bot, for example `@BunnyNexus avatar` or `@BunnyNexus info server`.
+Timer, moderation and free-game setup commands are slash-only.
+
+### Owner only
+
+`/freebie-admin status | pause | resume | check | sources | history | retry | announce`: health, pausing sends,
+forcing a source check, resolving duplicate offers between sources, delivery history and retries, and announcements.
+Only the IDs in `FREEBIE_OWNER_IDS` can use it.
+
+`/freebie-admin announce title message` sends an owner message to every server with free-game alerts: one message per
+server, in its alert channel (the major PC one when set), never pinging anyone. Run it in a review channel; it first
+shows a private preview with the server count, and nothing is sent until you press **Send** within 15 minutes.
+**Stop this announcement** cancels the servers not reached yet. Type `\n` in the message for a new line.
+
+Possible duplicates between GamerPower and Epic are held, not posted twice: the review channel gets one
+**Possible duplicate** message with **Same giveaway / Separate giveaway / Ignore** buttons. Games of one Epic release
+are posted together, one message and one ping per channel; a review shows **Approve release** when several are
+waiting.
+
+`/mail-bridge status | check | diagnose | dry-run | test`: health and testing for the
+[mail bridge](#mail-bridge). Nothing here changes your mailbox, and only `test` posts anything.
+
+Both live on the developers' own Discord accounts (add the bot to your account), so they appear in your `/`
+menu in any server or DM and in nobody else's.
+
+## Running it
+
+You need **JDK 21** and a **MongoDB replica set or sharded cluster** (transactions are required; for example
+MongoDB Atlas). A standalone MongoDB is refused at startup.
+
+```bash
+cp .env.example .env      # then fill in TOKEN and MongoURI
+./mvnw clean verify       # Windows: .\mvnw.cmd clean verify
 java -jar target/BunnyHub-4.00.jar
 ```
 
-On macOS/Linux use `./mvnw clean verify`. The Windows launcher `start_server.bat` resolves its own directory. Run `stop` or `exit` in the bot console for shutdown.
+On Windows, `start_server.bat` does the same. Type `stop` or `exit` in the console to shut down cleanly.
 
-If the current JAR is running and locked on Windows, build separately with `./mvnw clean verify -Dbunny.build.directory=target-upgrade` (use `mvnw.cmd` on Windows). Stop the old process before launching the new JAR. The upgrade validation uses this separate directory and does not restart the running bot.
+The bot uses only the standard guild and direct-message intents. No privileged intent (Message Content, Server
+Members or Presence) has to be enabled.
 
-Copy `.env.example` to `.env` in the working directory and set `TOKEN` and `MongoURI`, or supply those environment variables directly. Existing development configuration in `src/main/resources/.env` is supported as a fallback when a root `.env` is absent. Neither location is included in new JARs. Logging is configured through `src/main/resources/logback.xml`; the unused `application.yml` was removed.
+### Configuration
 
-MongoDB must be a replica set or sharded cluster supporting transactions (for example, an Atlas cluster). Standalone MongoDB is rejected at startup. The database name remains `GBF` for compatibility. The bot creates unique indexes on `BunnyUsers.userID` and `TimerData.account.userID`; if existing duplicate accounts prevent index creation, startup stops without deleting or merging records. Resolve those duplicates before restarting.
+Settings come from environment variables or a `.env` file in the working directory. Credentials are never
+packaged into the jar.
 
-The application supports slash commands, user context menus, and leading bot mentions, using ordinary guild/direct-message intents. No privileged Message Content or Guild Members intent is required. Developer and test-guild IDs remain configured in `Main`.
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `TOKEN` | Yes | Discord bot token |
+| `MongoURI` | Yes | MongoDB connection string |
+| `MONGO_DB_NAME` | No | Database name (default `GBF`) |
+| `FREEBIE_REVIEW_CHANNEL_ID` | For free games | Private channel where new giveaways are reviewed |
+| `FREEBIE_OWNER_IDS` | For free games | Comma-separated user IDs allowed to approve, reject and stop alerts |
+| `FREEBIE_OTHER_REVIEW_CHANNEL_ID` | No | Separate review channel for non-major sections (defaults to the main one) |
+| `FREEBIE_AUTO_SEND` | No | Launchers posted without review: comma-separated ids, default `epic,steam,gog`, or `none` |
+| `FREEBIE_POLL_MINUTES` | No | GamerPower poll interval, 5–120 (default 10) |
+| `FREEBIE_RETENTION_DAYS` | No | How long finished alerts are kept, 30–3650 (default 90) |
+| `FREEBIE_DM_MAX_SUBSCRIBERS` | No | Cap on personal DM subscribers, 0–100000 (default 100; 0 turns DMs off) |
+| `FREEBIE_ENABLED` | No | `false` turns free-game alerts off entirely |
+| `FREEBIE_GROUPED_ANNOUNCEMENTS` | No | `false` posts every Epic game separately instead of one post per release (default `true`) |
+| `FREEBIE_EGDATA_ENABLED` | No | Region restrictions and separate mobile offers from EGData (default `true`) |
+| `FREEBIE_PUBLISH_ENABLED` | No | `true` publishes new free-game posts to servers following the channels below (default `false`) |
+| `FREEBIE_PUBLISH_CHANNEL_IDS` | With publishing | Comma-separated Announcement Channel IDs to publish from |
+| `FREEBIE_EPIC_CHECKOUT` | No | Combined "Claim all PC games" checkout button (default `false`) |
+| `FREEBIE_RESOLVE_GAMERPOWER_LINKS` | No | Resolve GamerPower links during discovery to merge Epic duplicates automatically (default `false`) |
+| `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` | For the mail bridge | Google OAuth client and refresh token, see [Mail bridge](#mail-bridge) |
+| `MAIL_BRIDGE_CHANNEL_ID` | No | Where task notifications go (default `1562067773033807912`) |
+| `MAIL_BRIDGE_GUILD_ID` | No | The server that channel is in (default `1043515676960247828`) |
+| `MAIL_BRIDGE_MENTION_USER_ID` | No | The only user the notifications may ping (default `333644367539470337`) |
+| `MAIL_BRIDGE_DIAGNOSTIC_CHANNEL_ID` | No | Where "couldn't classify" and "Gmail access broken" notices go, without email content. Unset: unclassified emails are only logged, and access warnings go to the main channel |
+| `MAIL_BRIDGE_QUERY` | No | Gmail search for candidate emails (default `from:(openai.com OR chatgpt.com)`) |
+| `MAIL_BRIDGE_SENDERS` | No | Comma-separated addresses or domains the From address must match (default `openai.com,chatgpt.com`; subdomains count) |
+| `MAIL_BRIDGE_PATTERNS_EEE_TRAINING` | No | How to recognise each task, see below. Default: the task's name |
+| `MAIL_BRIDGE_PATTERNS_POWER_ELECTRONICS` | No | |
+| `MAIL_BRIDGE_PATTERNS_RTL_VERIFICATION` | No | |
+| `MAIL_BRIDGE_POLL_MINUTES` | No | How often Gmail is checked, 1–60 (default 5) |
+| `MAIL_BRIDGE_MAX_ATTEMPTS` | No | Post attempts per notification before giving up, 1–20 (default 6) |
+| `MAIL_BRIDGE_ENABLED` | No | `false` turns the mail bridge off |
 
-## Handler migration (2026-09-12)
+Launcher ids for `FREEBIE_AUTO_SEND`: `epic`, `steam`, `gog`, `ubisoft`, `ea`, `battlenet`, `itchio`,
+`drm-free`, `playstation`, `xbox`, `switch`, `android`, `ios`, `other`.
 
-BunnyNexus now uses the newer BunnyHub command framework from the local BeastarsBot project. Commands share `CommandContext`, with `SlashContext` and `MentionContext` entry points, aliases, subcommand groups, default mention subcommands, and a shared permission/cooldown gate. The unused separate prefix-command registry was removed.
+Developer and test-server IDs are set in `Main.java`.
 
-Try `@BunnyNexus avatar`, `@BunnyNexus av`, or `@BunnyNexus pfp show_both:true size:4096`. Replace the bot name with a real mention. Mention options support `name:value`, quoted values, and positional arguments. Mention replies are public; use `/avatar ephemeral:true` for a private response. Timer commands remain slash-only because they depend on interaction hooks and interactive study menus; mentioning them points to the slash command.
+### Test instance
 
-Buttons, modals, and string selects use the newer routers. Button/select handlers can declare their own cooldowns. Session buttons and semester submissions declare that they need an edit acknowledgement before work is scheduled; buttons opening modals do not defer. Timer and avatar slash commands acknowledge before entering the worker queue. Autocomplete retains the existing null, length, duplicate, and 25-choice safeguards.
+`start_test_server.bat` starts a second, separate bot for live testing. It reads `.env.test` instead of `.env`
+and must use its own bot token and its own database (`MONGO_DB_NAME`). It refuses to start against the
+production `GBF` database or with the production token.
 
-The worker pool is configurable through `setCommandPool(workers, queueCapacity)` (24 workers plus 100 additional admission slots in `Main`, at most 124 unfinished tasks). Per-user FIFO queues preserve timer safety without occupying workers waiting on user locks. Ready users take turns, and idle queues are removed. Autocomplete uses a separate bounded pool configured with `setAutocompletePool` (default 4 workers plus 32 slots). Workload snapshots expose activity, queue age, rejection, and completion metrics.
+## Deployment
 
-Mongo's pool size includes command and autocomplete workers plus eight connections per server. `setDatabaseTimeout(Duration)` sets a finite driver operation budget (default 10 seconds), with bounded connection, selection, and checkout waits. These explicit budgets override corresponding URI timeouts; deployments with long-running index builds or higher latency should review the settings. `setDatabaseName` and `setMongoUriKey` preserve this deployment's existing `GBF` database and `MongoURI` key.
+Production runs on Railway from the `Dockerfile`, deploying automatically when `main` changes. The image builds
+the jar with Maven and runs it on a slim Java 21 runtime.
 
-Beastars's domain services, custom admin-role policies, audit service, and application-emoji rewriting were not imported. The shared admin gate uses Discord's Administrator permission. BunnyNexus keeps its own styling, shutdown cleanup, transactional persistence and revision checks. JDA stays on 6.6.0; no dependencies were downgraded to Beastars's older versions. Caffeine 3.2.4 was added for the new handler's bounded cooldown caches and cache metrics.
+Memory is capped in `JAVA_OPTS`: a 384 MB heap with the Serial garbage collector, which hands freed memory back.
+If the bot ever runs out of memory it exits, and Railway's restart policy brings it back. In normal use it sits
+around 300 MB.
 
-## Dependency refresh
+## Mail bridge
 
-Stable releases verified against Maven Central on 2026-09-10:
+Forwards the "your scheduled task finished" emails from three ChatGPT career-search tasks to one Discord channel
+and pings you, so the results don't get lost among other chats:
 
-| Dependency | Version |
+| Category | Task | Runs |
+| --- | --- | --- |
+| `EEE_TRAINING` | EEE Industrial Training Hunter | Daily |
+| `POWER_ELECTRONICS` | Power Electronics Career Intelligence | Weekly |
+| `RTL_VERIFICATION` | RTL / Digital Verification Career Tracker | Weekly |
+
+```
+ChatGPT task finishes → email to Gmail → bridge reads it (Gmail API, read-only) → classify
+  → record in MongoDB (dedupe) → post in the channel with a ping → mark as delivered
+```
+
+It runs inside the bot, so it needs no extra server, bot token or webhook. It posts as BunnyNexus, which must
+be in the server and able to see, post, embed links and read history in the channel.
+
+### What the emails contain
+
+**Confirmed:**
+- ChatGPT emails you when a scheduled task finishes, if email notifications are on (ChatGPT → Settings →
+  Notifications → Tasks).
+- The email is a notice that the task finished. It does **not** include the full report.
+
+**Not confirmed, so not hardcoded:**
+- The exact sender address, subject wording, and whether there's a direct link to the conversation. Those can
+  only be confirmed against a real email.
+
+Because of that, the sender and the task patterns are settings, and the notification says so plainly when the
+email has no direct link. The report must then be opened in ChatGPT under **Tasks**. Only an `https` link to
+`chatgpt.com` or `chat.openai.com` counts as a report link. Tracking redirects don't, and no link from an email
+is ever opened by the bot. Run `/mail-bridge diagnose` after the first real task email to see what it actually
+contains, and adjust the settings if needed.
+
+### Set up Gmail access (once)
+
+1. **Create a Google Cloud project:** go to [console.cloud.google.com](https://console.cloud.google.com) and
+   create a project, for example "bunnynexus-mail".
+2. **Enable the Gmail API:** APIs & Services → Library → Gmail API → Enable.
+3. **Set up the OAuth consent screen:** Google Auth Platform (or APIs & Services → OAuth consent screen).
+   - User type: **External**.
+   - Fill in the app name and your email.
+   - Under Data access, add the scope `https://www.googleapis.com/auth/gmail.readonly`. That's the only scope
+     used: it can read mail and can't change or send anything.
+   - Under Audience, add your Gmail address as a test user.
+4. **Publish the app:** under Audience, click **Publish app**, so its status is **In production**. While it's
+   in Testing, Google expires refresh tokens after 7 days and the bridge would stop every week. You don't need
+   Google's verification for your own account. During sign-in you'll see "Google hasn't verified this app";
+   choose Advanced → continue.
+5. **Create the OAuth client:** Clients (or Credentials) → Create OAuth client ID → **Web application**.
+   - Add the authorised redirect URI `https://developers.google.com/oauthplayground`.
+   - Keep the client ID and secret to yourself.
+6. **Get the refresh token:**
+   1. Open the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground).
+   2. Click the gear icon, tick **Use your own OAuth credentials**, and enter the client ID and secret.
+   3. In Step 1, type `https://www.googleapis.com/auth/gmail.readonly`, click Authorize APIs, and sign in with
+      the Gmail account that receives the task emails.
+   4. In Step 2, click **Exchange authorization code for tokens** and copy the **refresh token**.
+7. **Add the variables:** in Railway → bunnyhub-bot → Variables, add `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`
+   and `GMAIL_REFRESH_TOKEN`. When running locally, put them in `.env` instead, readable only by you
+   (`chmod 600 .env`; it's already ignored by git). Never commit them or paste them into chat. The bot keeps
+   the short-lived access token in memory only.
+
+The refresh token stays valid until you revoke it (Google Account → Security → Third-party access), change your
+password, or don't use it for six months. If it stops working, the bridge pauses, posts one "Gmail access needs
+attention" message pinging you, and logs it. Repeat step 6, update `GMAIL_REFRESH_TOKEN`, and redeploy.
+
+### Discord side
+
+- **Channel and server:** they're set by default to the channel and server above. To change them, turn on
+  Developer Mode (User Settings → Advanced), right-click the channel → Copy Channel ID, and the server icon →
+  Copy Server ID.
+- **Your user ID:** right-click your name → Copy User ID. It goes in `MAIL_BRIDGE_MENTION_USER_ID`.
+- **Pings:** each message allows exactly one ping, you. Nothing from an email can mention anyone. Text from the
+  email is escaped and its links are removed, so it can't ping anyone or hide a link. `@everyone` and `@here`
+  are never allowed.
+
+### How emails are classified
+
+1. **Sender:** the From address must match `MAIL_BRIDGE_SENDERS`. Anything else is ignored.
+2. **Subject:** each category's patterns are tried on the subject. If exactly one category matches, that's the
+   answer.
+3. **Body:** if the subject didn't settle it, the body is tried the same way.
+4. **No clear match:** if no category matches, or more than one does, the email is **never** forwarded, let
+   alone to all three. It's logged and, if `MAIL_BRIDGE_DIAGNOSTIC_CHANNEL_ID` is set, a notice with no email
+   content goes there. Emails from the sender that don't mention a task at all (receipts, security alerts) are
+   ignored quietly.
+
+Patterns are separated by `;`. Plain text matches anywhere and ignores case. `/…/` is a regular expression, also
+case-insensitive. For example:
+
+```
+MAIL_BRIDGE_PATTERNS_RTL_VERIFICATION=RTL / Digital Verification Career Tracker;/\b(RTL|FPGA) career\b/
+```
+
+To narrow the search, use Gmail's own syntax in `MAIL_BRIDGE_QUERY`, for example `label:career-tasks` after
+setting up a Gmail filter that labels the task emails.
+
+### Validate it with a real email
+
+1. **Add the bot to your account** if you haven't yet, so `/mail-bridge` shows up for you.
+2. **Run `/mail-bridge status`.** It should say when it last checked Gmail, with no "Discord:" problem line. If
+   the bridge is off, it says which setting is missing.
+3. **Run `/mail-bridge test`.** It posts a test message in the channel and pings you.
+4. **Create a real task email:** in ChatGPT, run one of the tasks now (or wait for it), with email notifications
+   on.
+5. **Run `/mail-bridge diagnose`.** It lists recent emails that look like task notices: sender, the start of the
+   subject, how each would be classified, and whether there's a report link. Bodies are never shown. If the task
+   email doesn't show up, or shows `UNMATCHED`, adjust `MAIL_BRIDGE_SENDERS`, `MAIL_BRIDGE_QUERY` or the
+   patterns.
+6. **Run `/mail-bridge dry-run`.** It shows, privately, exactly what would be posted, without posting it.
+7. **Run `/mail-bridge check`** (or wait for the next poll). The notification should arrive in the channel.
+
+Only emails received **after the bridge first started** are forwarded. That start time is stored once, so older
+emails never flood the channel. A task email that arrived earlier can still be checked with `diagnose` and
+`dry-run`.
+
+### Reliability and limits
+
+- **Duplicates:** every Gmail message is recorded by its ID in MongoDB (`MailBridgeMessages`) before anything is
+  posted, so a message is handled once across polls, restarts and redeploys. Nothing in Gmail is changed: no
+  deleting, archiving, labelling or marking as read.
+- **Delivery:** a notification only counts as delivered once Discord returns the message ID. Failures are retried
+  with growing waits (1, 2, 4… minutes, at most an hour) up to `MAIL_BRIDGE_MAX_ATTEMPTS`. Discord's rate
+  limits and Retry-After are handled by the bot's Discord library. Gmail's Retry-After is respected too.
+- **Exactly once isn't possible.** If Discord accepts a post but the answer is lost (a timeout, or a restart at
+  the wrong moment), the outcome is unknown. Before posting again, the bridge looks for the message in the
+  channel's last 50 messages by its `Gmail ref` footer, and only posts if it isn't there. If the channel history
+  can't be read, it posts again rather than risk losing the notice, so a rare duplicate is possible; a missed
+  notice isn't.
+- **If the bot can't post** (not in the server, missing permissions), notifications wait without using up their
+  attempts, and `status` says why.
+- **Search window:** each poll looks back at most 14 days, and finished records are kept for 90 days, so a long
+  outage can't make old emails reappear.
+
+### Logs and troubleshooting
+
+Logs go to Railway → bunnyhub-bot → Deployments → View logs. Filter for `[MailBridge]`. They contain Gmail
+message IDs, categories and reasons, never subjects, bodies, tokens or links.
+
+| Symptom | Likely cause |
 | --- | --- |
-| JDA | 6.6.0 |
-| dotenv-java | 3.2.0 |
-| MongoDB sync driver | 5.11.0 |
-| Logback | 1.6.3 |
-| SLF4J | 2.0.19 |
-| Reflections | 0.10.2 (latest published) |
-| jfiglet | 0.0.9 (latest published) |
-| JUnit Jupiter, tests only | 6.1.3 |
-| Mockito, tests only | 5.23.0 |
+| `[MailBridge] Disabled: GMAIL_... is missing` | Variables not set on Railway |
+| `Google rejected the stored credentials (invalid_grant)` | Refresh token expired or revoked, often because the app was still in Testing. Publish the app and get a new token |
+| `Gmail refused access (HTTP 403)` | Wrong scope: the token wasn't made with `gmail.readonly` |
+| `Can't post yet: the bot is not in server …` | Invite BunnyNexus to that server |
+| `Can't post yet: missing Embed Links in #…` | Give the bot View Channel, Send Messages, Embed Links and Read Message History there |
+| `… looks like a task email but wasn't forwarded` | Patterns didn't match exactly one task. Run `/mail-bridge diagnose` and adjust them |
+| Nothing at all after a task ran | Check ChatGPT's email notifications are on, then run `diagnose` with a wider `query` |
 
-Caffeine 3.2.4 was added on 2026-09-12 to match the newer Beastars handler.
+## Project layout
 
-Maven plugins are pinned to stable versions. Maven 4 and compiler-plugin 4 prereleases were intentionally excluded. JDA's compatible transitive dependencies are resolved through its published POM rather than independently overriding them.
+| Path (under `src/main/java/org/bunnys`) | Contents |
+| --- | --- |
+| `handler/` | The BunnyHub framework: lifecycle, command discovery, slash and mention routing, cooldowns, bounded worker pools, MongoDB access |
+| `commands/` | Thin registration classes: names, options and permissions for each command |
+| `bunnynexus/commands/` | Command implementations (timer, free games, info, help) |
+| `bunnynexus/freebies/` | Free-game discovery, review, delivery, lifecycle and DMs |
+| `bunnynexus/moderation/` | Ban, kick and mute logic and checks |
+| `bunnynexus/timers/` | Study sessions, semesters, GPA and their Discord views |
+| `bunnynexus/help/` | The `/help` menu |
+| `bunnynexus/mailbridge/` | Gmail → Discord task notifications: Gmail client, parsing, classification, delivery |
+| `buttons/`, `selects/`, `modals/` | Component handlers, routed by the prefix of each component id |
+| `events/`, `services/` | Gateway listeners and long-running background services |
+| `database/models/` | Stored MongoDB documents |
 
-JDA 6 migration covers component packages, explicit action rows, component-tree queries, command interaction contexts, and modal `Label` components. See the official [JDA 6 migration notes](https://github.com/discord-jda/JDA/releases/tag/v6.0.0) and [6.6.0 release](https://github.com/discord-jda/JDA/releases/tag/v6.6.0). This bot has no voice features; no DAVE integration is required for its current functionality.
+Commands, events, components and services are discovered automatically from these packages, so a new command
+only needs a class in `commands/`.
 
-## Structure and behavior
+### Data safety
 
-### User and server information
+- Account and timer writes are revision-checked, so a concurrent edit fails instead of overwriting.
+- Finishing a session and archiving a semester update everything in one transaction.
+- Free-game deliveries are durable and retried. Each message carries a reference that stops a retry from
+  posting twice.
+- Mail bridge notifications work the same way, keyed by Gmail message ID.
 
-`/info user` shows your profile; `/info user user:@someone` looks up another account. Cards include account creation, badges, profile/avatar links, and available server membership details such as join date, roles, boosting, display colour, and key permissions. Missing membership data is retrieved asynchronously; nonmembers and DM lookups receive an account-only card.
+## Testing
 
-`/info server` shows the current server's owner, creation date, member count, roles, channels, boosts, verification, age restriction, language, features, and available artwork. It explains that a server is required if used in DMs. Neither lookup needs privileged member or presence intents.
+```bash
+./mvnw clean verify
+```
 
-Mention equivalents include `@BunnyNexus info user user:@someone` and `@BunnyNexus info server`. `whois`/`about` alias `info`, `member` aliases `user`, and `guild` aliases `server`, matching Beastars. These commands register automatically when the updated bot starts.
+The test suite covers the command definitions, the help menu, Discord payload limits, free-game parsing
+(including captured GamerPower and Epic responses), delivery and review logic, timers, and moderation checks. It
+doesn't log in to Discord.
 
-### Course editing and avatars
+The MongoDB integration tests (`*IT`) need a local `mongod` and run only when given one:
 
-Right-click a user (or open their user actions on mobile), then choose **Apps → Avatar**. This is a Discord **USER** context-menu command. It shows the selected user's server and global avatars at 2048px, with the server avatar first when available, and replies privately. Global fallback and original/PNG download links work as in `/avatar`. `/avatar` and its mention aliases remain available for choosing resolution, ordering, and visibility. Both entry points share the same implementation and caller cooldown.
+```bash
+./mvnw verify -Dtest='*IT' -Dbunny.test.mongod=/path/to/mongod
+```
 
-`/timer remove-subject` and `/timer update-subject` suggest course codes from the selected destination. Codes containing hyphens and older records with surrounding whitespace are handled correctly. Academic-record removal does not require an active semester or a timer document.
-
-Use `/timer update-subject destination:ACCOUNT code:CS-101 grade:A credits:4` to update a retake grade. Optional fields are `new-code`, `name`, `credits`, `grade`, `marks-lost`, and `clear-grade`. Only supplied details change; study time and study counts remain intact. A replacement grade updates the existing course rather than adding a second attempt, so cumulative GPA uses its current grade and credit hours. Changes affect only the selected destination, not archived semesters or a second copy of the course. Course-code changes are blocked during an active semester session. `clear-grade:true` removes the grade; it cannot be combined with `grade`.
-
-`/avatar` supports `user`, `priority`, `show_both`, `size`, and `ephemeral`. Resolution defaults to 2048 and can be selected up to 4096. Both avatars are displayed at full size when requested, in the selected priority order. Download buttons provide animated originals (when present) and PNG images. Server-avatar requests fall back explicitly to the global avatar in DMs or when no server avatar is available. A missing member in the interaction payload is retrieved asynchronously after acknowledgment.
-
-- `handler`: application lifecycle, bounded background interaction execution, command discovery/routing, and persistence.
-- `commands`: thin registration classes for `Avatar`, `Help`, `Timer`, `Info` and (in `commands/freebies`) `Freebie`, `FreebieAdmin` and `FreeGames`. They declare options and connect named implementation classes; Avatar registers both slash and USER command definitions.
-- `bunnynexus/commands/info`: `AvatarCommand`, `UserInfo`, and `ServerInfo` implementations.
-- `bunnynexus/commands/timer`: one named class per timer action (`Stats`, `Register`, `Gpa`, `AddSubject`, `RemoveSubject`, `UpdateSubject`, `Start`, `SwitchSubject`, `EndSession`, `EndSemester`), sharing `TimerSubcommand` for error handling.
-- `bunnynexus/freebies`: the free-game pipeline; `bunnynexus/help` and `bunnynexus/info`: help menu and info cards.
-- `buttons`, `modals`: Discord component entry points. Timer commands defer their responses before database work; session buttons and semester submissions defer edits.
-- `bunnynexus/timers/services`: timer, subject, and semester mutations (`TimerStore` holds the multi-document transactions; `SessionClock` computes live session timings). `Timers`, `TimerEmbeds` and `SessionEmbeds` build the Discord presentation. The former `nexus` package was renamed to `bunnynexus`; database model packages and stored documents are unchanged.
-- `database/models`: existing MongoDB documents and their optional revision fields.
-- `src/test`: regression tests for progression, legacy BSON decoding, persistence calls, JDA payloads, concurrent work, and menu ownership.
-
-Writes to existing account/timer documents compare a nullable `revision` field and reject stale updates. Existing records acquire a revision on their next successful write. Session completion and semester archival update both documents in one transaction. New accounts use insert-only upserts to recover a partial registration without replacing existing history.
-
-Every newly archived semester is saved in `SemesterHistory`; the longest-semester snapshot is also retained. Existing semesters that were already discarded by the older implementation cannot be reconstructed. Lifetime study time is counted when a session finishes, not again at archival. Account RP now uses BSON int64; older BSON int32 values remain readable.
-
-Course codes containing hyphens, such as `CS-101`, are supported. Autocomplete labels separate code and name with ` - `. New courses validate code/name lengths and credit hours. Streaks use UTC calendar days. Statistics show up to 12 courses to respect Discord embed limits; the GPA menu lists all courses.
-
-Pending sessions and GPA menus remain in memory and expire automatically. Pending menus do not survive a restart; active timers are persisted and their message IDs remain valid. Old menus cannot operate a replacement session. Only one bot process should own the same Discord application; optimistic writes protect data conflicts but do not coordinate in-memory menus across processes.
-
-Timer pause/resume confirmations are ephemeral. Live Telemetry shows elapsed time since the latest completed break when its end timestamp is available; see [Timer break responses and telemetry](docs/TIMER_BREAKS.md).
-
-## Validation limits
-
-Automated tests do not log in to Discord. The default suite uses mocked database boundaries; `FreebieRepositoryIT` runs against a real, test-owned three-node MongoDB when given `-Dtest=FreebieRepositoryIT -Dbunny.test.mongod=<mongod executable>`. They exercise actual JDA serialization and BSON codecs, plus mocked database/interaction boundaries. A deployment smoke test should cover registering, starting, pausing, resuming, switching courses, stopping, and archiving on the intended Discord server and MongoDB cluster.
+Made by .Bunnys

@@ -46,7 +46,7 @@ class FreebieAnnouncementCardsTest {
         assertEquals("<@&" + ROLE + ">", data.getContent());
         assertEquals(Set.of(ROLE), data.getMentionedRoles());
         assertTrue(data.getAllowedMentions().stream().noneMatch(t -> t == Message.MentionType.EVERYONE || t == Message.MentionType.HERE));
-        assertEquals(List.of("Claim Epic offer", "Offer details"), labels(data.getComponents().stream().map(c -> (ActionRow) c).toList()));
+        assertEquals(List.of(FreebieCards.claimButton(m.offer()).getLabel(), "Offer details"), labels(data.getComponents().stream().map(c -> (ActionRow) c).toList()));
         String region = data.getEmbeds().getFirst().getFields().stream().filter(f -> "REGION".equals(f.getName())).findFirst().orElseThrow().getValue();
         assertTrue(region.contains("not fully verified"));
     }

@@ -4,7 +4,6 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.entities.MessageEmbed;
-import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import org.bunnys.handler.commands.BunnyCommand;
 import org.bunnys.handler.commands.BunnySubcommand;
@@ -46,7 +45,7 @@ public final class HelpMenu {
 
     static final int MAX_MENU_OPTIONS = 25;
 
-    private static final String TAGLINE = "Study timers, GPA tracking and free-game alerts for your server.";
+    private static final String TAGLINE = "Study timers, free-game alerts and moderation tools.";
 
     private HelpMenu() {}
 
@@ -78,7 +77,7 @@ public final class HelpMenu {
             if (category != null) return categoryPage(bot, catalog, viewer, category);
         } else if (view != null && view.startsWith("d=")) {
             Target target = catalog.resolve(view.substring(2));
-            if (target != null) return detail(bot, catalog, viewer, target);
+            if (target != null) return HelpDetail.render(bot, catalog, viewer, target);
         }
         return overview(bot, catalog, viewer, null);
     }
@@ -102,7 +101,7 @@ public final class HelpMenu {
         // Longest match first, so "timer start now" still lands on /timer start.
         for (int size = Math.min(words.size(), 3); size > 0; size--) {
             Target target = catalog.resolve(String.join(" ", words.subList(0, size)));
-            if (target != null) return detail(bot, catalog, viewer, target);
+            if (target != null) return HelpDetail.render(bot, catalog, viewer, target);
         }
 
         // A category name is a reasonable thing to type too.
@@ -129,14 +128,12 @@ public final class HelpMenu {
     // ------------------------------------------------------------------
 
     private static Rendered overview(Bot bot, HelpCatalog catalog, Viewer viewer, String notice) {
-        EmbedBuilder embed = base(bot).setTitle(AppDesign.Emojis.VERIFY + " " + bot.name() + " Help");
+        EmbedBuilder embed = base(bot).setTitle(bot.name() + " Help");
 
         StringBuilder intro = new StringBuilder();
-        if (notice != null) intro.append("⚠️ ").append(notice).append("\n\n");
-        intro.append(TAGLINE).append("\n\n")
-                .append("• Type `/` and pick a command, or click a blue command name below.\n")
-                .append("• Commands marked 💬 also work as `@").append(bot.name()).append(" command`.\n")
-                .append("• Use the menus below, or `/help command:<name>`, for full usage and examples.");
+        if (notice != null) intro.append(notice).append("\n\n");
+        intro.append(TAGLINE).append("\n")
+                .append("Type `/` to run a command, or pick one from the menu below to see how it works.");
         embed.setDescription(intro.toString());
 
         if (catalog.isEmpty()) {
@@ -144,15 +141,17 @@ public final class HelpMenu {
         } else {
             for (Map.Entry<String, List<BunnyCommand>> entry : catalog.categories().entrySet()) {
                 StringBuilder lines = new StringBuilder();
-                for (BunnyCommand command : entry.getValue())
+                for (BunnyCommand command : entry.getValue()) {
                     lines.append(rootReference(bot, command)).append(" ")
-                            .append(shorten(command.getDescription(), 70)).append("\n");
-                field(embed, emoji(entry.getKey()) + " " + entry.getKey(), lines.toString());
+                            .append(shorten(command.getDescription(), 60)).append("\n");
+                    if (command.hasBranches()) lines.append(branchList(bot, command)).append("\n");
+                }
+                field(embed, entry.getKey(), lines.toString());
             }
         }
 
         int count = catalog.all().size();
-        Embeds.footer(embed, count + (count == 1 ? " command" : " commands") + " • Overview");
+        Embeds.footer(embed, count + (count == 1 ? " command" : " commands"));
         return new Rendered(embed.build(), HelpControls.rows(catalog, viewer, OVERVIEW, null, null));
     }
 
@@ -162,17 +161,16 @@ public final class HelpMenu {
 
     private static Rendered categoryPage(Bot bot, HelpCatalog catalog, Viewer viewer, String category) {
         List<BunnyCommand> inCategory = catalog.categories().get(category);
-        EmbedBuilder embed = base(bot).setTitle(emoji(category) + " " + category);
-        embed.setDescription("Pick a command from the menu below for its options and an example.\n"
-                + "`<value>` is required, `[value]` is optional.");
+        EmbedBuilder embed = base(bot).setTitle(category);
+        embed.setDescription("Pick a command from the menu below for its options and an example.");
 
         for (BunnyCommand command : inCategory) {
             StringBuilder body = new StringBuilder();
-            body.append("*").append(describe(command.getDescription())).append("*\n");
+            body.append(describe(command.getDescription())).append("\n");
             if (command.hasBranches()) {
-                List<String> refs = new ArrayList<>();
-                for (Branch branch : branches(command)) refs.add(reference(bot, branch.path()));
-                body.append(String.join(" · ", refs));
+                for (Branch branch : branches(command))
+                    body.append(reference(bot, branch.path())).append(" ")
+                            .append(shorten(branch.subcommand().getDescription(), 70)).append("\n");
             } else {
                 body.append(reference(bot, command.getName()));
                 String args = syntax(command.getOptions());
@@ -193,131 +191,10 @@ public final class HelpMenu {
     }
 
     // ------------------------------------------------------------------
-    // Detail card
-    // ------------------------------------------------------------------
-
-    private static Rendered detail(Bot bot, HelpCatalog catalog, Viewer viewer, Target target) {
-        BunnyCommand command = target.command();
-        BunnySubcommand sub = target.subcommand();
-        String path = target.path();
-
-        EmbedBuilder embed = base(bot).setTitle("📘 /" + path);
-        String description = sub != null ? sub.getDescription() : command.getDescription();
-
-        StringBuilder intro = new StringBuilder("*").append(describe(description)).append("*");
-        String badges = badges(command, sub);
-        if (!badges.isEmpty()) intro.append("\n\n").append(badges);
-        embed.setDescription(intro.toString());
-
-        if (sub == null && command.hasBranches()) branchFields(embed, bot, command);
-        else usageFields(embed, bot, command, sub, path);
-
-        StringBuilder footer = new StringBuilder(command.getCategory());
-        if (sub != null) footer.append(" • Part of /").append(command.getName());
-        Embeds.footer(embed, footer.toString());
-        return new Rendered(embed.build(), HelpControls.rows(catalog, viewer, detailKey(path), command.getCategory(), target));
-    }
-
-    /** A runnable command or subcommand: how to call it, an example, then each option. */
-    private static void usageFields(EmbedBuilder embed, Bot bot, BunnyCommand command, BunnySubcommand sub, String path) {
-        List<OptionData> options = sub != null ? sub.getOptions() : command.getOptions();
-        boolean mentionable = command.isMentionEnabled() && (sub == null || sub.isMentionEnabled());
-        String args = syntax(options);
-
-        StringBuilder usage = new StringBuilder();
-        usage.append("**Slash:** ").append(reference(bot, path));
-        if (!args.isEmpty()) usage.append("\n`/").append(path).append(args).append("`");
-        usage.append("\n**Mention:** ").append(mentionable
-                ? "`@" + bot.name() + " " + path + args + "`"
-                : "*not available, use the slash command*");
-
-        List<String> aliases = sub != null ? sub.getAliases() : command.getAliases();
-        if (mentionable && !aliases.isEmpty()) {
-            String prefix = path.contains(" ") ? path.substring(0, path.lastIndexOf(' ') + 1) : "";
-            List<String> shortcuts = new ArrayList<>();
-            for (String alias : aliases) shortcuts.add("`@" + bot.name() + " " + prefix + alias + "`");
-            usage.append("\n**Shortcuts:** ").append(String.join(" ", shortcuts));
-        }
-        if (sub == null && command.getUserContextName() != null)
-            usage.append("\n**Right-click:** a user → **Apps → ").append(command.getUserContextName()).append("**");
-        if (sub == null && command.defaultSubcommand() != null && mentionable)
-            usage.append("\n`@").append(bot.name()).append(" ").append(command.getName()).append("` alone runs **")
-                    .append(command.defaultSubcommand().getName()).append("**.");
-        field(embed, "How to use", usage.toString());
-
-        String declared = sub != null ? sub.getExample() : command.getExample();
-        if ((declared != null && !declared.isBlank()) || !options.isEmpty())
-            field(embed, "Example", example(declared, path, options, bot.name(), mentionable));
-
-        if (options.isEmpty()) {
-            field(embed, "Options", "None. Just run it.");
-            return;
-        }
-
-        List<String> lines = new ArrayList<>();
-        for (OptionData option : options) lines.add(optionLine(option));
-        chunked(embed, "Options", lines);
-    }
-
-    /** A command with subcommands: one field per branch, each with its own clickable usage. */
-    private static void branchFields(EmbedBuilder embed, Bot bot, BunnyCommand command) {
-        List<Branch> branches = branches(command);
-        int shown = 0;
-        for (Branch branch : branches) {
-            if (shown >= MAX_FIELDS - 1) break;
-            StringBuilder body = new StringBuilder();
-            body.append(describe(branch.subcommand().getDescription())).append("\n")
-                    .append(reference(bot, branch.path()));
-            String args = syntax(branch.subcommand().getOptions());
-            if (!args.isEmpty()) body.append(" `").append(args.trim()).append("`");
-            if (!field(embed, "/" + branch.path(), body.toString())) break;
-            shown++;
-        }
-        int hidden = branches.size() - shown;
-        if (hidden > 0) field(embed, "More", hidden + " more. Pick one from the menu below.");
-    }
-
-    private static String optionLine(OptionData option) {
-        StringBuilder line = new StringBuilder("`").append(option.getName()).append("` ")
-                .append(option.isRequired() ? "**required**" : "optional")
-                .append(" · ").append(typeHint(option));
-        if (option.getDescription() != null && !option.getDescription().isBlank())
-            line.append("\n").append(option.getDescription());
-        List<Command.Choice> choices = option.getChoices();
-        if (!choices.isEmpty()) {
-            List<String> values = new ArrayList<>();
-            // The value is what a mention must type; the name is what the slash picker shows.
-            for (Command.Choice choice : choices)
-                values.add(choice.getName().equals(choice.getAsString())
-                        ? "`" + choice.getName() + "`"
-                        : "`" + choice.getAsString() + "` (" + choice.getName() + ")");
-            line.append("\nOne of: ").append(String.join(" ", values));
-        }
-        return line.toString();
-    }
-
-    /** Copy-pasteable: the declared example, or every required option filled with a sample. */
-    private static String example(String declared, String path, List<OptionData> options, String botName, boolean mentionable) {
-        String slash;
-        if (declared != null && !declared.isBlank()) {
-            slash = declared.trim();
-        } else {
-            StringBuilder generated = new StringBuilder("/").append(path);
-            for (OptionData option : options)
-                if (option.isRequired()) generated.append(" ").append(option.getName()).append(":").append(sample(option));
-            slash = generated.toString();
-        }
-        String result = "`" + slash + "`";
-        if (mentionable)
-            result += "\n`@" + botName + " " + (slash.startsWith("/") ? slash.substring(1) : slash) + "`";
-        return result;
-    }
-
-    // ------------------------------------------------------------------
     // Text helpers
     // ------------------------------------------------------------------
 
-    private static EmbedBuilder base(Bot bot) {
+    static EmbedBuilder base(Bot bot) {
         EmbedBuilder embed = new EmbedBuilder().setColor(AppDesign.ColorCodes.DEFAULT).setTimestamp(Instant.now());
         if (bot.avatarUrl() != null) embed.setThumbnail(bot.avatarUrl());
         return embed;
@@ -333,26 +210,29 @@ public final class HelpMenu {
         return id == null ? "`/" + path + "`" : "</" + path + ":" + id + ">";
     }
 
-    /** Overview entry: clickable when runnable, bold code for a command that needs a subcommand. */
-    private static String rootReference(Bot bot, BunnyCommand command) {
-        String marker = command.isMentionEnabled() ? " 💬" : "";
-        if (command.hasBranches()) return "**`/" + command.getName() + "`**" + marker;
-        return reference(bot, command.getName()) + marker;
+    /** A branched command's subcommands on one indented line, each clickable, for the overview. */
+    private static String branchList(Bot bot, BunnyCommand command) {
+        List<String> refs = new ArrayList<>();
+        for (Branch branch : branches(command)) refs.add(reference(bot, branch.path()));
+        return "\u2003" + String.join("  ", refs);
     }
 
-    private static String badges(BunnyCommand command, BunnySubcommand sub) {
+    /** Overview entry: clickable when runnable, bold code for a command that needs a subcommand. */
+    private static String rootReference(Bot bot, BunnyCommand command) {
+        if (command.hasBranches()) return "**`/" + command.getName() + "`**";
+        return reference(bot, command.getName());
+    }
+
+    static String badges(BunnyCommand command, BunnySubcommand sub) {
         List<String> badges = new ArrayList<>();
         if (!command.getUserPermissions().isEmpty()) {
             List<String> names = new ArrayList<>();
             for (Permission permission : command.getUserPermissions()) names.add(permission.getName());
-            badges.add("🔒 Needs " + String.join(", ", names));
+            badges.add("Needs " + String.join(", ", names));
         }
-        if (command.isDeveloperOnly() || (sub != null && sub.isDeveloperOnly())) badges.add("🛠️ Bot owner only");
-        if (!command.isDmEnabled()) badges.add("🏠 Servers only");
-        if (command.isNsfw() || (sub != null && sub.isNsfw())) badges.add("🔞 NSFW channels");
-        int cooldown = sub != null && sub.getCooldown() > 0 ? sub.getCooldown() : command.getCooldown();
-        if (cooldown > 0) badges.add("⏱️ " + cooldown + "s cooldown");
-        if (command.isMentionEnabled() && (sub == null || sub.isMentionEnabled())) badges.add("💬 Mention works");
-        return String.join(" · ", badges);
+        if (command.isDeveloperOnly() || (sub != null && sub.isDeveloperOnly())) badges.add("Bot owner only");
+        if (!command.isDmEnabled()) badges.add("Servers only");
+        if (command.isNsfw() || (sub != null && sub.isNsfw())) badges.add("NSFW channels only");
+        return badges.isEmpty() ? "" : "-# " + String.join(" · ", badges);
     }
 }

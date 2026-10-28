@@ -2,6 +2,7 @@ package org.bunnys.database.models.timers;
 
 import org.bson.codecs.pojo.annotations.BsonIgnore;
 
+/** A course: code, name, credit hours, grade and the study time spent on it. */
 public class Subject {
     private String subjectName;
     private String subjectCode;

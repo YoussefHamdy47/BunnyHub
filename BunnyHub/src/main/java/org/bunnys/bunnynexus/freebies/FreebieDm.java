@@ -78,8 +78,7 @@ public final class FreebieDm {
     /** The channel alert card with no ping and no mentions at all, plus a stateless Unsubscribe button. */
     static MessageCreateData card(FreebieOffer offer, String jobId) {
         return new MessageCreateBuilder().setEmbeds(FreebieMessages.alertEmbed(offer, reference(jobId)))
-                .setComponents(ActionRow.of(FreebieCards.claimButton(offer), Button.link(offer.pageUrl().toString(), "Offer details"),
-                        unsubscribeButton()))
+                .setComponents(ActionRow.of(FreebieCards.claimButton(offer), unsubscribeButton()))
                 .setAllowedMentions(List.of()).mentionRepliedUser(false).build();
     }
 
@@ -95,14 +94,14 @@ public final class FreebieDm {
     /** The consent DM; the subscription is only saved once Discord accepts it. */
     public static MessageCreateData consent(Set<FreebieSection> sections) {
         var embed = Embeds.of("📬", "Free-game DMs are on")
-                .setDescription("You'll get a DM when the bot owner approves a free game in: **" + labels(sections) + "**.\n"
-                        + "At most " + DAILY_CAP + " a day. Use the button below or `/free-games unsubscribe` to stop.")
+                .setDescription("You'll get a DM when a new free game is posted in: **" + labels(sections) + "**.\n"
+                        + "At most " + DAILY_CAP + " a day. Use the button below to stop.")
                 .setTimestamp(null).build();
         return new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(unsubscribeButton()))
                 .setAllowedMentions(List.of()).build();
     }
 
-    /** Section picker for {@code /free-games subscribe}; bound to the user who asked. */
+    /** Section picker for {@code /free-games dms}; bound to the user who asked. */
     public static List<ActionRow> picker(String userId, Set<FreebieSection> current) {
         var menu = StringSelectMenu.create(PICKER_PREFIX + ":" + userId).setPlaceholder("Sections to get DMs for")
                 .setRequiredRange(1, FreebieSection.values().length);

@@ -7,8 +7,8 @@ import java.util.Set;
 
 /**
  * Groups launchers for owner review and for server settings. The major PC storefronts are the priority section:
- * their reviews ping the owners in the main review channel, everything else is reviewed quietly (optionally in a
- * second channel). Servers configure one channel, role and launcher set per section.
+ * their reviews go to the main review channel, and the other sections' go to the second review channel when one is
+ * set. Servers configure one channel, role and launcher set per section.
  *
  * <p>The code is a stable one-character id used inside component ids; never reuse or rename one.
  */

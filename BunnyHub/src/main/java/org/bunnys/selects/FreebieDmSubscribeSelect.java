@@ -15,7 +15,7 @@ import org.bunnys.utils.FailureDiagnostics;
 import java.util.List;
 
 /**
- * The section picker from {@code /free-games subscribe}: {@code freebie_dmsub:<userId>}. Only that user may use it.
+ * The section picker from {@code /free-games dms}: {@code freebie_dmsub:<userId>}. Only that user may use it.
  * A new subscription is saved only once the consent DM was accepted by Discord.
  */
 @SuppressWarnings("unused") // Discovered reflectively by SelectRouter.
@@ -27,7 +27,7 @@ public class FreebieDmSubscribeSelect extends BunnySelect {
         var system = FreebieSystem.current().orElse(null);
         var sections = FreebieSection.decode(String.join("", event.getValues()));
         if (system == null || args.length != 2 || !args[1].equals(event.getUser().getId()) || sections.isEmpty()) {
-            event.reply("Use `/free-games subscribe` to choose your own free-game DMs.").setEphemeral(true)
+            event.reply("Use `/free-games dms` to choose your own free-game DMs.").setEphemeral(true)
                     .setAllowedMentions(List.of()).queue();
             return;
         }
@@ -51,12 +51,12 @@ public class FreebieDmSubscribeSelect extends BunnySelect {
 
     public static String reply(FreebieDmService.Subscribed result, java.util.Set<FreebieSection> sections) {
         return switch (result) {
-            case SUBSCRIBED -> "✅ You're subscribed to free-game DMs for **" + FreebieDm.labels(sections) + "**. I sent you a confirmation DM.";
-            case EDITED -> "✅ Your free-game DMs now cover **" + FreebieDm.labels(sections) + "**.";
-            case FULL -> "⚠️ Free-game DMs are full right now. Try again later, or follow a server's free-games channel instead.";
+            case SUBSCRIBED -> "You're subscribed to free-game DMs for **" + FreebieDm.labels(sections) + "**. I sent you a confirmation DM.";
+            case EDITED -> "Your free-game DMs now cover **" + FreebieDm.labels(sections) + "**.";
+            case FULL -> "Free-game DMs are full right now. Try again later, or follow a server's free-games channel instead.";
             case DISABLED -> "Personal DM alerts are turned off right now.";
-            case BUSY -> "⏳ Your subscription is still being set up. Try again in a minute.";
-            case DM_REFUSED -> "⚠️ I couldn't DM you, so nothing was saved. Allow **direct messages from server members** "
+            case BUSY -> "Your subscription is still being set up. Try again in a minute.";
+            case DM_REFUSED -> "I couldn't DM you, so nothing was saved. Allow **direct messages from server members** "
                     + "(Privacy Settings for a server we share) and try again.";
         };
     }

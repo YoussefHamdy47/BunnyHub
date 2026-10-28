@@ -11,6 +11,7 @@ import org.bunnys.handler.commands.context.CommandContext;
 import org.bunnys.utils.ErrorReporter;
 import org.bunnys.utils.SystemEmbeds;
 
+/** {@code /info user}: account details for anyone, plus membership details when they are in this server. */
 public final class UserInfo extends BunnySubcommand {
     public UserInfo() {
         setName("user");

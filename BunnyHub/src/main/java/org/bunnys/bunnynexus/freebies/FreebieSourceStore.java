@@ -124,6 +124,11 @@ final class FreebieSourceStore {
                 List<org.bson.conversions.Bson> seen = new ArrayList<>(List.of(
                         set("lastSeenAt", Date.from(now)), set("missingPolls", 0), set("gone", false),
                         set("evidence." + c.provider().id, new Document("missing", 0).append("seenAt", Date.from(now)).append("identity", c.identity()))));
+                // Offers stored before a source reported a price get it the next time they are seen, while still in
+                // review: approved cards keep exactly what the owner approved.
+                if (c.worth().isPresent() && existing.getString("worth") == null && "PENDING".equals(existing.getString("state")))
+                    offers.updateOne(and(eq("_id", existing.getString("_id")), eq("worth", null), eq("state", "PENDING")),
+                            set("worth", c.worth().get()));
                 seen.addAll(FreebieFields.changes(existing, c, now));
                 // Conditional on the state read, so rules chosen for a pending review never land on an approved offer.
                 var applied = offers.updateOne(and(eq("_id", existing.getString("_id")), eq("state", existing.getString("state"))), combine(seen));

@@ -1,5 +1,6 @@
 package org.bunnys.commands;
 
+import net.dv8tion.jda.api.interactions.IntegrationType;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
@@ -18,6 +19,7 @@ public final class Help extends BunnyCommand {
     public Help(BunnyHub client) {
         super(client);
         setName("help");
+        setInstallTypes(IntegrationType.GUILD_INSTALL, IntegrationType.USER_INSTALL);
         setDescription("Browse every command, with usage, options and examples.");
         setCategory("Information");
         addAliases("commands", "h");

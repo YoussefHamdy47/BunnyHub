@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.interactions.IntegrationType;
 import net.dv8tion.jda.api.interactions.commands.Command;
 
 /**
@@ -122,6 +123,19 @@ public class CommandRegistry {
 
     public void deployCommands() { deployCommands(client.getJDA()); }
 
+    /**
+     * Account-install commands only appear once "User Install" is ticked in the Developer Portal
+     * (Installation → Installation Contexts); Discord accepts them silently either way, so say so in the log.
+     */
+    private void warnIfUserInstallOff(JDA jda) {
+        if (routes.commands().values().stream().noneMatch(BunnyCommand::isUserInstallable)) return;
+        jda.retrieveApplicationInfo().queue(info -> {
+            if (!info.getIntegrationTypesConfig().containsKey(IntegrationType.USER_INSTALL))
+                BunnyLog.warning("[CommandRegistry] Some commands are for account installs, but User Install is off in the"
+                        + " Developer Portal (Installation → Installation Contexts); nobody can see them yet.");
+        }, err -> BunnyLog.warning("[CommandRegistry] Could not check install settings | " + err.getClass().getSimpleName()));
+    }
+
     public void deployCommands(JDA jda) {
         List<CommandData> global = new ArrayList<>();
         Map<String, List<CommandData>> perGuild = new HashMap<>();
@@ -135,6 +149,7 @@ public class CommandRegistry {
                 global.addAll(command.buildCommandDefinitions());
         }
 
+        warnIfUserInstallOff(jda);
         jda.updateCommands().addCommands(global).queue(
                 ok -> {
                     Map<String, String> ids = new HashMap<>();

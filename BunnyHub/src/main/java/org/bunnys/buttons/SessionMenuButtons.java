@@ -5,6 +5,7 @@ import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.buttons.BunnyButton;
 import org.bunnys.bunnynexus.timers.buttons.SessionMenuManager;
 
+/** Pause, resume, switch and stop buttons on a live study session card. */
 @SuppressWarnings("unused") // Discovered reflectively by ButtonRouter.
 public class SessionMenuButtons extends BunnyButton {
     @Override public boolean deferEditBeforeDispatch() { return true; }

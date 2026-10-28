@@ -43,7 +43,7 @@ class FreebieCatchUpTest {
     }
 
     @Test void theSectionFormOffersTheChoiceDefaultingToNewChannelsOnly() {
-        var form = FreebieDashboard.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "0"}).orElseThrow();
+        var form = FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "0"}).orElseThrow();
         var labels = form.getComponents().stream().map(c -> (Label) c).toList();
         var post = labels.get(4).getChild().asStringSelectMenu();
         assertEquals(FreebieDashboard.POST_FIELD, post.getCustomId());

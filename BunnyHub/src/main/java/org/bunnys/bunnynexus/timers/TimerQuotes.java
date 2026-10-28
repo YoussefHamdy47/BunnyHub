@@ -2,6 +2,7 @@ package org.bunnys.bunnynexus.timers;
 
 import java.util.Random;
 
+/** Greetings and motivational lines shown on study session cards, one picked at random each time. */
 public class TimerQuotes {
 
     private static final Random RANDOM = new Random();

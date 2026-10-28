@@ -1,5 +1,6 @@
 package org.bunnys.commands.info;
 
+import net.dv8tion.jda.api.interactions.IntegrationType;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.commands.BunnyCommand;
 import org.bunnys.handler.commands.context.CommandContext;
@@ -20,6 +21,7 @@ public final class Info extends BunnyCommand {
     public Info(BunnyHub client) {
         super(client);
         setName("info");
+        setInstallTypes(IntegrationType.GUILD_INSTALL, IntegrationType.USER_INSTALL);
         setDescription("Look up a user or this server");
         addAliases("whois", "about");
         setCategory("Information");

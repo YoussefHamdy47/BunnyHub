@@ -7,6 +7,7 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.function.IntToLongFunction;
 
+/** The progression maths: XP and RP needed per level and rank, and how much study time a session is worth. */
 public class LevelEngine {
 
     public static final int MAX_RANK = 5000;

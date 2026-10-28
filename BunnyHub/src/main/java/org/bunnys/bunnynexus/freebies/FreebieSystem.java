@@ -47,6 +47,7 @@ public final class FreebieSystem {
     private final FreebieBroadcastWorker broadcastWorker;
     private EgDataFeed egdataFeed;
     private FreebieEnrichment enrichment;
+    private final FreebieReviewDecisions decisions;
     private Instant nextSweep = Instant.MIN; // Discovery thread only.
     static final Duration SWEEP_EVERY = Duration.ofMinutes(10);
 
@@ -64,6 +65,9 @@ public final class FreebieSystem {
         sendingThread = Executors.newSingleThreadScheduledExecutor(daemon("FreebieSender"));
         reviews = new FreebieReviewChannel(config, repository, subscriptions, jda, sendingThread, clock);
         discovery = new FreebieDiscovery(config, repository, feed, clock, reviews, this::ended);
+        // Only GamerPower links go through a redirect; Epic's feed already gives the store page.
+        if (feed.provider() == FreebieFeed.Provider.GAMERPOWER)
+            discovery.afterPoll(new FreebieClaimLinks(repository, new GamerPowerLinks(), clock));
         notifier = new FreebieNotifier(repository, jda, clock, sendingThread);
         lifecycle = new FreebieLifecyclePlanner(repository, subscriptions);
         lifecycleWorker = new FreebieLifecycleWorker(repository, subscriptions, sendingThread, clock);
@@ -76,6 +80,8 @@ public final class FreebieSystem {
         sender = new FreebieSender(repository, jda, sendingThread, clock, notifier).withSubscriptions(subscriptions)
                 .withLifecycle(lifecycleWorker).withDms(dmWorker).withBroadcasts(broadcastWorker)
                 .withAnnouncements(new FreebieAnnouncementSender(repository, features, sendingThread, clock, notifier).withSubscriptions(subscriptions), announcementWorker, publisher);
+        decisions = new FreebieReviewDecisions(config, repository, subscriptions, reviews, clock, this::fanOut,
+                offerId -> background("withdrawn cards", () -> markEnded(offerId)));
     }
 
     public FreebieFeatures features() { return features; }
@@ -114,7 +120,7 @@ public final class FreebieSystem {
         var system = new FreebieSystem(config.get(), features, repository, subscriptions, client::getJDA, Clock.systemUTC(), new GamerPowerFeed());
         system.epicFeed = new EpicFeed(system.clock);
         system.epicDiscovery = new FreebieDiscovery(config.get(), repository, system.epicFeed, system.clock, system.reviews, system::ended);
-        if (features.resolveGamerPowerLinks()) system.discovery.withLinkResolver(new GamerPowerLinks());
+        if (features.resolveGamerPowerLinks()) system.discovery.withLinkResolver(new FreebieStorePages(new GamerPowerLinks()));
         if (features.egdata()) {
             system.egdataFeed = new EgDataFeed(system.clock);
             system.enrichment = new FreebieEnrichment(repository.offerCollection(), system.egdataFeed, system.clock);
@@ -199,8 +205,14 @@ public final class FreebieSystem {
             if (offer.isEmpty()) break;
             reviews.post(client, offer.get());
         }
-        for (var offer : repository.offersIn(FreebieOffer.State.PENDING, 200))
+        for (var offer : repository.offersIn(FreebieOffer.State.PENDING, 200)) {
             if (offer.ended(now)) ended(offer, "ended before review");
+            // Once its review message is up (the audit trail and the Stop button), an auto-send launcher goes out.
+            // A game of an Epic release is auto-approved through a release snapshot, so the release shares one post.
+            else if (config.autoSends(offer.store()) && offer.reviewMessageId().isPresent()) {
+                if (!approvals.autoApprove(offer)) decisions.autoApprove(offer);
+            }
+        }
         var refreshes = repository.routes() == null ? null : repository.routes().reviewRefreshes(10);
         for (var offer : refreshes == null ? List.<FreebieOffer>of() : refreshes) {
             reviews.edit(offer, "Waiting for review (updated with details from another source)",
@@ -245,6 +257,9 @@ public final class FreebieSystem {
             repository.dmJobs().cancelForOffer(offer.id(), now);
         }
     }
+
+    /** Recorded as the approver of auto-sent offers; never a real user ID, so it is never mentioned. */
+    public static final String AUTO_ACTOR = "auto";
 
     /** The giveaway ended (or vanished from the feed): close review or stop remaining sends. */
     private void ended(FreebieOffer offer, String why) {
@@ -317,17 +332,20 @@ public final class FreebieSystem {
 
     /**
      * First click: shows exactly what would be sent and asks for a second confirmation. A game of an Epic release is
-     * previewed as a one-game release snapshot (see {@link FreebieApprovals}).
+     * previewed as a one-game release snapshot (see {@link FreebieApprovals}); other games use the single approval.
      */
     public Reply requestApproval(String actorId, String offerId) {
         requireOwner(actorId);
-        return approvals.request(actorId, offerId, false);
+        return approvals.isRelease(offerId) ? approvals.request(actorId, offerId, false) : decisions.requestApproval(actorId, offerId);
     }
 
+    /** Legacy single confirmation; a game of an Epic release must be confirmed through its release snapshot instead. */
     public String confirmApproval(String actorId, String offerId) {
         requireOwner(actorId);
-        return approvals.confirmSingle(actorId, offerId);
+        return approvals.isRelease(offerId) ? approvals.confirmSingle(actorId, offerId) : decisions.confirmApproval(actorId, offerId);
     }
+
+    public String reject(String actorId, String offerId) { return decisions.reject(actorId, offerId); }
 
     /** First click of "Approve release": shows every pending game of the release; approves nothing yet. */
     public Reply requestGroupApproval(String actorId, String offerId) {
@@ -366,43 +384,12 @@ public final class FreebieSystem {
         return FreebieBroadcasts.stopControls(id);
     }
 
-    public String reject(String actorId, String offerId) {
-        requireOwner(actorId);
-        var rejected = repository.transition(offerId, FreebieOffer.State.PENDING, FreebieOffer.State.REJECTED, actorId, clock.instant());
-        if (rejected.isEmpty()) return "Already handled. Nothing changed.";
-        reviews.edit(rejected.get(), "Rejected by <@" + actorId + ">. Nothing was sent.", List.of());
-        return "Rejected. Nothing was sent.";
-    }
-
     /** Kill switch for one offer: messages already sent stay, everything not yet sent is cancelled. */
-    public String stop(String actorId, String offerId) {
-        requireOwner(actorId);
-        Instant now = clock.instant();
-        var stopped = repository.stopByOwner(offerId, FreebieOffer.State.APPROVED, actorId, now);
-        if (stopped.isEmpty()) stopped = repository.stopByOwner(offerId, FreebieOffer.State.COMPLETED, actorId, now);
-        if (stopped.isEmpty()) return "This offer is not currently sending.";
-        long cancelled = repository.cancelPending(offerId, "stopped by owner", now);
-        repository.dmJobs().cancelForOffer(offerId, now);
-        background("withdrawn cards", () -> markEnded(offerId));
-        reviews.edit(stopped.get(), "Stopped by <@" + actorId + ">. " + cancelled + " pending message(s) cancelled; summary follows.",
-                List.of());
-        return "Stopped. " + cancelled + " pending message(s) cancelled. Up to " + FreebieSender.MAX_IN_FLIGHT
-                + " already in flight may still arrive.";
-    }
-
+    public String stop(String actorId, String offerId) { return decisions.stop(actorId, offerId); }
     /** Owner fixes a wrongly detected launcher before approving; the confirmation then counts the new audience. */
-    public String changeStore(String actorId, String offerId, String storeId) {
-        requireOwner(actorId);
-        var store = FreebieStore.byId(storeId).orElse(null);
-        if (store == null) return "Unknown launcher.";
-        var changed = repository.changeStore(offerId, store, clock.instant());
-        if (changed.isEmpty()) return "Only offers still waiting for review can change launcher.";
-        reviews.edit(changed.get(), "Waiting for review (launcher set to " + store.label() + " by <@" + actorId + ">)",
-                FreebieMessages.reviewControls(changed.get()));
-        return "Launcher changed to **" + store.label() + "**.";
-    }
+    public String changeStore(String actorId, String offerId, String storeId) { return decisions.changeStore(actorId, offerId, storeId); }
 
-    /** Approved giveaways that a newly configured channel can still claim. Owner approval is never bypassed. */
+    /** Approved (or auto-sent) giveaways that a newly configured channel can still claim. */
     public List<FreebieOffer> liveFor(FreebieStore store) { return repository.liveApproved(store, clock.instant()); }
 
     /** What anyone can claim right now, for {@code /free-games}; empty store means every launcher. */
@@ -487,3 +474,4 @@ public final class FreebieSystem {
         };
     }
 }
+

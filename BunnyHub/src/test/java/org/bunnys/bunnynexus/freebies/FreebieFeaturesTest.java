@@ -38,14 +38,15 @@ class FreebieFeaturesTest {
         assertEquals(1, warnings.size());
     }
 
-    @Test void redirectHopsStayOnApprovedHttpsHosts() {
-        URI from = URI.create("https://www.gamerpower.com/open/home");
-        assertEquals(Optional.of(URI.create("https://store.epicgames.com/p/home-19212a")),
-                GamerPowerLinks.next(from, "https://store.epicgames.com/p/home-19212a"));
-        assertEquals(Optional.of(URI.create("https://www.gamerpower.com/go/home")), GamerPowerLinks.next(from, "/go/home"));
-        for (String bad : List.of("http://store.epicgames.com/p/home", "https://evil.example/p/home", "https://u@store.epicgames.com/p/x",
-                "https://store.epicgames.com:444/p/x", "javascript:alert(1)"))
-            assertTrue(GamerPowerLinks.next(from, bad).isEmpty(), bad);
-        assertTrue(GamerPowerLinks.next(from, null).isEmpty());
+    @Test void onlyAnEpicProductPageGivesAGamerPowerReportAStorefrontIdentity() {
+        var report = FreebieIdentityTest.gamerpower("3823", "Home (Epic Games) Giveaway", "PC, Epic Games Store", Optional.empty());
+        var epic = new FreebieStorePages(new GamerPowerLinks(uri -> new GamerPowerLinks.Hop(302,
+                Optional.of("https://store.epicgames.com/en-US/p/home-19212a"))));
+        assertEquals(Optional.of("home-19212a"), epic.apply(report).productSlug());
+        var steam = new FreebieStorePages(new GamerPowerLinks(uri -> new GamerPowerLinks.Hop(302,
+                Optional.of("https://store.steampowered.com/app/1/"))));
+        assertTrue(steam.apply(report).productSlug().isEmpty(), "another store is not an Epic identity");
+        var failing = new FreebieStorePages(new GamerPowerLinks(uri -> { throw new java.io.IOException("520"); }));
+        assertSame(report, failing.apply(report), "a failed redirect leaves the report unchanged (held, never merged)");
     }
 }

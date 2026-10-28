@@ -6,6 +6,7 @@ import net.dv8tion.jda.api.interactions.callbacks.IReplyCallback;
 import org.bunnys.database.models.user.BunnyUser;
 import org.jetbrains.annotations.NotNull;
 
+/** Fired when finished study time raises a user's account level; announced by {@code AccountLevelUp}. */
 public class AccountLevelUpEvent extends Event {
     private final IReplyCallback interaction;
     private final int levelUps;

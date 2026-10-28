@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.bunnys.utils.FailureDiagnostics;
 import org.bunnys.utils.Replies;
 
+/** Turns failures into short, safe messages for the user, and the two failure types commands throw on purpose. */
 public final class InteractionErrors {
     private InteractionErrors() {}
 
