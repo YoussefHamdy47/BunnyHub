@@ -47,6 +47,7 @@ final class FreebieLifecyclePlanner {
      */
     FreebieLifecycleStore.Planned ended(String offerId, End end, Instant now) {
         jobs().cancelReminders(offerId, now);
+        if (repository.announcements() != null) repository.announcements().touch(offerId, now); // Posted pages rebuild without its claim.
         // Snapshot before scanning SENT rows: a send can finish between the scan and a later open-count read.
         // If anything was in flight, another pass must pick up that final card even when it has now settled.
         long openBeforePlanning = jobs().openDeliveries(offerId);
@@ -66,7 +67,11 @@ final class FreebieLifecyclePlanner {
                 Date posted = delivery.getDate("finishedAt");
                 var verdict = FreebieLifecycle.reminder(offer, hours, delivery.getString("state"), delivery.getString("messageId"),
                         posted == null ? null : posted.toInstant(), now);
-                if (verdict == FreebieLifecycle.Reminder.DUE && jobs().planReminder(offer.id(), delivery, hours, now)) queued++;
+                if (verdict != FreebieLifecycle.Reminder.DUE) continue;
+                String group = delivery.getString("announcementKey");
+                boolean planned = group == null ? jobs().planReminder(offer.id(), delivery, hours, now)
+                        : jobs().planGroupReminder(offer.id(), group, delivery, hours, offer.realEnd().orElseThrow(), now);
+                if (planned) queued++;
             }
         }
         return queued;

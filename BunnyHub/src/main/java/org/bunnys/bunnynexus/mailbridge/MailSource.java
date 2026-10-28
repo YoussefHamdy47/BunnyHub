@@ -16,6 +16,7 @@ public interface MailSource {
 
     /** Why a mailbox call failed, and whether trying again later can help. */
     final class MailSourceException extends Exception {
+        @java.io.Serial private static final long serialVersionUID = 1L;
         public enum Kind {
             /** The refresh token was revoked or expired, or the scope is wrong: needs a person to re-authorize. */
             AUTH,
@@ -26,7 +27,7 @@ public interface MailSource {
         }
 
         private final Kind kind;
-        private final Optional<Instant> retryAfter;
+        private final transient Optional<Instant> retryAfter;
 
         public MailSourceException(Kind kind, String message, Optional<Instant> retryAfter) {
             super(message);

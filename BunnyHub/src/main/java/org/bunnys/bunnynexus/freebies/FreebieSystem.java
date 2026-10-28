@@ -39,6 +39,14 @@ public final class FreebieSystem {
     private final FreebieLifecyclePlanner lifecycle;
     private final FreebieLifecycleWorker lifecycleWorker;
     private final FreebieDmWorker dmWorker;
+    private final FreebieFeatures features;
+    private final FreebieAnnouncementWorker announcementWorker;
+    private final FreebiePublisher publisher;
+    private final FreebieApprovals approvals;
+    private final FreebieBroadcasts broadcasts;
+    private final FreebieBroadcastWorker broadcastWorker;
+    private EgDataFeed egdataFeed;
+    private FreebieEnrichment enrichment;
     private final FreebieReviewDecisions decisions;
     private Instant nextSweep = Instant.MIN; // Discovery thread only.
     static final Duration SWEEP_EVERY = Duration.ofMinutes(10);
@@ -46,7 +54,12 @@ public final class FreebieSystem {
     // Package-private for tests; production code goes through start().
     FreebieSystem(FreebieConfig config, FreebieRepository repository, FreebieSubscriptions subscriptions,
                           Supplier<JDA> jda, Clock clock, GamerPowerFeed feed) {
-        this.config = config; this.repository = repository; this.subscriptions = subscriptions;
+        this(config, FreebieFeatures.DEFAULT, repository, subscriptions, jda, clock, feed);
+    }
+
+    FreebieSystem(FreebieConfig config, FreebieFeatures features, FreebieRepository repository, FreebieSubscriptions subscriptions,
+                  Supplier<JDA> jda, Clock clock, GamerPowerFeed feed) {
+        this.config = config; this.features = features; this.repository = repository; this.subscriptions = subscriptions;
         this.jda = jda; this.clock = clock; this.feed = feed;
         discoveryThread = Executors.newSingleThreadScheduledExecutor(daemon("FreebieDiscovery"));
         sendingThread = Executors.newSingleThreadScheduledExecutor(daemon("FreebieSender"));
@@ -59,11 +72,19 @@ public final class FreebieSystem {
         lifecycle = new FreebieLifecyclePlanner(repository, subscriptions);
         lifecycleWorker = new FreebieLifecycleWorker(repository, subscriptions, sendingThread, clock);
         dmWorker = new FreebieDmWorker(repository, sendingThread, clock);
+        approvals = new FreebieApprovals(repository, subscriptions, reviews, features, this::fanOut, clock);
+        announcementWorker = new FreebieAnnouncementWorker(repository, features, sendingThread, clock);
+        broadcasts = new FreebieBroadcasts(repository, subscriptions, clock, reviews::notifyOwners);
+        broadcastWorker = new FreebieBroadcastWorker(repository, sendingThread, clock);
+        publisher = new FreebiePublisher(repository, features, sendingThread, clock);
         sender = new FreebieSender(repository, jda, sendingThread, clock, notifier).withSubscriptions(subscriptions)
-                .withLifecycle(lifecycleWorker).withDms(dmWorker);
+                .withLifecycle(lifecycleWorker).withDms(dmWorker).withBroadcasts(broadcastWorker)
+                .withAnnouncements(new FreebieAnnouncementSender(repository, features, sendingThread, clock, notifier).withSubscriptions(subscriptions), announcementWorker, publisher);
         decisions = new FreebieReviewDecisions(config, repository, subscriptions, reviews, clock, this::fanOut,
                 offerId -> background("withdrawn cards", () -> markEnded(offerId)));
     }
+
+    public FreebieFeatures features() { return features; }
 
     public static Optional<FreebieSystem> current() { return Optional.ofNullable(instance); }
     public FreebieConfig config() { return config; }
@@ -95,17 +116,25 @@ public final class FreebieSystem {
             BunnyLog.error("[Freebies] Disabled: database setup failed | " + FailureDiagnostics.describe(failure));
             return;
         }
-        var system = new FreebieSystem(config.get(), repository, subscriptions, client::getJDA, Clock.systemUTC(), new GamerPowerFeed());
+        var features = FreebieFeatures.fromEnvironment(BunnyLog::warning);
+        var system = new FreebieSystem(config.get(), features, repository, subscriptions, client::getJDA, Clock.systemUTC(), new GamerPowerFeed());
         system.epicFeed = new EpicFeed(system.clock);
         system.epicDiscovery = new FreebieDiscovery(config.get(), repository, system.epicFeed, system.clock, system.reviews, system::ended);
+        if (features.resolveGamerPowerLinks()) system.discovery.withLinkResolver(new FreebieStorePages(new GamerPowerLinks()));
+        if (features.egdata()) {
+            system.egdataFeed = new EgDataFeed(system.clock);
+            system.enrichment = new FreebieEnrichment(repository.offerCollection(), system.egdataFeed, system.clock);
+        }
         instance = system;
         system.discoveryThread.scheduleWithFixedDelay(guarded("housekeeping", system::housekeeping), 20, 30, TimeUnit.SECONDS);
         system.discovery.start(system.discoveryThread, 15);
         system.epicDiscovery.start(system.discoveryThread, 25);
+        if (system.enrichment != null) system.enrichment.start(system.discoveryThread, 45);
         system.sendingThread.scheduleWithFixedDelay(guarded("sender", system.sender::tick), 10, 1, TimeUnit.SECONDS);
         system.sendingThread.scheduleWithFixedDelay(guarded("notices", system.notifier::tick), 10, 5, TimeUnit.SECONDS);
         BunnyLog.success("[Freebies] Started. Review channel " + config.get().reviewChannelId() + ", polling every "
-                + config.get().pollMinutes() + " min.");
+                + config.get().pollMinutes() + " min. Grouped announcements " + (features.grouped() ? "on" : "off")
+                + ", automatic publishing " + (features.publishEnabled() ? "on for " + features.publishChannels().size() + " channel(s)" : "off") + ".");
     }
 
     public static synchronized void shutdown() {
@@ -119,6 +148,9 @@ public final class FreebieSystem {
         sender.close();
         lifecycleWorker.close();
         dmWorker.close();
+        announcementWorker.close();
+        broadcastWorker.close();
+        publisher.close();
         notifier.close();
         discoveryThread.shutdownNow();
         sendingThread.shutdown();
@@ -131,6 +163,7 @@ public final class FreebieSystem {
         }
         feed.close();
         if (epicFeed != null) epicFeed.close();
+        if (egdataFeed != null) egdataFeed.close();
     }
 
     // ------------------------------------------------------------------ housekeeping (discovery thread)
@@ -151,12 +184,22 @@ public final class FreebieSystem {
         lifecycle.run(now);
         repository.dmJobs().recover(now);
         repository.dmSubscribers().expirePending(now);
+        // Corrections and region changes saved on offers reach their posted announcement pages as silent edits.
+        if (repository.announcements() != null) repository.announcements().propagateCorrections(now, 50);
+        // Release approvals committed before a crash finish reconciling into per-game state and planning.
+        approvals.recover();
+        broadcasts.housekeeping();
         JDA client = jda.get();
         if (client == null || client.getStatus() != JDA.Status.CONNECTED) return;
         if (!now.isBefore(nextSweep)) {
             cleanup().sweep(client, now);
             nextSweep = now.plus(SWEEP_EVERY);
         }
+        // Held source reports are announced once with their decision buttons, so none is suppressed unnoticed.
+        if (repository.sources() != null)
+            for (var question : repository.sources().unannounced(5))
+                if (reviews.postQuestion(question.parent().getString("store"), FreebieSourceDecisions.view(question.parent(), question.token())))
+                    repository.sources().announced(question);
         for (int i = 0; i < 5; i++) {
             var offer = repository.reviews().claim(clock.instant());
             if (offer.isEmpty()) break;
@@ -165,7 +208,16 @@ public final class FreebieSystem {
         for (var offer : repository.offersIn(FreebieOffer.State.PENDING, 200)) {
             if (offer.ended(now)) ended(offer, "ended before review");
             // Once its review message is up (the audit trail and the Stop button), an auto-send launcher goes out.
-            else if (config.autoSends(offer.store()) && offer.reviewMessageId().isPresent()) decisions.autoApprove(offer);
+            // A game of an Epic release is auto-approved through a release snapshot, so the release shares one post.
+            else if (config.autoSends(offer.store()) && offer.reviewMessageId().isPresent()) {
+                if (!approvals.autoApprove(offer)) decisions.autoApprove(offer);
+            }
+        }
+        var refreshes = repository.routes() == null ? null : repository.routes().reviewRefreshes(10);
+        for (var offer : refreshes == null ? List.<FreebieOffer>of() : refreshes) {
+            reviews.edit(offer, "Waiting for review (updated with details from another source)",
+                    FreebieMessages.reviewControls(offer, repository.routes().groupPending(offer, now)));
+            repository.routes().clearReviewRefresh(offer.id());
         }
         for (var offer : repository.offersIn(FreebieOffer.State.APPROVED, 200)) {
             if (offer.ended(now)) { ended(offer, "the giveaway ended"); continue; }
@@ -187,6 +239,14 @@ public final class FreebieSystem {
      */
     void fanOut(FreebieOffer offer) {
         Instant now = clock.instant();
+        // The route is reserved once, before any row exists: announcement pages for new approvals, legacy otherwise.
+        if (repository.routes() != null) repository.routes().route(offer.id(), features.grouped(), Optional.empty());
+        // A release-keyed route sends only what a committed release snapshot approved; per-game state alone never does.
+        if (!approvals.authorized(offer)) {
+            BunnyLog.warning("[Freebies] " + offer.id() + " is approved but not in its release approval; nothing planned.");
+            repository.setFanoutDone(offer.id(), 0);
+            return;
+        }
         // Channels known to be deleted are skipped; an uncached one is planned and judged by the sender later.
         int planned = repository.planDeliveries(offer, FreebieCleanup.deliverable(jda.get(), subscriptions.forStore(offer.store())), now);
         // DMs are planned before fan-out is recorded as done, so a crash in between replans them (idempotently).
@@ -270,10 +330,60 @@ public final class FreebieSystem {
         return FreebieSourceDecisions.resolve(repository.sources(), actor, offerId, action, clock.instant());
     }
 
-    /** First click: show exactly how many channels will be messaged and ask for a second confirmation. */
-    public Reply requestApproval(String actorId, String offerId) { return decisions.requestApproval(actorId, offerId); }
-    public String confirmApproval(String actorId, String offerId) { return decisions.confirmApproval(actorId, offerId); }
+    /**
+     * First click: shows exactly what would be sent and asks for a second confirmation. A game of an Epic release is
+     * previewed as a one-game release snapshot (see {@link FreebieApprovals}); other games use the single approval.
+     */
+    public Reply requestApproval(String actorId, String offerId) {
+        requireOwner(actorId);
+        return approvals.isRelease(offerId) ? approvals.request(actorId, offerId, false) : decisions.requestApproval(actorId, offerId);
+    }
+
+    /** Legacy single confirmation; a game of an Epic release must be confirmed through its release snapshot instead. */
+    public String confirmApproval(String actorId, String offerId) {
+        requireOwner(actorId);
+        return approvals.isRelease(offerId) ? approvals.confirmSingle(actorId, offerId) : decisions.confirmApproval(actorId, offerId);
+    }
+
     public String reject(String actorId, String offerId) { return decisions.reject(actorId, offerId); }
+
+    /** First click of "Approve release": shows every pending game of the release; approves nothing yet. */
+    public Reply requestGroupApproval(String actorId, String offerId) {
+        requireOwner(actorId);
+        return approvals.request(actorId, offerId, true);
+    }
+
+    /** Confirmation of a previewed release snapshot ({@code confirmrelease-<r|s>-<token>}). */
+    public String confirmRelease(String actorId, String offerId, String action) {
+        requireOwner(actorId);
+        String[] parts = action.split("-", 3);
+        if (parts.length != 3 || !parts[1].matches("[rs]") || !parts[2].matches("[0-9a-f]{24}")) return "This control is malformed.";
+        return approvals.confirmRelease(actorId, offerId, parts[1].equals("r"), parts[2]);
+    }
+
+    /** /freebie-admin announce: saves a draft and shows exactly what every subscribed server would get. */
+    public FreebieBroadcasts.Reply announce(String actorId, String title, String body) {
+        requireOwner(actorId);
+        return broadcasts.preview(actorId, title, body);
+    }
+
+    /** The owner's confirmation button ({@code broadcast-<token>}). */
+    public String confirmAnnouncement(String actorId, String id, String action) {
+        requireOwner(actorId);
+        String token = action.substring(FreebieBroadcasts.SEND.length());
+        if (!token.matches("[0-9a-f]{24}")) return "This control is malformed.";
+        return broadcasts.confirm(actorId, id, token);
+    }
+
+    public String stopAnnouncement(String actorId, String id) {
+        requireOwner(actorId);
+        return broadcasts.stop(actorId, id);
+    }
+
+    public static java.util.List<net.dv8tion.jda.api.components.actionrow.ActionRow> announcementStopControls(String id) {
+        return FreebieBroadcasts.stopControls(id);
+    }
+
     /** Kill switch for one offer: messages already sent stay, everything not yet sent is cancelled. */
     public String stop(String actorId, String offerId) { return decisions.stop(actorId, offerId); }
     /** Owner fixes a wrongly detected launcher before approving; the confirmation then counts the new audience. */
@@ -316,7 +426,10 @@ public final class FreebieSystem {
 
     public String status(String actorId) {
         requireOwner(actorId);
-        return FreebieStatusText.render(repository, config, discovery.status() + (epicDiscovery == null ? "" : "\n" + epicDiscovery.status()) + "\nSource identity decisions: /freebie-admin sources", sender.inFlight(), jda.get(), clock.instant());
+        return FreebieStatusText.render(repository, config, discovery.status() + (epicDiscovery == null ? "" : "\n" + epicDiscovery.status())
+                + (enrichment == null ? "" : "\n" + enrichment.status()) + "\nHeld source reports awaiting a decision: " + (repository.sources() == null ? 0 : repository.sources().openQuestions()) + " (/freebie-admin sources)"
+                + "\n" + broadcasts.status() + (repository.publications() == null ? "" : "\n" + FreebieStatusText.publishing(features, repository.publications().counts())),
+                sender.inFlight(), jda.get(), clock.instant());
     }
 
     static String lifecycleStatus(FreebieLifecycleStore.Stats edits, FreebieLifecycleStore.Stats reminders, Instant now) {

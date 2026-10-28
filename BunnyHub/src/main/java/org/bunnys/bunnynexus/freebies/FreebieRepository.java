@@ -27,8 +27,16 @@ public final class FreebieRepository {
 
     public enum DeliveryState { PENDING, SENDING, SENT, FAILED, BLOCKED, CANCELLED }
     /** {@code catchUp}: planned for a channel that subscribed later; claimed only after fresh first posts. */
+    /** {@code announcementKey}: the row belongs to an announcement page (see {@link FreebieAnnouncementStore}). */
     public record Claimed(String id, String offerId, String guildId, String channelId, Optional<String> roleId,
-                          int attempts, boolean verifyFirst, String token, boolean catchUp) {
+                          int attempts, boolean verifyFirst, String token, boolean catchUp, Optional<String> announcementKey) {
+        public Claimed {
+            Objects.requireNonNull(announcementKey);
+        }
+        public Claimed(String id, String offerId, String guildId, String channelId, Optional<String> roleId,
+                       int attempts, boolean verifyFirst, String token, boolean catchUp) {
+            this(id, offerId, guildId, channelId, roleId, attempts, verifyFirst, token, catchUp, Optional.empty());
+        }
         public Claimed(String id, String offerId, String guildId, String channelId, Optional<String> roleId,
                        int attempts, boolean verifyFirst, String token) {
             this(id, offerId, guildId, channelId, roleId, attempts, verifyFirst, token, false);
@@ -59,10 +67,24 @@ public final class FreebieRepository {
     FreebieDmSubscribers dmSubscribers() { return dmSubscribers; }
     private final FreebieDmJobs dmJobs;
     FreebieDmJobs dmJobs() { return dmJobs; }
+    private final FreebieAnnouncementStore announcements;
+    FreebieAnnouncementStore announcements() { return announcements; }
+    private final FreebiePublicationStore publications;
+    FreebiePublicationStore publications() { return publications; }
+    MongoCollection<Document> offerCollection() { return offers; }
+    private final FreebieRoutes routes;
+    private final FreebieReleases releases;
+    private final FreebieBroadcastStore broadcasts;
+    /** Owner announcements to every subscribed server. */
+    FreebieBroadcastStore broadcasts() { return broadcasts; }
+    /** Release approval snapshots: the authority for release-keyed sends. */
+    FreebieReleases releases() { return releases; }
+    /** Delivery routes, announcement rows and release groups. */
+    FreebieRoutes routes() { return routes; }
 
     public FreebieRepository(MongoDatabase db) {
         offers = db.getCollection(OFFERS); deliveries = db.getCollection(DELIVERIES);
-        sources = new FreebieSourceStore(offers);
+        sources = new FreebieSourceStore(offers, db.getCollection(FreebieSourceStore.LOCKS));
         notices = db.getCollection(NOTICES); control = db.getCollection(CONTROL);
         summaries = new FreebieSummaryStore(offers);
         reviews = new FreebieReviewStore(offers);
@@ -73,6 +95,11 @@ public final class FreebieRepository {
         lifecycle = new FreebieLifecycleStore(db);
         dmSubscribers = new FreebieDmSubscribers(db);
         dmJobs = new FreebieDmJobs(db);
+        announcements = new FreebieAnnouncementStore(db);
+        publications = new FreebiePublicationStore(db);
+        routes = new FreebieRoutes(offers, deliveries);
+        releases = new FreebieReleases(db);
+        broadcasts = new FreebieBroadcastStore(db);
     }
 
     public void installIndexes() {
@@ -85,6 +112,11 @@ public final class FreebieRepository {
         lifecycle.installIndexes();
         dmSubscribers.installIndexes();
         dmJobs.installIndexes();
+        announcements.installIndexes();
+        publications.installIndexes();
+        releases.installIndexes();
+        broadcasts.installIndexes();
+        deliveries.createIndex(Indexes.ascending("announcementKey", "channelId", "state"), new IndexOptions().name("delivery_announcement").sparse(true));
         offers.createIndex(Indexes.ascending("state", "reviewMessageId"), new IndexOptions().name("offer_state"));
         deliveries.createIndex(Indexes.ascending("state", "nextAttemptAt"), new IndexOptions().name("delivery_due"));
         deliveries.createIndex(Indexes.ascending("state", "leaseUntil"), new IndexOptions().name("delivery_lease"));
@@ -111,6 +143,8 @@ public final class FreebieRepository {
         return markMissing(FreebieFeed.Provider.GAMERPOWER, presentIds);
     }
 
+    /** Whether this provider identity is already reserved on some offer (including tombstones). */
+    boolean knows(String identity) { return offers.countDocuments(eq("sourceAliases", identity)) > 0; }
     // ------------------------------------------------------------------ direct claim links (see GamerPowerLinks)
 
     static final int MAX_CLAIM_LINK_ATTEMPTS = 3;
@@ -127,9 +161,13 @@ public final class FreebieRepository {
     void claimLinkResolved(String offerId, java.net.URI store, Instant now) {
         var offer = offers.find(and(eq("_id", offerId), GAMERPOWER_CLAIM)).first();
         if (offer == null) return;
-        offers.updateOne(and(eq("_id", offerId), GAMERPOWER_CLAIM), combine(set("claimUrl", store.toASCIIString()),
+        List<Bson> changes = new ArrayList<>(List.of(set("claimUrl", store.toASCIIString()),
                 set("gamerPowerClaimUrl", offer.getString("claimUrl")), inc("claimLinkAttempts", 1),
                 set("claimLinkResolvedAt", Date.from(now))));
+        // An official Epic product page is a verified storefront identity: a later Epic report of the same giveaway
+        // merges with this offer instead of being held (FreebieSourceStore.verifiedMatch).
+        if (offer.getString("productSlug") == null) EpicLinks.productSlug(store).ifPresent(slug -> changes.add(set("productSlug", slug)));
+        offers.updateOne(and(eq("_id", offerId), GAMERPOWER_CLAIM), combine(changes));
     }
 
     /** No usable store link this time; after {@link #MAX_CLAIM_LINK_ATTEMPTS} the GamerPower link stays for good. */
@@ -153,6 +191,16 @@ public final class FreebieRepository {
         List<Bson> changes = new ArrayList<>(List.of(set("state", to.name()), inc("revision", 1L), set("updatedAt", Date.from(now))));
         if (actorId != null) { changes.add(set("decidedBy", actorId)); changes.add(set("decidedAt", Date.from(now))); }
         return update(and(eq("_id", offerId), eq("state", from.name())), combine(changes));
+    }
+
+    /**
+     * Release reconciliation: PENDING to APPROVED only at the revision the owner reviewed, so a game changed after the
+     * snapshot (new official details, a review refresh) is never approved by it.
+     */
+    Optional<FreebieOffer> approveReviewed(String offerId, long revision, String actorId, Instant at) {
+        return update(and(eq("_id", offerId), eq("state", "PENDING"), eq("revision", revision)), combine(
+                set("state", FreebieOffer.State.APPROVED.name()), inc("revision", 1L), set("updatedAt", Date.from(at)),
+                set("decidedBy", actorId), set("decidedAt", Date.from(at)), set("approvedByRelease", true)));
     }
 
     /** Owner stop: also records {@code stoppedByOwner}, in the same update, so posted cards read "withdrawn". */
@@ -195,6 +243,13 @@ public final class FreebieRepository {
                 .map(FreebieOffer::read).into(new ArrayList<>());
     }
 
+    /** The raw offer document, for enrichment facts; empty for unknown and purged offers. */
+    Optional<Document> offerDocument(String id) {
+        return Optional.ofNullable(offers.find(and(eq("_id", id), ne("state", FreebieRetention.PURGED))).first());
+    }
+
+    FreebieFacts facts(String id) { return offerDocument(id).map(FreebieFacts::read).orElse(FreebieFacts.NONE); }
+
     /** Several fan-outs of one offer may race; the recorded plan size never shrinks. */
     public void setFanoutDone(String offerId, int planned) {
         offers.updateOne(eq("_id", offerId), combine(set("fanoutDone", true), max("plannedDeliveries", planned)));
@@ -225,8 +280,9 @@ public final class FreebieRepository {
     public int planDeliveries(FreebieOffer offer, Iterable<FreebieSubscriptions.Subscription> audience, Instant now) {
         int planned = 0;
         List<Document> batch = new ArrayList<>();
+        var key = routes.announcementKey(offer.id());
         for (var subscription : audience) {
-            batch.add(delivery(offer, subscription, false, now));
+            batch.add(withKey(delivery(offer, subscription, false, now), key, now));
             if (batch.size() == INSERT_BATCH) { planned += insertIgnoringDuplicates(batch); batch.clear(); }
         }
         if (!batch.isEmpty()) planned += insertIgnoringDuplicates(batch);
@@ -235,7 +291,18 @@ public final class FreebieRepository {
 
     /** Catch-up for one channel; false when it already has (or had) a delivery for this offer. */
     public boolean planDelivery(FreebieOffer offer, FreebieSubscriptions.Subscription subscription, Instant now) {
-        return insertIgnoringDuplicates(List.of(delivery(offer, subscription, true, now))) == 1;
+        return insertIgnoringDuplicates(List.of(withKey(delivery(offer, subscription, true, now), routes.announcementKey(offer.id()), now))) == 1;
+    }
+
+    /** Group members wait a few seconds so games approved together share one first post and one ping. */
+    static final Duration ASSEMBLY = Duration.ofSeconds(10);
+
+    private static Document withKey(Document row, Optional<String> key, Instant now) {
+        key.ifPresent(k -> {
+            row.append("announcementKey", k);
+            if (k.startsWith("epic|")) row.put("nextAttemptAt", Date.from(now.plus(ASSEMBLY)));
+        });
+        return row;
     }
 
     private static Document delivery(FreebieOffer offer, FreebieSubscriptions.Subscription s, boolean catchUp, Instant now) {
@@ -279,7 +346,8 @@ public final class FreebieRepository {
         if (doc == null) return Optional.empty();
         return Optional.of(new Claimed(doc.getString("_id"), doc.getString("offerId"), doc.getString("guildId"),
                 doc.getString("channelId"), Optional.ofNullable(doc.getString("roleId")), doc.getInteger("attempts"),
-                doc.getBoolean("verifyFirst", false), token, doc.getBoolean("catchUp", false)));
+                doc.getBoolean("verifyFirst", false), token, doc.getBoolean("catchUp", false),
+                Optional.ofNullable(doc.getString("announcementKey"))));
     }
 
     private boolean finish(Claimed c, Instant now, Bson... changes) {

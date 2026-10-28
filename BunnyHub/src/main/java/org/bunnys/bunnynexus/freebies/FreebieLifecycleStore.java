@@ -26,8 +26,13 @@ final class FreebieLifecycleStore {
     static final List<String> OPEN = List.of("PENDING", "SENDING"), FINAL = List.of("DONE", "SKIPPED", "FAILED", "CANCELLED");
     private static final int PAGE = 500;
 
+    /** {@code groupKey}: a reminder for every game of one announcement in this channel that ends at the same time. */
     record Job(String id, Kind kind, String offerId, String deliveryId, String guildId, String channelId, String messageId,
-               boolean withdrawn, int hours, int attempts, boolean verifyFirst, String token, String recipientId) {
+               boolean withdrawn, int hours, int attempts, boolean verifyFirst, String token, String recipientId, String groupKey) {
+        Job(String id, Kind kind, String offerId, String deliveryId, String guildId, String channelId, String messageId,
+            boolean withdrawn, int hours, int attempts, boolean verifyFirst, String token, String recipientId) {
+            this(id, kind, offerId, deliveryId, guildId, channelId, messageId, withdrawn, hours, attempts, verifyFirst, token, recipientId, null);
+        }
         Job(String id, Kind kind, String offerId, String deliveryId, String guildId, String channelId, String messageId,
             boolean withdrawn, int hours, int attempts, boolean verifyFirst, String token) {
             this(id, kind, offerId, deliveryId, guildId, channelId, messageId, withdrawn, hours, attempts, verifyFirst, token, null);
@@ -82,7 +87,7 @@ final class FreebieLifecycleStore {
     /** Sent alerts of {@code offerId} in the given channels, with their message ID and send time. */
     List<Document> sentIn(String offerId, Collection<String> channels) {
         return deliveries.find(and(eq("offerId", offerId), eq("state", "SENT"), in("channelId", channels)))
-                .projection(Projections.include("_id", "guildId", "channelId", "messageId", "finishedAt", "state"))
+                .projection(Projections.include("_id", "guildId", "channelId", "messageId", "finishedAt", "state", "announcementKey"))
                 .into(new ArrayList<>());
     }
 
@@ -119,7 +124,9 @@ final class FreebieLifecycleStore {
         int queued = 0, without = 0;
         String after = "";
         while (true) {
-            var page = source.find(and(eq("offerId", offerId), eq("state", "SENT"), gt("_id", after)))
+            // Announcement rows are edited through their page (one rebuilt message), never card by card.
+            var page = source.find(and(eq("offerId", offerId), eq("state", "SENT"), gt("_id", after),
+                            dm ? new Document() : exists("announcementKey", false)))
                     .projection(Projections.include("_id", "guildId", "channelId", "messageId", "userId"))
                     .sort(Sorts.ascending("_id")).limit(PAGE).into(new ArrayList<>());
             if (page.isEmpty()) break;
@@ -147,6 +154,16 @@ final class FreebieLifecycleStore {
                 delivery, now).append("hours", hours))) == 1;
     }
 
+    /**
+     * One reminder for all games of an announcement in this channel that end at the same moment: the first planner
+     * wins, so simultaneous endings never cause separate reminder pings.
+     */
+    boolean planGroupReminder(String offerId, String groupKey, Document delivery, int hours, Instant end, Instant now) {
+        String id = "remind|" + groupKey + "|" + delivery.getString("channelId") + "|" + end.getEpochSecond();
+        return insertIgnoringDuplicates(List.of(job(Kind.REMIND, id, offerId, delivery, now).append("hours", hours)
+                .append("groupKey", groupKey))) == 1;
+    }
+
     private static Document job(Kind kind, String id, String offerId, Document delivery, Instant now) {
         return new Document("_id", id).append("schemaVersion", 1).append("kind", kind.name()).append("offerId", offerId)
                 .append("deliveryId", delivery.getString("_id")).append("guildId", delivery.getString("guildId"))
@@ -168,7 +185,8 @@ final class FreebieLifecycleStore {
 
     /** The offer ended: reminders not yet started never post. A leased one re-checks the offer before sending. */
     long cancelReminders(String offerId, Instant now) {
-        return jobs.updateMany(and(eq("offerId", offerId), eq("kind", "REMIND"), eq("state", "PENDING")),
+        // A grouped reminder stays: its worker re-checks which games of the group are still live before posting.
+        return jobs.updateMany(and(eq("offerId", offerId), eq("kind", "REMIND"), eq("state", "PENDING"), exists("groupKey", false)),
                 combine(set("state", "CANCELLED"), set("cancelReason", FreebieLifecycle.Cancel.OFFER_ENDED.name()),
                         set("finishedAt", Date.from(now)))).getModifiedCount();
     }
@@ -197,7 +215,7 @@ final class FreebieLifecycleStore {
         return Optional.of(new Job(d.getString("_id"), Kind.valueOf(d.getString("kind")), d.getString("offerId"),
                 d.getString("deliveryId"), d.getString("guildId"), d.getString("channelId"), d.getString("messageId"),
                 d.getBoolean("withdrawn", false), d.getInteger("hours", 0), d.getInteger("attempts", 1),
-                d.getBoolean("verifyFirst", false), token, d.getString("recipientId")));
+                d.getBoolean("verifyFirst", false), token, d.getString("recipientId"), d.getString("groupKey")));
     }
 
     static Bson owned(Job job, Instant now) {

@@ -75,9 +75,19 @@ Timer, moderation and free-game setup commands are slash-only.
 
 ### Owner only
 
-`/freebie-admin status | pause | resume | check | sources | history | retry`: health, pausing sends, forcing a
-source check, resolving duplicate offers between sources, and delivery history and retries. Only the IDs in
-`FREEBIE_OWNER_IDS` can use it.
+`/freebie-admin status | pause | resume | check | sources | history | retry | announce`: health, pausing sends,
+forcing a source check, resolving duplicate offers between sources, delivery history and retries, and announcements.
+Only the IDs in `FREEBIE_OWNER_IDS` can use it.
+
+`/freebie-admin announce title message` sends an owner message to every server with free-game alerts: one message per
+server, in its alert channel (the major PC one when set), never pinging anyone. Run it in a review channel; it first
+shows a private preview with the server count, and nothing is sent until you press **Send** within 15 minutes.
+**Stop this announcement** cancels the servers not reached yet. Type `\n` in the message for a new line.
+
+Possible duplicates between GamerPower and Epic are held, not posted twice: the review channel gets one
+**Possible duplicate** message with **Same giveaway / Separate giveaway / Ignore** buttons. Games of one Epic release
+are posted together, one message and one ping per channel; a review shows **Approve release** when several are
+waiting.
 
 `/mail-bridge status | check | diagnose | dry-run | test`: health and testing for the
 [mail bridge](#mail-bridge). Nothing here changes your mailbox, and only `test` posts anything.
@@ -119,6 +129,12 @@ packaged into the jar.
 | `FREEBIE_RETENTION_DAYS` | No | How long finished alerts are kept, 30–3650 (default 90) |
 | `FREEBIE_DM_MAX_SUBSCRIBERS` | No | Cap on personal DM subscribers, 0–100000 (default 100; 0 turns DMs off) |
 | `FREEBIE_ENABLED` | No | `false` turns free-game alerts off entirely |
+| `FREEBIE_GROUPED_ANNOUNCEMENTS` | No | `false` posts every Epic game separately instead of one post per release (default `true`) |
+| `FREEBIE_EGDATA_ENABLED` | No | Region restrictions and separate mobile offers from EGData (default `true`) |
+| `FREEBIE_PUBLISH_ENABLED` | No | `true` publishes new free-game posts to servers following the channels below (default `false`) |
+| `FREEBIE_PUBLISH_CHANNEL_IDS` | With publishing | Comma-separated Announcement Channel IDs to publish from |
+| `FREEBIE_EPIC_CHECKOUT` | No | Combined "Claim all PC games" checkout button (default `false`) |
+| `FREEBIE_RESOLVE_GAMERPOWER_LINKS` | No | Resolve GamerPower links during discovery to merge Epic duplicates automatically (default `false`) |
 | `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN` | For the mail bridge | Google OAuth client and refresh token, see [Mail bridge](#mail-bridge) |
 | `MAIL_BRIDGE_CHANNEL_ID` | No | Where task notifications go (default `1562067773033807912`) |
 | `MAIL_BRIDGE_GUILD_ID` | No | The server that channel is in (default `1043515676960247828`) |

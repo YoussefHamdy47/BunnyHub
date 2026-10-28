@@ -41,6 +41,10 @@ final class FreebieSender {
     private FreebieSubscriptions subscriptions;
     private FreebieLifecycleWorker lifecycle;
     private FreebieDmWorker dms;
+    private FreebieAnnouncementSender announcements;
+    private FreebieAnnouncementWorker pages;
+    private FreebiePublisher publisher;
+    private FreebieBroadcastWorker broadcasts;
     private volatile boolean closed;
 
     FreebieSender(FreebieRepository repository, Supplier<JDA> jda, ScheduledExecutorService executor, Clock clock, FreebieNotifier notifier) {
@@ -50,6 +54,10 @@ final class FreebieSender {
     FreebieSender withSubscriptions(FreebieSubscriptions value) { subscriptions = value; return this; }
     FreebieSender withLifecycle(FreebieLifecycleWorker value) { lifecycle = value; return this; }
     FreebieSender withDms(FreebieDmWorker value) { dms = value; return this; }
+    FreebieSender withBroadcasts(FreebieBroadcastWorker value) { broadcasts = value; return this; }
+    FreebieSender withAnnouncements(FreebieAnnouncementSender sender, FreebieAnnouncementWorker worker, FreebiePublisher publishing) {
+        announcements = sender; pages = worker; publisher = publishing; return this;
+    }
     int background() { return background.get(); }
 
     int inFlight() { return inFlight.get(); }
@@ -76,12 +84,19 @@ final class FreebieSender {
         // slot frees up (at most one request timeout), never indefinitely.
         if (lifecycle != null) lifecycle.prepare();
         if (dms != null) dms.prepare();
+        if (broadcasts != null) broadcasts.prepare();
         while (lifecycle != null && lifecycle.claimOne(client, inFlight, background)) { /* Fill with due card work. */ }
+        // Announcement edits (ended/withdrawn games, corrections, silent joins), then automatic publishing.
+        while (pages != null && pages.claimOne(client, inFlight, background)) { /* Fill with due page edits. */ }
+        if (publisher != null) publisher.prepare();
+        while (publisher != null && publisher.claimOne(client, inFlight, background)) { /* Fill with due publications. */ }
         boolean more = true;
         while (more && !closed) {
             boolean catchUp = claimCatchUpOne(client);
             boolean dm = dms != null && dms.claimOne(client, inFlight, background);
-            more = catchUp || dm;
+            // Owner announcements take turns with catch-up and DMs, after every first post and card update.
+            boolean announcement = broadcasts != null && broadcasts.claimOne(client, inFlight, background);
+            more = catchUp || dm || announcement;
         }
     }
 
@@ -139,6 +154,9 @@ final class FreebieSender {
             return failed(job, offer, FreebieFailure.MISSING_PERMISSIONS, "missing view/send/embed");
         // A deleted role must not block the alert; it just goes out without a ping.
         Optional<String> role = job.roleId().filter(id -> guild.getRoleById(id) != null);
+        // Announcement rows follow their page; the page is the send unit (one message, one ping).
+        if (job.announcementKey().isPresent() && announcements != null)
+            return announcements.start(client, job, guild, channel, role, () -> done(job));
         String reference = FreebieMessages.reference(job.id());
 
         if (job.verifyFirst() && !self.hasPermission(channel, Permission.MESSAGE_HISTORY)) {

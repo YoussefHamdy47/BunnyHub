@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.Clock;
 import java.util.concurrent.Executor;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -61,8 +62,8 @@ final class FreebieReviewChannel {
             }
             var audience = subscriptions.audience(offer.store());
             if (!repository.reviews().owns(job, clock.instant())) return;
-            var message = destination.sendMessage(FreebieMessages.review(offer, audience.channels(), audience.guilds(), config.ownerIds(),
-                            config.autoSends(offer.store())))
+            var message = destination.sendMessage(FreebieMessages.review(offer, facts(offer), groupPending(offer),
+                            audience.channels(), audience.guilds(), config.ownerIds(), config.autoSends(offer.store()), clock.instant()))
                     .setNonce(FreebieMessages.nonce("review|" + offer.id())).timeout(45, TimeUnit.SECONDS).submit().get(50, TimeUnit.SECONDS);
             repository.reviews().sent(job, channelId, message.getId(), clock.instant());
         } catch (InterruptedException interrupted) {
@@ -75,8 +76,9 @@ final class FreebieReviewChannel {
         var channel = reviewChannelOf(jda.get(), offer);
         if (channel == null || offer.reviewMessageId().isEmpty()) return;
         var audience = subscriptions.audience(offer.store());
-        channel.editMessageEmbedsById(offer.reviewMessageId().get(), FreebieMessages.alertEmbed(offer, "preview"),
-                        FreebieMessages.reviewEmbed(offer, audience.channels(), audience.guilds(), status))
+        var facts = facts(offer);
+        channel.editMessageEmbedsById(offer.reviewMessageId().get(), FreebieAnnouncementCards.preview(offer, facts, clock.instant()),
+                        FreebieMessages.reviewEmbed(offer, facts, audience.channels(), audience.guilds(), status, clock.instant()))
                 .setComponents(FreebieMessages.withClear(components)).queue(null,
                         error -> BunnyLog.warning("[Freebies] Could not update review " + offer.id() + " | " + FailureDiagnostics.describe(error)));
     }
@@ -90,6 +92,28 @@ final class FreebieReviewChannel {
         String paused = repository.sendingPaused() ? " **(sending is paused)**" : "";
         edit(offer, "Sending… " + counts.sent() + "/" + total + " sent, " + counts.failed() + " failed, "
                 + counts.open() + " left." + paused, FreebieMessages.stopControls(offer));
+    }
+
+    /**
+     * Posts a held source report with its decision buttons in the review channel of the giveaway's section. Blocking,
+     * discovery thread only, bounded wait. True only when Discord accepted it.
+     */
+    boolean postQuestion(String storeId, FreebieDeliveryAdmin.View view) {
+        var store = FreebieStore.byId(storeId).orElse(FreebieStore.OTHER);
+        var channel = channel(jda.get(), config.reviewChannelFor(store));
+        if (channel == null) channel = channel(jda.get(), config.reviewChannelId());
+        if (channel == null) return false;
+        try {
+            channel.sendMessage("**Possible duplicate held for your decision**\n" + view.text()).setComponents(view.rows())
+                    .setAllowedMentions(List.of()).timeout(45, TimeUnit.SECONDS).submit().get(50, TimeUnit.SECONDS);
+            return true;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (ExecutionException | TimeoutException | RuntimeException failure) {
+            BunnyLog.warning("[Freebies] Source question will be posted again | " + FailureDiagnostics.describe(failure));
+            return false;
+        }
     }
 
     void notifyOwners(String text) {
@@ -107,6 +131,14 @@ final class FreebieReviewChannel {
         edit(offer, (offer.state() == FreebieOffer.State.COMPLETED ? "Done" : "Stopped") + " — sent " + counts.sent()
                 + ", failed " + counts.failed() + ", cancelled " + counts.cancelled() + ".", List.of());
     }
+    private int groupPending(FreebieOffer offer) {
+        return repository.routes() == null ? 0 : repository.routes().groupPending(offer, clock.instant());
+    }
+
+    private FreebieFacts facts(FreebieOffer offer) {
+        return Objects.requireNonNullElse(repository.facts(offer.id()), FreebieFacts.NONE);
+    }
+
     /** The channel holding this offer's review; offers reviewed before sections existed are in the main one. */
     private GuildMessageChannel reviewChannelOf(JDA client, FreebieOffer offer) {
         return channel(client, offer.reviewChannelId().orElse(config.reviewChannelId()));

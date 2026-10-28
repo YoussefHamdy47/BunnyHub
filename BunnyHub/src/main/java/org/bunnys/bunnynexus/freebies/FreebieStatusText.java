@@ -52,6 +52,20 @@ final class FreebieStatusText {
                 + jobs.skipped() + "** skipped (daily cap)\n";
     }
 
+    /**
+     * Automatic publishing state. "Published" means Discord accepted the crosspost (or the message was already
+     * published); it does not confirm delivery to any following server.
+     */
+    static String publishing(FreebieFeatures features, java.util.Map<String, Long> counts) {
+        String state = features.publishEnabled() ? "on for " + features.publishChannels().size() + " announcement channel(s)" : "off";
+        long queued = counts.getOrDefault("QUEUED", 0L) + counts.getOrDefault("PUBLISHING", 0L);
+        return "Automatic publishing: " + state + " • queued " + queued + " • published " + counts.getOrDefault("PUBLISHED", 0L)
+                + " • delayed " + counts.getOrDefault("DELAYED", 0L) + " • uncertain " + counts.getOrDefault("UNCERTAIN", 0L)
+                + " • blocked " + counts.getOrDefault("BLOCKED", 0L) + " • failed " + counts.getOrDefault("FAILED", 0L)
+                + " • skipped " + counts.getOrDefault("SKIPPED", 0L)
+                + "\n(published = accepted by Discord for followers; delivery to each following server is not confirmed)";
+    }
+
     static String retention(int days, Optional<FreebieRetention.Last> last) {
         return "\n**Data retention** (" + days + " days)\n" + last.map(l -> "Last purge <t:"
                 + l.at().getEpochSecond() + ":R>: " + l.deliveries() + " alert(s), " + l.offers() + " offer(s), "
