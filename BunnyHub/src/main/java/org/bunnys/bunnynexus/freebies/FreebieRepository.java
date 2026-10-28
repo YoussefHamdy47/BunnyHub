@@ -186,6 +186,22 @@ public final class FreebieRepository {
     }
 
     /** Conditional state change; empty when someone else already moved it (double click, other owner, expiry). */
+    /**
+     * PENDING → APPROVED by an owner. {@code quiet}: the owner chose "Send without ping"; it is saved in the same
+     * conditional write, so every post of this game (first posts, catch-up, reminders) leaves out the role mention.
+     */
+    public Optional<FreebieOffer> approve(String offerId, String actorId, Instant now, boolean quiet) {
+        List<Bson> changes = new ArrayList<>(List.of(set("state", FreebieOffer.State.APPROVED.name()), inc("revision", 1L),
+                set("updatedAt", Date.from(now)), set("decidedBy", actorId), set("decidedAt", Date.from(now))));
+        if (quiet) changes.add(set("quiet", true));
+        return update(and(eq("_id", offerId), eq("state", FreebieOffer.State.PENDING.name())), combine(changes));
+    }
+
+    /** Whether the owner approved this game without a ping. */
+    boolean quiet(String offerId) {
+        return offers.countDocuments(and(eq("_id", offerId), eq("quiet", true))) == 1;
+    }
+
     public Optional<FreebieOffer> transition(String offerId, FreebieOffer.State from, FreebieOffer.State to,
                                              String actorId, Instant now) {
         List<Bson> changes = new ArrayList<>(List.of(set("state", to.name()), inc("revision", 1L), set("updatedAt", Date.from(now))));
@@ -197,10 +213,11 @@ public final class FreebieRepository {
      * Release reconciliation: PENDING to APPROVED only at the revision the owner reviewed, so a game changed after the
      * snapshot (new official details, a review refresh) is never approved by it.
      */
-    Optional<FreebieOffer> approveReviewed(String offerId, long revision, String actorId, Instant at) {
-        return update(and(eq("_id", offerId), eq("state", "PENDING"), eq("revision", revision)), combine(
-                set("state", FreebieOffer.State.APPROVED.name()), inc("revision", 1L), set("updatedAt", Date.from(at)),
-                set("decidedBy", actorId), set("decidedAt", Date.from(at)), set("approvedByRelease", true)));
+    Optional<FreebieOffer> approveReviewed(String offerId, long revision, String actorId, Instant at, boolean quiet) {
+        List<Bson> changes = new ArrayList<>(List.of(set("state", FreebieOffer.State.APPROVED.name()), inc("revision", 1L),
+                set("updatedAt", Date.from(at)), set("decidedBy", actorId), set("decidedAt", Date.from(at)), set("approvedByRelease", true)));
+        if (quiet) changes.add(set("quiet", true));
+        return update(and(eq("_id", offerId), eq("state", "PENDING"), eq("revision", revision)), combine(changes));
     }
 
     /** Owner stop: also records {@code stoppedByOwner}, in the same update, so posted cards read "withdrawn". */

@@ -63,6 +63,23 @@ class FreebieReleasesIT {
         assertTrue(approvals.confirmRelease("owner", home, true, token).startsWith("Another approval"), "a token commits once");
     }
 
+    @Test void sendWithoutPingIsKeptInTheSnapshotAndSurvivesACrashBeforeReconcile() {
+        String token = preview("owner", true);
+        var commit = repository.releases().commit(key, token, "owner", approvals.members(offer(home), true, NOW), NOW, true);
+        assertTrue(commit.snapshot().orElseThrow().quiet());
+        approvals.recover(); // as housekeeping after a crash
+        assertTrue(repository.quiet(home) && repository.quiet(sker), "both games of the release post without a ping");
+    }
+
+    @Test void aSingleApprovalWithoutPingIsSavedInTheSameWrite() {
+        offers.updateOne(eq("_id", home), unset("groupKey")); // a game outside any release
+        assertTrue(repository.approve(home, "owner", NOW, true).isPresent());
+        assertTrue(repository.quiet(home));
+        assertTrue(repository.approve(home, "owner", NOW, false).isEmpty(), "approves once");
+        assertTrue(repository.quiet(home));
+        assertFalse(repository.quiet(sker));
+    }
+
     @Test void aGameAddedOrChangedDuringReviewMakesTheConfirmationStale() {
         String token = preview("owner", true);
         offers.updateOne(eq("_id", sker), inc("revision", 1L)); // e.g. official details refreshed the review

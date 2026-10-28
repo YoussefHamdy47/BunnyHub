@@ -40,20 +40,24 @@ final class FreebieReviewDecisions {
         return new FreebieSystem.Prompt(FreebieMessages.confirm(offer, audience.channels(), audience.guilds()));
     }
 
-    String confirmApproval(String actorId, String offerId) {
+    String confirmApproval(String actorId, String offerId) { return confirmApproval(actorId, offerId, false); }
+
+    /** {@code quiet}: "Send without ping"; the role mention is left out of every post of this game. */
+    String confirmApproval(String actorId, String offerId, boolean quiet) {
         requireOwner(actorId);
         Instant now = clock.instant();
         var current = repository.offer(offerId).orElse(null);
         if (current == null) return "That offer no longer exists.";
         if (current.ended(now)) return "This giveaway has already ended; nothing was sent.";
-        var approved = repository.transition(offerId, FreebieOffer.State.PENDING, FreebieOffer.State.APPROVED, actorId, now);
+        var approved = repository.approve(offerId, actorId, now, quiet);
         if (approved.isEmpty()) return "Already handled by someone else (or expired). Nothing changed.";
         fanOut.accept(approved.get());
         var refreshed = repository.offer(offerId).orElse(approved.get());
         var counts = repository.counts(offerId);
-        reviews.edit(refreshed, "Approved by <@" + actorId + "> — sending to " + counts.open() + " channel(s).",
+        String how = quiet ? " without a ping" : "";
+        reviews.edit(refreshed, "Approved by <@" + actorId + ">" + how + " — sending to " + counts.open() + " channel(s).",
                 FreebieMessages.stopControls(refreshed));
-        return "Approved. Sending to " + counts.open() + " channel(s); a summary will be posted here when it finishes.";
+        return "Approved" + how + ". Sending to " + counts.open() + " channel(s); a summary will be posted here when it finishes.";
     }
 
     String reject(String actorId, String offerId) {

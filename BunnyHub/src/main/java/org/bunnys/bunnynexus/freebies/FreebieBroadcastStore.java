@@ -37,12 +37,21 @@ final class FreebieBroadcastStore {
         jobs.createIndex(Indexes.ascending("broadcastId", "state"), new IndexOptions().name("broadcast_job_owner"));
     }
 
-    record Broadcast(String id, String title, String body, String state, String actor) {
+    /** {@code ping}: the owner chose "Send with ping" (each server's saved free-game role); false otherwise. */
+    record Broadcast(String id, String title, String body, String state, String actor, boolean ping) {
+        Broadcast(String id, String title, String body, String state, String actor) { this(id, title, body, state, actor, false); }
         static Broadcast read(Document d) {
-            return new Broadcast(d.getString("_id"), d.getString("title"), d.getString("body"), d.getString("state"), d.getString("actor"));
+            return new Broadcast(d.getString("_id"), d.getString("title"), d.getString("body"), d.getString("state"), d.getString("actor"),
+                    d.getBoolean("ping", false));
         }
     }
-    record Job(String id, String broadcastId, String guildId, String channelId, int attempts, boolean verifyFirst, String token) {}
+    /** {@code roleId}: the server's saved free-game role for the chosen channel, if any. */
+    record Job(String id, String broadcastId, String guildId, String channelId, int attempts, boolean verifyFirst, String token,
+               java.util.Optional<String> roleId) {
+        Job(String id, String broadcastId, String guildId, String channelId, int attempts, boolean verifyFirst, String token) {
+            this(id, broadcastId, guildId, channelId, attempts, verifyFirst, token, java.util.Optional.empty());
+        }
+    }
     record Counts(long sent, long failed, long skipped, long cancelled, long open) {
         long total() { return sent + failed + skipped + cancelled + open; }
     }
@@ -57,10 +66,13 @@ final class FreebieBroadcastStore {
     }
 
     /** DRAFT → SENDING, once, by the owner who previewed it, before the draft expires. */
-    Optional<Broadcast> confirm(String id, String token, String actor, Instant now) {
+    Optional<Broadcast> confirm(String id, String token, String actor, Instant now) { return confirm(id, token, actor, now, false); }
+
+    /** {@code ping}: saved with the confirmation, in the same conditional write. */
+    Optional<Broadcast> confirm(String id, String token, String actor, Instant now, boolean ping) {
         var d = broadcasts.findOneAndUpdate(and(eq("_id", id), eq("state", "DRAFT"), eq("token", token), eq("actor", actor),
                         gt("until", Date.from(now))),
-                combine(set("state", "SENDING"), set("confirmedAt", Date.from(now)), unset("token")),
+                combine(set("state", "SENDING"), set("confirmedAt", Date.from(now)), set("ping", ping), unset("token")),
                 new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER));
         return Optional.ofNullable(d).map(Broadcast::read);
     }
@@ -78,9 +90,17 @@ final class FreebieBroadcastStore {
 
     /** One job per server; idempotent. */
     int plan(String broadcastId, Map<String, String> channelByGuild, Instant now) {
+        Map<String, FreebieSubscriptions.Subscription> targets = new TreeMap<>();
+        channelByGuild.forEach((guild, channel) -> targets.put(guild, new FreebieSubscriptions.Subscription(guild, channel, FreebieStore.OTHER, Optional.empty())));
+        return planTargets(broadcastId, targets, now);
+    }
+
+    /** One job per server, with the chosen channel and its saved role; idempotent. */
+    int planTargets(String broadcastId, Map<String, FreebieSubscriptions.Subscription> targets, Instant now) {
         List<Document> batch = new ArrayList<>();
-        channelByGuild.forEach((guild, channel) -> batch.add(new Document("_id", broadcastId + "|" + guild).append("schemaVersion", 1)
-                .append("broadcastId", broadcastId).append("guildId", guild).append("channelId", channel).append("state", "PENDING")
+        targets.forEach((guild, s) -> batch.add(new Document("_id", broadcastId + "|" + guild).append("schemaVersion", 1)
+                .append("broadcastId", broadcastId).append("guildId", guild).append("channelId", s.channelId())
+                .append("roleId", s.roleId().orElse(null)).append("state", "PENDING")
                 .append("attempts", 0).append("verifyFirst", false).append("dueAt", Date.from(now)).append("createdAt", Date.from(now))));
         if (batch.isEmpty()) return 0;
         try { return jobs.insertMany(batch, new InsertManyOptions().ordered(false)).getInsertedIds().size(); }
@@ -135,7 +155,7 @@ final class FreebieBroadcastStore {
                 new FindOneAndUpdateOptions().sort(Sorts.ascending("dueAt", "_id")).returnDocument(ReturnDocument.AFTER));
         if (d == null) return Optional.empty();
         return Optional.of(new Job(d.getString("_id"), d.getString("broadcastId"), d.getString("guildId"), d.getString("channelId"),
-                d.getInteger("attempts", 1), d.getBoolean("verifyFirst", false), token));
+                d.getInteger("attempts", 1), d.getBoolean("verifyFirst", false), token, Optional.ofNullable(d.getString("roleId"))));
     }
 
     static Bson owned(Job job, Instant now) {

@@ -153,7 +153,8 @@ final class FreebieSender {
         if (!self.hasPermission(channel, Permission.VIEW_CHANNEL, Permission.MESSAGE_SEND, Permission.MESSAGE_EMBED_LINKS))
             return failed(job, offer, FreebieFailure.MISSING_PERMISSIONS, "missing view/send/embed");
         // A deleted role must not block the alert; it just goes out without a ping.
-        Optional<String> role = job.roleId().filter(id -> guild.getRoleById(id) != null);
+        // Approved with "Send without ping": the alert still posts, without the role mention.
+        Optional<String> role = repository.quiet(job.offerId()) ? Optional.empty() : job.roleId().filter(id -> guild.getRoleById(id) != null);
         // Announcement rows follow their page; the page is the send unit (one message, one ping).
         if (job.announcementKey().isPresent() && announcements != null)
             return announcements.start(client, job, guild, channel, role, () -> done(job));

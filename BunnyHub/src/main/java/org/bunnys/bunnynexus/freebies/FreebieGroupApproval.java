@@ -32,7 +32,10 @@ final class FreebieGroupApproval {
                         .addField("CHANNELS", String.valueOf(channels), true)
                         .addField("SERVERS", String.valueOf(guilds), true).setTimestamp(null).build())
                 .setComponents(ActionRow.of(Button.success(FreebieMessages.BUTTON_PREFIX + ":confirmrelease-" + (wholeRelease ? "r" : "s")
-                        + "-" + token + ":" + offer.id(), members.size() > 1 ? "Yes, send all " + members.size() : "Yes, send it")))
+                        + "-" + token + ":" + offer.id(), members.size() > 1 ? "Yes, send all " + members.size() : "Yes, send it"),
+                        // Upper-case scope = the same confirmation without a ping.
+                        Button.secondary(FreebieMessages.BUTTON_PREFIX + ":confirmrelease-" + (wholeRelease ? "R" : "S")
+                                + "-" + token + ":" + offer.id(), "Send without ping")))
                 .setAllowedMentions(List.of()).build();
     }
 

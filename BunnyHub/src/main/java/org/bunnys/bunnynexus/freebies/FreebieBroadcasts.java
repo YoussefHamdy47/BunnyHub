@@ -18,7 +18,7 @@ import java.util.function.Consumer;
  */
 public final class FreebieBroadcasts {
     public static final int MAX_TITLE = 200, MAX_BODY = 3500;
-    static final String SEND = "broadcast-", STOP = "broadcaststop";
+    static final String SEND = "broadcast-", SEND_QUIET = "broadcastq-", STOP = "broadcaststop";
     private final FreebieRepository repository;
     private final FreebieSubscriptions subscriptions;
     private final Clock clock;
@@ -34,14 +34,19 @@ public final class FreebieBroadcasts {
 
     /** One channel per subscribed server: the major-PC section's channel first, then by section and channel ID. */
     Map<String, String> recipients() {
+        Map<String, String> channels = new TreeMap<>();
+        targets().forEach((guild, s) -> channels.put(guild, s.channelId()));
+        return channels;
+    }
+
+    /** The chosen setting per server: its channel and the free-game role saved with it. */
+    Map<String, FreebieSubscriptions.Subscription> targets() {
         Map<String, FreebieSubscriptions.Subscription> best = new TreeMap<>();
         for (var s : subscriptions.all(FreebieSubscriptions.MAX_PER_GUILD * 20_000)) {
             var current = best.get(s.guildId());
             if (current == null || ORDER.compare(s, current) < 0) best.put(s.guildId(), s);
         }
-        Map<String, String> channels = new TreeMap<>();
-        best.forEach((guild, s) -> channels.put(guild, s.channelId()));
-        return channels;
+        return best;
     }
 
     private static final Comparator<FreebieSubscriptions.Subscription> ORDER =
@@ -64,29 +69,35 @@ public final class FreebieBroadcasts {
         var preview = FreebieBroadcastWorker.message(title, body, "Bot announcement • ref preview").getEmbeds().getFirst();
         var info = Embeds.of("📣", "Send this announcement?")
                 .setDescription("It goes to **" + servers + "** server(s): one message each, in the server's free-game alert channel "
-                        + "(the major PC one when set). Nobody is pinged. Servers following an Announcement Channel do not receive it.\n"
+                        + "(the major PC one when set). Servers following an Announcement Channel do not receive it.\n"
+                        + "**Send with ping** mentions each server's free-game role (where one is set); **Send without ping** mentions nobody. "
+                        + "@everyone and @here are never pinged.\n"
                         + "Only you can confirm, within 15 minutes. Messages cannot be recalled once sent.")
                 .setTimestamp(null).build();
         return new Preview(new MessageCreateBuilder().setEmbeds(preview, info)
-                .setComponents(ActionRow.of(Button.danger(FreebieMessages.BUTTON_PREFIX + ":" + SEND + token + ":" + draft.id(), "Send to " + servers + " server(s)"),
+                .setComponents(ActionRow.of(Button.danger(FreebieMessages.BUTTON_PREFIX + ":" + SEND + token + ":" + draft.id(), "Send with ping"),
+                        Button.primary(FreebieMessages.BUTTON_PREFIX + ":" + SEND_QUIET + token + ":" + draft.id(), "Send without ping"),
                         Button.secondary(FreebieMessages.BUTTON_PREFIX + ":" + STOP + ":" + draft.id(), "Discard")))
                 .setAllowedMentions(List.of()).build());
     }
 
     /** The owner's confirmation: DRAFT → SENDING once, then one job per server (idempotent). */
-    String confirm(String actor, String id, String token) {
+    String confirm(String actor, String id, String token) { return confirm(actor, id, token, false); }
+
+    /** {@code ping}: "Send with ping" (each server's saved free-game role) or "Send without ping". */
+    String confirm(String actor, String id, String token, boolean ping) {
         Instant now = clock.instant();
-        var broadcast = repository.broadcasts().confirm(id, token, actor, now);
+        var broadcast = repository.broadcasts().confirm(id, token, actor, now, ping);
         if (broadcast.isEmpty()) return "This draft expired, was discarded, was already sent, or belongs to another owner. Nothing was sent.";
         int servers = plan(id);
-        return "Sending to " + servers + " server(s). Progress is in `/freebie-admin status`; use the button below to stop the rest.";
+        return "Sending to " + servers + " server(s)" + (ping ? " with each server's free-game role pinged" : " without pings") + ". Progress is in `/freebie-admin status`; use the button below to stop the rest.";
     }
 
     private int plan(String id) {
-        var recipients = recipients();
-        repository.broadcasts().plan(id, recipients, clock.instant());
-        repository.broadcasts().planned(id, recipients.size());
-        return recipients.size();
+        var targets = targets();
+        repository.broadcasts().planTargets(id, targets, clock.instant());
+        repository.broadcasts().planned(id, targets.size());
+        return targets.size();
     }
 
     String stop(String actor, String id) {

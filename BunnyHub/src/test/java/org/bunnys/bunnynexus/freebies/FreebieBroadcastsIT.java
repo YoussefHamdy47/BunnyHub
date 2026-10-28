@@ -66,6 +66,28 @@ class FreebieBroadcastsIT {
         assertEquals("Down tonight\nBack soon", repository.broadcasts().get(id).orElseThrow().body());
     }
 
+    @Test void thePingChoiceIsSavedWithTheConfirmationAndEachServerKeepsItsRole() {
+        String button = token(broadcasts.preview("owner", "T", "B"));
+        String id = draftId(button);
+        String quiet = FreebieMessages.BUTTON_PREFIX + ":" + FreebieBroadcasts.SEND_QUIET;
+        var preview = assertInstanceOf(FreebieBroadcasts.Preview.class, broadcasts.preview("owner", "T", "B"));
+        var ids = preview.message().getComponents().getFirst().asActionRow().getComponents().stream()
+                .map(c -> ((net.dv8tion.jda.api.components.buttons.Button) c).getCustomId()).toList();
+        assertTrue(ids.stream().anyMatch(i -> i.startsWith(quiet)), "the preview offers Send without ping");
+        assertTrue(broadcasts.confirm("owner", id, action(button).substring(FreebieBroadcasts.SEND.length()), true).contains("pinged"));
+        assertTrue(repository.broadcasts().get(id).orElseThrow().ping());
+        var roles = new HashMap<String, Object>();
+        for (Document d : jobs().find()) roles.put(d.getString("guildId"), d.get("roleId"));
+        assertNull(roles.get("100000000000000001"), "server A's chosen channel (major PC) has no saved role");
+        assertNull(roles.get("100000000000000002"));
+        // With a role saved on the chosen channel, that role travels with the job.
+        subscriptions.save(new FreebieSubscriptions.Subscription("100000000000000001", "300000000000000005", FreebieStore.EPIC,
+                Optional.of("400000000000000002")), "a", now);
+        String second = token(broadcasts.preview("owner", "T2", "B2"));
+        broadcasts.confirm("owner", draftId(second), action(second).substring(FreebieBroadcasts.SEND.length()), true);
+        assertEquals("400000000000000002", jobs().find(eq("_id", draftId(second) + "|100000000000000001")).first().getString("roleId"));
+    }
+
     @Test void expiredDraftsCannotBeSent() {
         String button = token(broadcasts.preview("owner", "T", "B"));
         var later = new FreebieBroadcasts(repository, subscriptions, Clock.fixed(now.plus(Duration.ofMinutes(16)), ZoneOffset.UTC), notices::add);

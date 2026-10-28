@@ -46,9 +46,14 @@ final class FreebieBroadcastWorker {
     static String nonce(String jobId) { return FreebieMessages.nonce("broadcast|" + jobId); }
 
     /** The message exactly as every server receives it (and as the owner previews it). */
-    static MessageCreateData message(String title, String body, String reference) {
+    static MessageCreateData message(String title, String body, String reference) { return message(title, body, reference, Optional.empty()); }
+
+    /** {@code ping}: the one role that may be mentioned; never @everyone, @here or users, whatever the text says. */
+    static MessageCreateData message(String title, String body, String reference, Optional<String> ping) {
         MessageEmbed embed = Embeds.of("📢", title).setDescription(body).setFooter(reference).setTimestamp(null).build();
-        return new MessageCreateBuilder().setEmbeds(embed).setAllowedMentions(List.of()).mentionRepliedUser(false).build();
+        var builder = new MessageCreateBuilder().setEmbeds(embed).setAllowedMentions(List.of()).mentionRepliedUser(false);
+        ping.ifPresent(role -> builder.setContent("<@&" + role + ">").mentionRoles(role));
+        return builder.build();
     }
 
     static boolean carries(Message message, String reference) {
@@ -109,7 +114,9 @@ final class FreebieBroadcastWorker {
                 else if (!"SENDING".equals(store().get(job.broadcastId()).map(FreebieBroadcastStore.Broadcast::state).orElse(""))) store().cancelled(job, at);
                 else if (repository.sendingPaused()) store().release(job, at.plusSeconds(120), at);
                 else if (!closed && store().submitting(job, at)) {
-                    var request = channel.sendMessage(message(broadcast.title(), broadcast.body(), reference)).setNonce(nonce(job.id()))
+                    // "Send with ping": only this server's saved free-game role, and only while the role still exists.
+                    Optional<String> ping = broadcast.ping() ? job.roleId().filter(id -> guild.getRoleById(id) != null) : Optional.empty();
+                    var request = channel.sendMessage(message(broadcast.title(), broadcast.body(), reference, ping)).setNonce(nonce(job.id()))
                             .timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit();
                     submitted = true;
                     request.whenComplete((message, sendError) -> dispatch(release, () -> {

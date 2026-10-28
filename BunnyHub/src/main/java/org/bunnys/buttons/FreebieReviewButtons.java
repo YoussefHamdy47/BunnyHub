@@ -31,7 +31,7 @@ public class FreebieReviewButtons extends BunnyButton {
         args = event.getComponentId().split(":", 3);
         if (args.length != 3) { deny(event, "This control is malformed."); return; }
         String action = args[1], offerId = args[2], actor = event.getUser().getId();
-        if (action.startsWith("broadcast-")) {
+        if (action.startsWith("broadcast-") || action.startsWith("broadcastq-")) {
             event.deferEdit().complete();
             String result = system.confirmAnnouncement(actor, offerId, action);
             var edit = event.getHook().editOriginal(result).setEmbeds().setAllowedMentions(List.of());
@@ -65,9 +65,9 @@ public class FreebieReviewButtons extends BunnyButton {
                         : "Cleared **" + result.deleted() + "** finished message" + (result.deleted() == 1 ? "" : "s")
                         + (result.kept() > 0 ? ", kept **" + result.kept() + "** that still need you." : ".")));
             }
-            case "confirm" -> {
+            case "confirm", FreebieMessages.CONFIRM_QUIET -> {
                 event.deferEdit().complete();
-                String result = system.confirmApproval(actor, offerId);
+                String result = system.confirmApproval(actor, offerId, action.equals(FreebieMessages.CONFIRM_QUIET));
                 event.getHook().editOriginal(result).setEmbeds().setComponents().setAllowedMentions(List.of()).queue();
             }
             case "approve" -> {
