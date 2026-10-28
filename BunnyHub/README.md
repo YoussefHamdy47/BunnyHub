@@ -82,7 +82,8 @@ Only the IDs in `FREEBIE_OWNER_IDS` can use it.
 `/freebie-admin announce title message` sends an owner message to every server with free-game alerts: one message per
 server, in its alert channel (the major PC one when set). Run it in a review channel; it first shows a private preview
 with the server count, and nothing is sent until you press **Send with ping** (each server's free-game role) or
-**Send without ping** within 15 minutes. @everyone and @here are never pinged.
+**Send without ping** within 15 minutes. @everyone and @here are never pinged. Add `section:` (for example Indie & other PC) to reach only servers with
+that section's channel; `if-missing: Use its main channel` sends the rest to their main channel instead of skipping them.
 **Stop this announcement** cancels the servers not reached yet. Type `\n` in the message for a new line.
 
 Possible duplicates between GamerPower and Epic are held, not posted twice: the review channel gets one

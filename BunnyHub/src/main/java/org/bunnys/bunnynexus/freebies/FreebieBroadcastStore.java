@@ -38,11 +38,18 @@ final class FreebieBroadcastStore {
     }
 
     /** {@code ping}: the owner chose "Send with ping" (each server's saved free-game role); false otherwise. */
-    record Broadcast(String id, String title, String body, String state, String actor, boolean ping) {
+    /**
+     * {@code section}: only servers with an alert channel for this section code (null: every server, main channel).
+     * {@code fallback}: a server without that section gets the announcement in its main channel instead of nothing.
+     */
+    record Broadcast(String id, String title, String body, String state, String actor, boolean ping, String section, boolean fallback) {
+        Broadcast(String id, String title, String body, String state, String actor, boolean ping) {
+            this(id, title, body, state, actor, ping, null, false);
+        }
         Broadcast(String id, String title, String body, String state, String actor) { this(id, title, body, state, actor, false); }
         static Broadcast read(Document d) {
             return new Broadcast(d.getString("_id"), d.getString("title"), d.getString("body"), d.getString("state"), d.getString("actor"),
-                    d.getBoolean("ping", false));
+                    d.getBoolean("ping", false), d.getString("section"), d.getBoolean("fallback", false));
         }
     }
     /** {@code roleId}: the server's saved free-game role for the chosen channel, if any. */
@@ -57,12 +64,15 @@ final class FreebieBroadcastStore {
     }
 
     /** A draft the owner previewed; only that owner can send it, within {@link #DRAFT_LIFETIME}. */
-    Broadcast draft(String title, String body, String actor, String token, Instant now) {
+    Broadcast draft(String title, String body, String actor, String token, Instant now) { return draft(title, body, actor, token, now, null, false); }
+
+    /** The target is saved with the draft, so planning (and recovery after a crash) uses exactly what was previewed. */
+    Broadcast draft(String title, String body, String actor, String token, Instant now, String section, boolean fallback) {
         String id = "bc" + Long.toString(now.toEpochMilli(), 36) + token.substring(0, 6);
         broadcasts.insertOne(new Document("_id", id).append("schemaVersion", 1).append("title", title).append("body", body)
-                .append("state", "DRAFT").append("actor", actor).append("token", token)
+                .append("state", "DRAFT").append("actor", actor).append("token", token).append("section", section).append("fallback", fallback)
                 .append("until", Date.from(now.plus(DRAFT_LIFETIME))).append("createdAt", Date.from(now)));
-        return new Broadcast(id, title, body, "DRAFT", actor);
+        return new Broadcast(id, title, body, "DRAFT", actor, false, section, fallback);
     }
 
     /** DRAFT → SENDING, once, by the owner who previewed it, before the draft expires. */

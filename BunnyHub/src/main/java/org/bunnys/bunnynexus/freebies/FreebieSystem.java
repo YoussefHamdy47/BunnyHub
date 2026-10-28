@@ -369,9 +369,16 @@ public final class FreebieSystem {
     }
 
     /** /freebie-admin announce: saves a draft and shows exactly what every subscribed server would get. */
-    public FreebieBroadcasts.Reply announce(String actorId, String title, String body) {
+    public FreebieBroadcasts.Reply announce(String actorId, String title, String body) { return announce(actorId, title, body, null, false); }
+
+    /**
+     * {@code section}: a section code ({@link FreebieSection#code()}) to reach only servers with that section's
+     * channel, or null for every server's main channel. {@code fallback}: servers without that section get it in
+     * their main channel instead of being skipped.
+     */
+    public FreebieBroadcasts.Reply announce(String actorId, String title, String body, String section, boolean fallback) {
         requireOwner(actorId);
-        return broadcasts.preview(actorId, title, body);
+        return broadcasts.preview(actorId, title, body, FreebieBroadcasts.target(section, fallback));
     }
 
     /** The owner's confirmation button ({@code broadcast-<token>}). */
