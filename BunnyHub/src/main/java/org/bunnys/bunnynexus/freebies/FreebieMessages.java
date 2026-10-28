@@ -57,6 +57,12 @@ public final class FreebieMessages {
 
     /** Major PC launchers ping the owners; the other sections wait quietly to be reviewed in bulk. */
     public static MessageCreateData review(FreebieOffer offer, int channels, int guilds, Set<String> ownerIds) {
+        return review(offer, FreebieFacts.NONE, 0, channels, guilds, ownerIds, java.time.Instant.now());
+    }
+
+    /** {@code groupPending}: other games of the same Epic release still awaiting review (enables "Approve release"). */
+    static MessageCreateData review(FreebieOffer offer, FreebieFacts facts, int groupPending, int channels, int guilds,
+                                    Set<String> ownerIds, java.time.Instant now) {
         boolean priority = offer.store().section().priority();
         Set<String> pinged = priority ? ownerIds : Set.of();
         String pings = String.join(" ", pinged.stream().sorted().map(id -> "<@" + id + ">").toList());
@@ -65,8 +71,8 @@ public final class FreebieMessages {
         return new MessageCreateBuilder().setContent((pings.isEmpty() ? "" : pings + " ") + headline
                         + "\nPublic preview below. Review the launcher and audience before approving.")
                 .setAllowedMentions(List.of()).mentionUsers(pinged)
-                .setEmbeds(alertEmbed(offer, "preview"), reviewEmbed(offer, channels, guilds, "Waiting for review"))
-                .setComponents(reviewControls(offer))
+                .setEmbeds(FreebieAnnouncementCards.preview(offer, facts, now), reviewEmbed(offer, facts, channels, guilds, "Waiting for review", now))
+                .setComponents(reviewControls(offer, groupPending))
                 .build();
     }
 
@@ -75,12 +81,18 @@ public final class FreebieMessages {
     public static final String CATCH_UP_PREFIX = "freebie_catchup";
 
     /** Approve / Reject plus a launcher picker to correct the auto-detected store before approving. */
-    public static List<ActionRow> reviewControls(FreebieOffer offer) {
+    public static List<ActionRow> reviewControls(FreebieOffer offer) { return reviewControls(offer, 0); }
+
+    /** With other games of the same Epic release pending, one extra button approves them together (one first post). */
+    static List<ActionRow> reviewControls(FreebieOffer offer, int groupPending) {
         var menu = StringSelectMenu.create(STORE_MENU_PREFIX + ":" + offer.id()).setPlaceholder("Wrong launcher? Change it here");
         for (FreebieStore store : FreebieStore.values()) menu.addOption(store.label(), store.id(), Emoji.fromFormatted(FreebieCards.emoji(store)));
         menu.setDefaultValues(offer.store().id());
-        return List.of(ActionRow.of(Button.success(BUTTON_PREFIX + ":approve:" + offer.id(), "Approve"),
-                        Button.danger(BUTTON_PREFIX + ":reject:" + offer.id(), "Reject")),
+        List<Button> decisions = new ArrayList<>(List.of(Button.success(BUTTON_PREFIX + ":approve:" + offer.id(), "Approve"),
+                Button.danger(BUTTON_PREFIX + ":reject:" + offer.id(), "Reject")));
+        if (groupPending > 0) decisions.add(1, Button.primary(BUTTON_PREFIX + ":approvegroup:" + offer.id(),
+                "Approve release (" + (groupPending + 1) + " games)"));
+        return List.of(ActionRow.of(decisions),
                 ActionRow.of(menu.build()));
     }
 
@@ -115,6 +127,10 @@ public final class FreebieMessages {
         return List.of(ActionRow.of(menu.build()));
     }
     public static MessageEmbed reviewEmbed(FreebieOffer offer, int channels, int guilds, String status) {
+        return reviewEmbed(offer, FreebieFacts.NONE, channels, guilds, status, java.time.Instant.now());
+    }
+
+    static MessageEmbed reviewEmbed(FreebieOffer offer, FreebieFacts facts, int channels, int guilds, String status, java.time.Instant now) {
         var embed = Embeds.of("🔎", "Owner review")
                 .setDescription("**" + text(title(offer.title()), 200) + "**\n" + status)
                 .addField("LAUNCHER", offer.store().label() + "\n" + offer.store().section().emoji() + " "
@@ -123,6 +139,14 @@ public final class FreebieMessages {
                 .addField("SOURCE / REGION", offer.sourceLabel() + " · " + offer.region(), false)
                 .addField("SOURCE PLATFORMS", text(offer.platforms(), 200), false)
                 .setTimestamp(null);
+        var checks = new ArrayList<String>();
+        if (facts.official()) checks.add("Official Epic title, description, artwork and claim window.");
+        facts.reportedPlatforms().filter(p -> !p.equals(offer.platforms())).ifPresent(p -> checks.add("GamerPower also reported: "
+                + text(p, 120) + " (not verified)."));
+        var mobile = facts.variants().stream().filter(v -> v.liveAt(now)).map(FreebieFacts.Variant::label).toList();
+        if (!mobile.isEmpty()) checks.add("Separate mobile offers (EGData): " + String.join(", ", mobile) + ". Approving includes their links.");
+        if (facts.official() && facts.regions().isEmpty()) checks.add("Regional restrictions not verified.");
+        if (!checks.isEmpty()) embed.addField("CHECKS", text(String.join("\n", checks), 1000), false);
         return embed.setFooter("Freebie review • ref " + nonce("review|" + offer.id())).build();
     }
 

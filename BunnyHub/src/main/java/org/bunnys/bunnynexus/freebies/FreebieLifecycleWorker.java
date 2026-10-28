@@ -14,6 +14,8 @@ import org.bunnys.utils.FailureDiagnostics;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -85,6 +87,7 @@ final class FreebieLifecycleWorker {
         if (job.attempts() > FreebieLifecycle.MAX_ATTEMPTS) { jobs().failed(job, "attempts exhausted", now); return false; }
         if (job.recipientId() != null) return startPrivateEdit(client, job, release);
         FreebieOffer offer = repository.offer(job.offerId()).orElse(null);
+        if (job.kind() == Kind.REMIND && job.groupKey() != null) offer = groupDue(job, offer, now).stream().findFirst().orElse(offer);
         if (job.kind() == Kind.REMIND) {
             var cancel = reminderCancel(job, offer, now);
             if (cancel.isPresent()) { jobs().cancelled(job, cancel.get(), now); return false; }
@@ -172,15 +175,32 @@ final class FreebieLifecycleWorker {
         Instant now = clock.instant();
         // Re-check right before posting: the offer may have ended or the setting changed since the claim.
         var offer = repository.offer(job.offerId()).orElse(null);
-        var cancel = reminderCancel(job, offer, now);
+        List<FreebieOffer> due = job.groupKey() == null ? (offer == null ? List.of() : List.of(offer)) : groupDue(job, offer, now);
+        if (job.groupKey() != null) offer = due.stream().findFirst().orElse(offer);
+        var cancel = due.isEmpty() ? Optional.of(Cancel.OFFER_ENDED) : reminderCancel(job, offer, now);
         if (cancel.isPresent()) return CompletableFuture.failedFuture(new Cancelled(cancel.get()));
         if (closed || !jobs().submitting(job, now)) return CompletableFuture.failedFuture(new LeaseLost());
         Optional<String> role = subscriptions.find(job.guildId(), job.channelId(), offer.store())
                 .flatMap(FreebieSubscriptions.Subscription::roleId).filter(id -> guild.getRoleById(id) != null);
-        return channel.sendMessage(FreebieLifecycleMessages.reminder(offer, job.channelId(), role, now))
+        return channel.sendMessage(FreebieLifecycleMessages.reminder(due, job.offerId(), job.channelId(), role, now))
                 .setMessageReference(job.messageId()).failOnInvalidReply(false)
                 .setNonce(FreebieLifecycleMessages.reminderNonce(job.offerId(), job.channelId()))
                 .timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit().thenApply(Message::getId);
+    }
+
+    /**
+     * The games of a grouped reminder: every live member of the announcement's pages in this channel that ends at the
+     * same moment as the job's offer.
+     */
+    private List<FreebieOffer> groupDue(Job job, FreebieOffer anchor, Instant now) {
+        if (anchor == null || anchor.realEnd().isEmpty()) return List.of();
+        Instant end = anchor.realEnd().get();
+        List<FreebieOffer> due = new ArrayList<>();
+        for (var page : repository.announcements().pages(job.groupKey(), job.channelId()))
+            for (String id : page.getList("members", String.class, List.of()))
+                repository.offer(id).filter(o -> FreebieLifecycle.live(o, now) && o.realEnd().equals(Optional.of(end))
+                        && due.stream().noneMatch(d -> d.id().equals(o.id()))).ifPresent(due::add);
+        return due;
     }
 
     /** Why a reminder must not post now, if any: offer no longer live, setting off, or too close to the end. */

@@ -20,7 +20,14 @@ final class FreebieSourceDecisions {
         if (parent == null) return new FreebieDeliveryAdmin.View("No unresolved source matches.", List.of());
         Document candidates = parent.get("sourceCandidates", Document.class);
         String token = candidates.keySet().stream().sorted().findFirst().orElseThrow();
-        Document candidate = candidates.get(token, Document.class);
+        long open = store.openQuestions();
+        var view = view(parent, token);
+        return open > 1 ? new FreebieDeliveryAdmin.View(view.text() + "\n" + (open - 1) + " more waiting; run this again after deciding.", view.rows()) : view;
+    }
+
+    /** One held report with its three decisions; also posted once to the review channel when the report is held. */
+    static FreebieDeliveryAdmin.View view(Document parent, String token) {
+        Document candidate = parent.get("sourceCandidates", Document.class).get(token, Document.class);
         String prefix = FreebieMessages.BUTTON_PREFIX + ":source-";
         String suffix = "-" + token + ":" + parent.getString("_id");
         String text = "**Possible duplicate — owner decision required**\nExisting offer: `" + parent.getString("_id")
@@ -30,7 +37,8 @@ final class FreebieSourceDecisions {
                 + candidate.getString("pageUrl") + ")"
                 + (parent.getString("pageUrl") == null ? "\nHistorical metadata was purged; identity cannot be checked from the old card."
                     : "\n[Existing source page](" + parent.getString("pageUrl") + ")")
-                + "\nCompare the exact product, edition and promotion window. A matching title is insufficient."
+                + "\nThis report was **held**, not merged: it opened no review and sends nothing until you decide."
+                + "\nCompare the exact product, edition, platform and promotion window. A matching title is insufficient."
                 + "\nSame giveaway adds source evidence only after its next live check. Separate queues another mandatory review."
                 + " Ignore permanently suppresses this source identity. None of these actions approves a game or enables checkout.";
         return new FreebieDeliveryAdmin.View(text, List.of(ActionRow.of(

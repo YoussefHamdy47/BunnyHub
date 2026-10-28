@@ -118,12 +118,37 @@ final class FreebieLifecycleMessages {
      * everyone/here or users, and the reply does not ping the replied-to author.
      */
     static MessageCreateData reminder(FreebieOffer offer, String channelId, Optional<String> roleId, Instant now) {
+        return reminder(List.of(offer), offer.id(), channelId, roleId, now);
+    }
+
+    /**
+     * One reminder for several games ending at the same time (an announcement group). {@code referenceOfferId} keeps
+     * the history reference stable across retries.
+     */
+    static MessageCreateData reminder(List<FreebieOffer> offers, String referenceOfferId, String channelId, Optional<String> roleId, Instant now) {
+        if (offers.size() > 1) {
+            Instant end = offers.getFirst().realEnd().orElseThrow();
+            long hours = FreebieLifecycle.hoursLeft(end, now);
+            var lines = new StringBuilder();
+            for (var o : offers) lines.append("**[").append(text(title(o.title()), 150)).append("](").append(o.claimUrl().toASCIIString()).append(")**\n");
+            var embed = Embeds.of("⏰", "Ending soon")
+                    .setDescription(lines + "Ends in about " + hours + (hours == 1 ? " hour" : " hours") + " (<t:" + end.getEpochSecond() + ":f>).")
+                    .setTimestamp(null).setFooter(reminderReference(referenceOfferId, channelId)).build();
+            List<Button> buttons = new ArrayList<>();
+            for (var o : offers.subList(0, Math.min(5, offers.size())))
+                buttons.add(Button.link(o.claimUrl().toString(), FreebieMessages.label("Claim " + title(o.title()))));
+            var builder = new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(buttons))
+                    .setAllowedMentions(List.of()).mentionRepliedUser(false);
+            roleId.ifPresent(role -> builder.setContent("<@&" + role + ">").mentionRoles(role));
+            return builder.build();
+        }
+        FreebieOffer offer = offers.getFirst();
         Instant end = offer.realEnd().orElseThrow();
         long hours = FreebieLifecycle.hoursLeft(end, now);
         var embed = Embeds.of("⏰", "Ending soon")
                 .setDescription("**[" + text(title(offer.title()), 200) + "](" + offer.claimUrl().toASCIIString() + ")**\n"
                         + "Ends in about " + hours + (hours == 1 ? " hour" : " hours") + " (<t:" + end.getEpochSecond() + ":f>).")
-                .setTimestamp(null).setFooter(reminderReference(offer.id(), channelId)).build();
+                .setTimestamp(null).setFooter(reminderReference(referenceOfferId, channelId)).build();
         var builder = new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(FreebieCards.claimButton(offer)))
                 .setAllowedMentions(List.of()).mentionRepliedUser(false);
         roleId.ifPresent(role -> builder.setContent("<@&" + role + ">").mentionRoles(role));

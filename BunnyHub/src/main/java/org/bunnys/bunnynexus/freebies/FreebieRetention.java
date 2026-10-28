@@ -34,12 +34,18 @@ final class FreebieRetention {
     private final MongoCollection<Document> offers, deliveries, notices, control;
     private final FreebieLifecycleStore lifecycle;
     private final FreebieDmJobs dmJobs;
+    private final FreebieAnnouncementStore announcements;
+    private final FreebiePublicationStore publications;
+    private final FreebieBroadcastStore broadcasts;
     /** Final edit/reminder jobs removed per run. */
     static final int JOBS_PER_RUN = 500;
 
     FreebieRetention(MongoDatabase db) {
         lifecycle = new FreebieLifecycleStore(db);
         dmJobs = new FreebieDmJobs(db);
+        announcements = new FreebieAnnouncementStore(db);
+        publications = new FreebiePublicationStore(db);
+        broadcasts = new FreebieBroadcastStore(db);
         offers = db.getCollection(FreebieRepository.OFFERS);
         deliveries = db.getCollection(FreebieRepository.DELIVERIES);
         notices = db.getCollection(FreebieRepository.NOTICES);
@@ -69,7 +75,9 @@ final class FreebieRetention {
         Instant cutoff = now.minus(Duration.ofDays(retentionDays));
         long d = purgeDeliveries(now, cutoff, limits), o = purgeOffers(now, cutoff, limits), n = purgeNotices(now, cutoff, limits);
         // Finished card edits and reminders follow the same window; open ones are never removed.
-        long j = lifecycle.purge(cutoff, JOBS_PER_RUN) + dmJobs.purge(now, cutoff, JOBS_PER_RUN);
+        long j = lifecycle.purge(cutoff, JOBS_PER_RUN) + dmJobs.purge(now, cutoff, JOBS_PER_RUN)
+                + publications.purge(cutoff, JOBS_PER_RUN) + announcements.purge(cutoff, JOBS_PER_RUN)
+                + broadcasts.purge(cutoff, JOBS_PER_RUN);
         var result = new Result(d, o, n, d >= limits.deliveries() || o >= limits.offers() || n >= limits.notices() || j >= JOBS_PER_RUN);
         control.updateOne(eq("_id", CONTROL_ID), combine(set("lastPurgeAt", Date.from(now)), set("lastPurgeDeliveries", d),
                 set("lastPurgeOffers", o), set("lastPurgeNotices", n), set("lastPurgeJobs", j), set("retentionDays", retentionDays),
@@ -93,7 +101,7 @@ final class FreebieRetention {
         while (deleted < limits.deliveries() && scanned < 4L * limits.deliveries()) {
             int size = (int) Math.min(limits.batch(), limits.deliveries() - deleted);
             var batch = deliveries.find(and(oldDelivery(now, cutoff), nin("offerId", held), nin("_id", busy)))
-                    .projection(Projections.include("_id", "offerId")).sort(Sorts.ascending("finishedAt", "_id"))
+                    .projection(Projections.include("_id", "offerId", "announcementKey")).sort(Sorts.ascending("finishedAt", "_id"))
                     .limit(size).into(new ArrayList<>());
             if (batch.isEmpty()) break;
             scanned += batch.size();
@@ -102,6 +110,8 @@ final class FreebieRetention {
                 if (!settled.computeIfAbsent(offerId, id -> offerSettled(id, now))) { held.add(offerId); continue; }
                 // A card edit or reminder still queued for this alert needs its message ID.
                 if (lifecycle.openFor(row.getString("_id"))) { busy.add(row.getString("_id")); continue; }
+                // A page still being submitted, refreshed or published needs its member rows.
+                if (row.getString("announcementKey") != null && announcements.openWorkFor(offerId)) { busy.add(row.getString("_id")); continue; }
                 deleted += deliveries.deleteOne(and(eq("_id", row.get("_id")), oldDelivery(now, cutoff))).getDeletedCount();
             }
         }
@@ -146,6 +156,7 @@ final class FreebieRetention {
             if (deliveries.countDocuments(eq("offerId", id)) > 0) continue;
             if (dmJobs.openFor(id)) continue; // A personal DM still queued needs the offer's card.
             if (lifecycle.openForOffer(id)) continue; // Includes private cards whose edits are still queued.
+            if (announcements.openWorkFor(id)) continue; // A posted page still shows this game.
             if (notices.countDocuments(and(eq("noticeOfferId", id), eq("noticeState", "PENDING"))) > 0) continue;
             var tombstone = new Document("_id", id).append("schemaVersion", 1).append("state", PURGED)
                     .append("source", offer.getString("source")).append("sourceId", offer.getString("sourceId"))

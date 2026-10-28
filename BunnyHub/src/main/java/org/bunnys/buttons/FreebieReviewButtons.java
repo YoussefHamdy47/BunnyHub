@@ -29,6 +29,25 @@ public class FreebieReviewButtons extends BunnyButton {
         args = event.getComponentId().split(":", 3);
         if (args.length != 3) { deny(event, "This control is malformed."); return; }
         String action = args[1], offerId = args[2], actor = event.getUser().getId();
+        if (action.startsWith("broadcast-")) {
+            event.deferEdit().complete();
+            String result = system.confirmAnnouncement(actor, offerId, action);
+            var edit = event.getHook().editOriginal(result).setEmbeds().setAllowedMentions(List.of());
+            (result.startsWith("Sending") ? edit.setComponents(FreebieSystem.announcementStopControls(offerId)) : edit.setComponents()).queue();
+            return;
+        }
+        if (action.equals("broadcaststop")) {
+            event.deferEdit().complete();
+            String result = system.stopAnnouncement(actor, offerId);
+            event.getHook().editOriginal(result).setEmbeds().setComponents().setAllowedMentions(List.of()).queue();
+            return;
+        }
+        if (action.startsWith("confirmrelease-")) {
+            event.deferEdit().complete();
+            String result = system.confirmRelease(actor, offerId, action);
+            event.getHook().editOriginal(result).setEmbeds().setComponents().setAllowedMentions(List.of()).queue();
+            return;
+        }
         if (action.startsWith("source-")) {
             event.deferReply(true).complete();
             followUp(event, system.resolveSource(actor, offerId, action));
@@ -44,6 +63,13 @@ public class FreebieReviewButtons extends BunnyButton {
             case "approve" -> {
                 event.deferReply(true).complete();
                 switch (system.requestApproval(actor, offerId)) {
+                    case FreebieSystem.Prompt prompt -> event.getHook().sendMessage(prompt.message()).setEphemeral(true).queue();
+                    case FreebieSystem.Text text -> followUp(event, "> " + AppDesign.Emojis.ERROR + " " + text.message());
+                }
+            }
+            case "approvegroup" -> {
+                event.deferReply(true).complete();
+                switch (system.requestGroupApproval(actor, offerId)) {
                     case FreebieSystem.Prompt prompt -> event.getHook().sendMessage(prompt.message()).setEphemeral(true).queue();
                     case FreebieSystem.Text text -> followUp(event, "> " + AppDesign.Emojis.ERROR + " " + text.message());
                 }

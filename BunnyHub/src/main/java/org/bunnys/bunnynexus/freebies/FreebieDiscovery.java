@@ -29,6 +29,9 @@ final class FreebieDiscovery {
     private final BiConsumer<FreebieOffer, String> ended;
     private final Instant startedAt;
     private ScheduledExecutorService executor;
+    private java.util.function.UnaryOperator<FreebieFeed.Candidate> links = c -> c;
+    /** New reports resolved per check; the rest wait for the next check. */
+    static final int MAX_RESOLVED_PER_POLL = 5;
 
     // Written on the discovery thread only; the volatile ones are also read by /freebie-admin status.
     private int failures;
@@ -43,6 +46,9 @@ final class FreebieDiscovery {
         this.reviews = reviews; this.ended = ended;
         startedAt = clock.instant();
     }
+
+    /** Optional storefront resolution for new reports (see {@link GamerPowerLinks}). */
+    FreebieDiscovery withLinkResolver(java.util.function.UnaryOperator<FreebieFeed.Candidate> resolver) { links = resolver; return this; }
 
     void start(ScheduledExecutorService discoveryThread, long initialDelaySeconds) {
         executor = discoveryThread;
@@ -94,7 +100,13 @@ final class FreebieDiscovery {
         }
         int fresh = 0;
         Set<String> present = new HashSet<>();
-        for (var candidate : fetch.candidates()) {
+        int resolved = 0;
+        for (var reported : fetch.candidates()) {
+            var candidate = reported;
+            if (resolved < MAX_RESOLVED_PER_POLL && !repository.knows(reported.identity())) {
+                candidate = links.apply(reported);
+                if (candidate != reported) resolved++;
+            }
             if (candidate.provider() != feed.provider()) throw new IllegalArgumentException("Mismatched feed provider");
             present.add(candidate.identity());
             present.add(FreebieSourceStore.canonicalId(candidate));
