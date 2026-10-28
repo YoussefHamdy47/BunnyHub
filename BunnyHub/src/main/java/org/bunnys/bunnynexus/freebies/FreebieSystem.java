@@ -342,7 +342,13 @@ public final class FreebieSystem {
     /** Legacy single confirmation; a game of an Epic release must be confirmed through its release snapshot instead. */
     public String confirmApproval(String actorId, String offerId) {
         requireOwner(actorId);
-        return approvals.isRelease(offerId) ? approvals.confirmSingle(actorId, offerId) : decisions.confirmApproval(actorId, offerId);
+        return confirmApproval(actorId, offerId, false);
+    }
+
+    /** {@code quiet}: the owner pressed "Send without ping". */
+    public String confirmApproval(String actorId, String offerId, boolean quiet) {
+        requireOwner(actorId);
+        return approvals.isRelease(offerId) ? approvals.confirmSingle(actorId, offerId) : decisions.confirmApproval(actorId, offerId, quiet);
     }
 
     public String reject(String actorId, String offerId) { return decisions.reject(actorId, offerId); }
@@ -357,22 +363,31 @@ public final class FreebieSystem {
     public String confirmRelease(String actorId, String offerId, String action) {
         requireOwner(actorId);
         String[] parts = action.split("-", 3);
-        if (parts.length != 3 || !parts[1].matches("[rs]") || !parts[2].matches("[0-9a-f]{24}")) return "This control is malformed.";
-        return approvals.confirmRelease(actorId, offerId, parts[1].equals("r"), parts[2]);
+        if (parts.length != 3 || !parts[1].matches("[rsRS]") || !parts[2].matches("[0-9a-f]{24}")) return "This control is malformed.";
+        // Upper case: the same confirmation, without a ping.
+        return approvals.confirmRelease(actorId, offerId, parts[1].equalsIgnoreCase("r"), parts[2], Character.isUpperCase(parts[1].charAt(0)));
     }
 
     /** /freebie-admin announce: saves a draft and shows exactly what every subscribed server would get. */
-    public FreebieBroadcasts.Reply announce(String actorId, String title, String body) {
+    public FreebieBroadcasts.Reply announce(String actorId, String title, String body) { return announce(actorId, title, body, null, false); }
+
+    /**
+     * {@code section}: a section code ({@link FreebieSection#code()}) to reach only servers with that section's
+     * channel, or null for every server's main channel. {@code fallback}: servers without that section get it in
+     * their main channel instead of being skipped.
+     */
+    public FreebieBroadcasts.Reply announce(String actorId, String title, String body, String section, boolean fallback) {
         requireOwner(actorId);
-        return broadcasts.preview(actorId, title, body);
+        return broadcasts.preview(actorId, title, body, FreebieBroadcasts.target(section, fallback));
     }
 
     /** The owner's confirmation button ({@code broadcast-<token>}). */
     public String confirmAnnouncement(String actorId, String id, String action) {
         requireOwner(actorId);
-        String token = action.substring(FreebieBroadcasts.SEND.length());
+        boolean quiet = action.startsWith(FreebieBroadcasts.SEND_QUIET);
+        String token = action.substring((quiet ? FreebieBroadcasts.SEND_QUIET : FreebieBroadcasts.SEND).length());
         if (!token.matches("[0-9a-f]{24}")) return "This control is malformed.";
-        return broadcasts.confirm(actorId, id, token);
+        return broadcasts.confirm(actorId, id, token, !quiet);
     }
 
     public String stopAnnouncement(String actorId, String id) {

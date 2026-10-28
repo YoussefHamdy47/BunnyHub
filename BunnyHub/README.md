@@ -80,14 +80,19 @@ forcing a source check, resolving duplicate offers between sources, delivery his
 Only the IDs in `FREEBIE_OWNER_IDS` can use it.
 
 `/freebie-admin announce title message` sends an owner message to every server with free-game alerts: one message per
-server, in its alert channel (the major PC one when set), never pinging anyone. Run it in a review channel; it first
-shows a private preview with the server count, and nothing is sent until you press **Send** within 15 minutes.
+server, in its alert channel (the major PC one when set). Run it in a review channel; it first shows a private preview
+with the server count, and nothing is sent until you press **Send with ping** (each server's free-game role) or
+**Send without ping** within 15 minutes. @everyone and @here are never pinged. Add `section:` (for example Indie & other PC) to reach only servers with
+that section's channel; `if-missing: Use its main channel` sends the rest to their main channel instead of skipping them.
 **Stop this announcement** cancels the servers not reached yet. Type `\n` in the message for a new line.
 
 Possible duplicates between GamerPower and Epic are held, not posted twice: the review channel gets one
 **Possible duplicate** message with **Same giveaway / Separate giveaway / Ignore** buttons. Games of one Epic release
 are posted together, one message and one ping per channel; a review shows **Approve release** when several are
 waiting.
+
+Every approval confirmation also has **Send without ping**: the game posts as usual, but without the role mention
+(its catch-up posts and ending-soon reminder stay quiet too).
 
 `/mail-bridge status | check | diagnose | dry-run | test`: health and testing for the
 [mail bridge](#mail-bridge). Nothing here changes your mailbox, and only `test` posts anything.

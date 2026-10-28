@@ -180,7 +180,8 @@ final class FreebieLifecycleWorker {
         var cancel = due.isEmpty() ? Optional.of(Cancel.OFFER_ENDED) : reminderCancel(job, offer, now);
         if (cancel.isPresent()) return CompletableFuture.failedFuture(new Cancelled(cancel.get()));
         if (closed || !jobs().submitting(job, now)) return CompletableFuture.failedFuture(new LeaseLost());
-        Optional<String> role = subscriptions.find(job.guildId(), job.channelId(), offer.store())
+        // A game sent without a ping also gets its ending-soon reminder without one.
+        Optional<String> role = repository.quiet(offer.id()) ? Optional.empty() : subscriptions.find(job.guildId(), job.channelId(), offer.store())
                 .flatMap(FreebieSubscriptions.Subscription::roleId).filter(id -> guild.getRoleById(id) != null);
         return channel.sendMessage(FreebieLifecycleMessages.reminder(due, job.offerId(), job.channelId(), role, now))
                 .setMessageReference(job.messageId()).failOnInvalidReply(false)

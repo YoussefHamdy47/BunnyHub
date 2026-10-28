@@ -102,6 +102,11 @@ final class FreebieApprovals {
 
     /** Commits the reviewed snapshot if nothing changed, then reconciles it. */
     String confirmRelease(String actor, String offerId, boolean wholeRelease, String token) {
+        return confirmRelease(actor, offerId, wholeRelease, token, false);
+    }
+
+    /** {@code quiet}: "Send without ping" for every game of the snapshot. */
+    String confirmRelease(String actor, String offerId, boolean wholeRelease, String token, boolean quiet) {
         Instant now = clock.instant();
         var offer = repository.offer(offerId).orElse(null);
         if (offer == null) return "That offer no longer exists.";
@@ -109,7 +114,7 @@ final class FreebieApprovals {
         if (release.isEmpty()) return "This approval is no longer valid. Press Approve again.";
         // Recomputed with the preview's rule; a handled or ended game yields a different list, so the commit is refused.
         var current = offer.state() == FreebieOffer.State.PENDING && !offer.ended(now) ? members(offer, wholeRelease, now) : List.<FreebieOffer>of();
-        var commit = repository.releases().commit(release.get(), token, actor, current, now);
+        var commit = repository.releases().commit(release.get(), token, actor, current, now, quiet);
         return switch (commit.outcome()) {
             case STALE -> "The release changed since you opened this (a game was added, changed, handled or ended). Nothing was approved; open it again.";
             case EXPIRED -> "This confirmation expired. Nothing was approved; open it again.";
@@ -141,7 +146,7 @@ final class FreebieApprovals {
             repository.routes().route(offer.id(), true, Optional.of(snapshot.key()));
             if (offer.state() == FreebieOffer.State.PENDING) {
                 var changed = offer.ended(now) ? Optional.<FreebieOffer>empty()
-                        : repository.approveReviewed(offer.id(), member.revision(), snapshot.actor(), snapshot.at());
+                        : repository.approveReviewed(offer.id(), member.revision(), snapshot.actor(), snapshot.at(), snapshot.quiet());
                 if (changed.isEmpty()) {
                     repository.releases().withdraw(snapshot.key(), offer.id(), now);
                     withdrawn++;
@@ -160,7 +165,8 @@ final class FreebieApprovals {
             var refreshed = repository.offer(offer.id()).orElse(offer);
             var counts = repository.counts(offer.id());
             channels = Math.max(channels, counts.open());
-            reviews.edit(refreshed, "Approved by <@" + snapshot.actor() + "> with its release — sending to " + counts.open() + " channel(s).",
+            reviews.edit(refreshed, "Approved by <@" + snapshot.actor() + "> with its release" + (snapshot.quiet() ? " without a ping" : "")
+                            + " — sending to " + counts.open() + " channel(s).",
                     FreebieMessages.stopControls(refreshed));
         }
         return new Reconciled(approved, withdrawn, channels);

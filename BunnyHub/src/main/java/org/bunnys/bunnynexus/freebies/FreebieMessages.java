@@ -147,9 +147,13 @@ public final class FreebieMessages {
                                 + "\n\nMessages cannot be recalled once sent.")
                         .addField("CHANNELS", String.valueOf(channels), true)
                         .addField("SERVERS", String.valueOf(guilds), true).setTimestamp(null).build())
-                .setComponents(ActionRow.of(Button.success(BUTTON_PREFIX + ":confirm:" + offer.id(), "Yes, send it")))
+                .setComponents(ActionRow.of(Button.success(BUTTON_PREFIX + ":confirm:" + offer.id(), "Yes, send it"),
+                        Button.secondary(BUTTON_PREFIX + ":" + CONFIRM_QUIET + ":" + offer.id(), "Send without ping")))
                 .setAllowedMentions(List.of()).build();
     }
+
+    /** The confirmation that sends without mentioning the servers' roles. */
+    public static final String CONFIRM_QUIET = "confirmquiet";
 
     public static List<ActionRow> stopControls(FreebieOffer offer) {
         return List.of(ActionRow.of(Button.danger(BUTTON_PREFIX + ":stop:" + offer.id(), "Stop sending"), clearButton()));

@@ -45,7 +45,7 @@ final class FreebieReleases {
         static Member of(FreebieOffer offer) { return new Member(offer.id(), offer.revision()); }
         static Member read(Document d) { return new Member(d.getString("offerId"), ((Number) d.get("revision")).longValue()); }
     }
-    record Snapshot(String key, long version, String actor, Instant at, List<Member> members) {}
+    record Snapshot(String key, long version, String actor, Instant at, List<Member> members, boolean quiet) {}
     enum Outcome { COMMITTED, STALE, EXPIRED, NOT_YOURS, RACED }
     record Commit(Outcome outcome, Optional<Snapshot> snapshot) {}
 
@@ -70,6 +70,11 @@ final class FreebieReleases {
      * as the preview; any added, removed, changed (revision), handled or ended game makes it {@link Outcome#STALE}.
      */
     Commit commit(String key, String token, String actor, List<FreebieOffer> current, Instant now) {
+        return commit(key, token, actor, current, now, false);
+    }
+
+    /** {@code quiet}: approved without a ping; kept in the immutable snapshot so recovery applies the same choice. */
+    Commit commit(String key, String token, String actor, List<FreebieOffer> current, Instant now, boolean quiet) {
         var doc = releases.find(eq("_id", key)).first();
         Document preview = doc == null ? null : doc.get("preview", Document.class);
         if (preview == null || !token.equals(preview.getString("token"))) return new Commit(Outcome.RACED, Optional.empty());
@@ -81,14 +86,15 @@ final class FreebieReleases {
             return new Commit(Outcome.STALE, Optional.empty());
         long version = ((Number) doc.get("version")).longValue() + 1;
         var snapshot = new Document("version", version).append("actor", actor).append("at", Date.from(now))
-                .append("members", reviewed.stream().map(Member::toDocument).toList()).append("reconciled", false);
+                .append("members", reviewed.stream().map(Member::toDocument).toList()).append("reconciled", false)
+                .append("quiet", quiet);
         var updated = releases.updateOne(and(eq("_id", key), eq("version", preview.get("version")), eq("preview.token", token),
                         eq("preview.actor", actor), gt("preview.until", Date.from(now)),
                         new Document("$expr", new Document("$lt", List.of(new Document("$size", "$snapshots"), MAX_SNAPSHOTS)))),
                 combine(push("snapshots", snapshot), set("version", version), unset("preview"), set("pendingReconcile", true),
                         addEachToSet("approvedMembers", reviewed.stream().map(Member::offerId).toList())));
         if (updated.getModifiedCount() != 1) return new Commit(Outcome.RACED, Optional.empty());
-        return new Commit(Outcome.COMMITTED, Optional.of(new Snapshot(key, version, actor, now, reviewed)));
+        return new Commit(Outcome.COMMITTED, Optional.of(new Snapshot(key, version, actor, now, reviewed, quiet)));
     }
 
     /** Whether a committed snapshot of this release covers the offer: the only authority for release-keyed sends. */
@@ -103,7 +109,8 @@ final class FreebieReleases {
             for (Document s : d.getList("snapshots", Document.class, List.of()))
                 if (!s.getBoolean("reconciled", false))
                     result.add(new Snapshot(d.getString("_id"), ((Number) s.get("version")).longValue(), s.getString("actor"),
-                            s.getDate("at").toInstant(), s.getList("members", Document.class).stream().map(Member::read).toList()));
+                            s.getDate("at").toInstant(), s.getList("members", Document.class).stream().map(Member::read).toList(),
+                            s.getBoolean("quiet", false)));
         return result;
     }
 

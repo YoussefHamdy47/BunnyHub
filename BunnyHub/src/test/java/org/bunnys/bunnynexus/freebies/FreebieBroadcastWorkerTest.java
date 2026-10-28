@@ -108,6 +108,33 @@ class FreebieBroadcastWorkerTest {
         verify(channel, never()).sendMessage(any(MessageCreateData.class));
     }
 
+    @Test void sendWithPingMentionsOnlyTheServersSavedRole() {
+        var role = "300000000000000000";
+        when(store.get(ID)).thenReturn(Optional.of(new FreebieBroadcastStore.Broadcast(ID, "T", "B @everyone", "SENDING", "owner", true)));
+        when(guild.getRoleById(role)).thenReturn(mock(Role.class));
+        when(send.submit()).thenReturn(new CompletableFuture<>());
+        run(new FreebieBroadcastStore.Job(job.id(), ID, GUILD, CHANNEL, 1, false, "t", Optional.of(role)));
+        var captor = ArgumentCaptor.forClass(MessageCreateData.class);
+        verify(channel).sendMessage(captor.capture());
+        assertEquals("<@&" + role + ">", captor.getValue().getContent());
+        assertEquals(Set.of(role), captor.getValue().getMentionedRoles());
+        assertTrue(captor.getValue().getAllowedMentions().isEmpty(), "never @everyone, @here or users");
+    }
+
+    @Test void sendWithoutPingOrADeletedRoleMentionsNobody() {
+        var role = "300000000000000000";
+        when(send.submit()).thenReturn(new CompletableFuture<>());
+        run(new FreebieBroadcastStore.Job(job.id(), ID, GUILD, CHANNEL, 1, false, "t", Optional.of(role))); // ping=false
+        when(store.get(ID)).thenReturn(Optional.of(new FreebieBroadcastStore.Broadcast(ID, "T", "B", "SENDING", "owner", true)));
+        run(new FreebieBroadcastStore.Job(job.id(), ID, GUILD, CHANNEL, 1, false, "t", Optional.of(role))); // role deleted
+        var captor = ArgumentCaptor.forClass(MessageCreateData.class);
+        verify(channel, times(2)).sendMessage(captor.capture());
+        for (var message : captor.getAllValues()) {
+            assertEquals("", message.getContent());
+            assertTrue(message.getMentionedRoles().isEmpty());
+        }
+    }
+
     @Test void typedLineBreaksBecomeRealOnes() {
         assertEquals("a\nb", FreebieBroadcasts.body(" a\\nb "));
     }
