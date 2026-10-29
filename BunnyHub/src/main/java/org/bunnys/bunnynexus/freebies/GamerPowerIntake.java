@@ -9,7 +9,11 @@ import java.util.*;
 
 /** Offline shadow intake only. No Offer, canonical store mapping, database write or network request. */
 public final class GamerPowerIntake {
-    public static final URI ENDPOINT = URI.create("https://www.gamerpower.com/api/giveaways?type=game");
+    /**
+     * The unfiltered list, with games picked out here. Every filtered URL is cached separately at GamerPower's CDN, and the
+     * rarely requested {@code ?type=game} copy was served 24 minutes stale on 2026-10-29 while this one was current.
+     */
+    public static final URI ENDPOINT = URI.create("https://www.gamerpower.com/api/giveaways");
     public static final URI ATTRIBUTION = URI.create("https://www.gamerpower.com/");
     public static final int MAX_BYTES = 2 * 1024 * 1024, MAX_ITEMS = 500;
     private static final Set<String> FIELDS = Set.of("id", "title", "description", "instructions", "platforms",
@@ -63,6 +67,10 @@ public final class GamerPowerIntake {
                 String sourceId = fields.get("id");
                 // Identity collisions remain ambiguous even when one row fails other validation.
                 if (sourceId != null && sourceId.matches("[1-9][0-9]{0,18}") && !ids.add(sourceId)) return failed(Problem.DUPLICATE_ID);
+                // DLC, loot, beta and other giveaway kinds are listed too; they are skipped, not invalid, so they never
+                // make a feed partial. A missing or malformed type is still a rejected row.
+                String type = fields.get("type");
+                if (type != null && !type.isBlank() && type.length() <= 32 && !type.equals("Game")) continue;
                 try {
                     var candidate = candidate(fields, fetchedAt);
                     candidates.add(candidate);

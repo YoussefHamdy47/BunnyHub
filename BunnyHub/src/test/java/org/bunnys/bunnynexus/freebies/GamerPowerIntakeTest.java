@@ -115,10 +115,27 @@ class GamerPowerIntakeTest {
             assertEquals(State.PARTIAL, result.state()); assertTrue(result.candidates().isEmpty());
         }
     }
-    @Test void invalidDatesInactiveOrNonGameRowsArePartialRatherThanWithdrawals() throws Exception {
+    @Test void invalidDatesOrInactiveRowsArePartialRatherThanWithdrawals() throws Exception {
         for (String text : new String[]{fixture().replace("2026-09-20", "2026-02-30"),
                 fixture().replace("N/A", "2026-09-19 10:00:00"), fixture().replace("Active", "Expired"),
-                fixture().replace("\"Game\"", "\"Loot\"")}) assertEquals(State.PARTIAL, decode(text).state());
+                fixture().replace("\"Game\"", "\"\""), fixture().replace("\"type\"", "\"kind\"")})
+            assertEquals(State.PARTIAL, decode(text).state(), text);
         assertTrue(decode(fixture().replace("N/A", "2026-09-25 10:00:00")).candidates().getFirst().endsLocal().isPresent());
+    }
+
+    @Test void otherGiveawayKindsAreSkippedWithoutMakingTheFeedPartial() throws Exception {
+        var loot = decode(fixture().replace("\"Game\"", "\"Loot\""));
+        assertEquals(State.EMPTY, loot.state()); assertEquals(0, loot.rejectedItems());
+    }
+
+    /** The unfiltered list (all kinds) captured on 2026-10-29, when it already had Hexologic and ?type=game did not. */
+    @Test void capturedUnfilteredListKeepsOnlyGamesAndStaysComplete() throws Exception {
+        try (var input = getClass().getResourceAsStream("/gamerpower/all-giveaways-2026-10-29.json")) {
+            var batch = new GamerPowerIntake().decode(200, input.readAllBytes(), Instant.parse("2026-10-29T17:17:00Z"));
+            assertEquals(State.CANDIDATES, batch.state()); assertEquals(0, batch.rejectedItems());
+            assertEquals(36, batch.candidates().size());
+            assertTrue(batch.candidates().stream().anyMatch(c -> c.sourceItemId().equals("3834") && c.title().startsWith("Hexologic")));
+        }
+        assertEquals("/api/giveaways", ENDPOINT.getPath()); assertNull(ENDPOINT.getQuery());
     }
 }
