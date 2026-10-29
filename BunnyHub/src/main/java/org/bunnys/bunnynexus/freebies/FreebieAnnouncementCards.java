@@ -134,7 +134,8 @@ final class FreebieAnnouncementCards {
 
     /**
      * Epic checkout for the live Epic games with exact catalog identities: "Instant Checkout" for one game, otherwise
-     * "Claim all PC games" (or "eligible" when a game on the page was left out). Never built when the URL would not fit.
+     * "Claim all PC games" (or "eligible" when a game on the page was left out). On a page of several games a checkout
+     * for just one of them names that game, so it is clear what it buys. Never built when the URL would not fit.
      */
     static Optional<Button> combined(List<Member> members, Instant now) {
         var eligible = members.stream().filter(m -> m.status() == Status.LIVE && m.offer().store() == FreebieStore.EPIC
@@ -142,7 +143,8 @@ final class FreebieAnnouncementCards {
         if (eligible.isEmpty()) return Optional.empty();
         var url = EpicLinks.checkout(eligible.stream().map(m -> m.facts().epicOffer().get()).toList());
         if (url.isEmpty()) return Optional.empty();
-        if (eligible.size() == 1) return Optional.of(Button.link(url.get().toString(), "Instant Checkout"));
+        if (eligible.size() == 1) return Optional.of(Button.link(url.get().toString(), members.size() == 1 ? "Instant Checkout"
+                : label("Instant Checkout: " + title(eligible.getFirst().offer().title()))));
         boolean all = eligible.size() == members.size();
         return Optional.of(Button.link(url.get().toString(), (all ? "Claim all PC games (" : "Claim eligible PC games (") + eligible.size() + ")"));
     }
