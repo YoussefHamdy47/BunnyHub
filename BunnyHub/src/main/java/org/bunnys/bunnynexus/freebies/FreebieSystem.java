@@ -36,6 +36,8 @@ public final class FreebieSystem {
     private final FreebieDiscovery discovery;
     private EpicFeed epicFeed;
     private FreebieDiscovery epicDiscovery;
+    private SteamFeed steamFeed;
+    private FreebieDiscovery steamDiscovery;
     private final FreebieLifecyclePlanner lifecycle;
     private final FreebieLifecycleWorker lifecycleWorker;
     private final FreebieDmWorker dmWorker;
@@ -120,6 +122,10 @@ public final class FreebieSystem {
         var system = new FreebieSystem(config.get(), features, repository, subscriptions, client::getJDA, Clock.systemUTC(), new GamerPowerFeed());
         system.epicFeed = new EpicFeed(system.clock);
         system.epicDiscovery = new FreebieDiscovery(config.get(), repository, system.epicFeed, system.clock, system.reviews, system::ended);
+        if (features.steam()) {
+            system.steamFeed = new SteamFeed(system.clock);
+            system.steamDiscovery = new FreebieDiscovery(config.get(), repository, system.steamFeed, system.clock, system.reviews, system::ended);
+        }
         if (features.resolveGamerPowerLinks()) system.discovery.withLinkResolver(new FreebieStorePages(new GamerPowerLinks()));
         if (features.egdata()) {
             system.egdataFeed = new EgDataFeed(system.clock);
@@ -129,12 +135,14 @@ public final class FreebieSystem {
         system.discoveryThread.scheduleWithFixedDelay(guarded("housekeeping", system::housekeeping), 20, 30, TimeUnit.SECONDS);
         system.discovery.start(system.discoveryThread, 15);
         system.epicDiscovery.start(system.discoveryThread, 25);
+        if (system.steamDiscovery != null) system.steamDiscovery.start(system.discoveryThread, 35);
         if (system.enrichment != null) system.enrichment.start(system.discoveryThread, 45);
         system.sendingThread.scheduleWithFixedDelay(guarded("sender", system.sender::tick), 10, 1, TimeUnit.SECONDS);
         system.sendingThread.scheduleWithFixedDelay(guarded("notices", system.notifier::tick), 10, 5, TimeUnit.SECONDS);
         BunnyLog.success("[Freebies] Started. Review channel " + config.get().reviewChannelId() + ", polling every "
                 + config.get().pollMinutes() + " min. Grouped announcements " + (features.grouped() ? "on" : "off")
-                + ", automatic publishing " + (features.publishEnabled() ? "on for " + features.publishChannels().size() + " channel(s)" : "off") + ".");
+                + ", automatic publishing " + (features.publishEnabled() ? "on for " + features.publishChannels().size() + " channel(s)" : "off")
+                + ", Steam source " + (features.steam() ? "on" : "off") + ".");
     }
 
     public static synchronized void shutdown() {
@@ -163,6 +171,7 @@ public final class FreebieSystem {
         }
         feed.close();
         if (epicFeed != null) epicFeed.close();
+        if (steamFeed != null) steamFeed.close();
         if (egdataFeed != null) egdataFeed.close();
     }
 
@@ -442,6 +451,7 @@ public final class FreebieSystem {
     public String status(String actorId) {
         requireOwner(actorId);
         return FreebieStatusText.render(repository, config, discovery.status() + (epicDiscovery == null ? "" : "\n" + epicDiscovery.status())
+                + (steamDiscovery == null ? "" : "\n" + steamDiscovery.status())
                 + (enrichment == null ? "" : "\n" + enrichment.status()) + "\nHeld source reports awaiting a decision: " + (repository.sources() == null ? 0 : repository.sources().openQuestions()) + " (/freebie-admin sources)"
                 + "\n" + broadcasts.status() + (repository.publications() == null ? "" : "\n" + FreebieStatusText.publishing(features, repository.publications().counts())),
                 sender.inFlight(), jda.get(), clock.instant());
@@ -464,6 +474,7 @@ public final class FreebieSystem {
         requireOwner(actorId);
         discovery.pollNow();
         if (epicDiscovery != null) epicDiscovery.pollNow();
+        if (steamDiscovery != null) steamDiscovery.pollNow();
         return "Source checks requested; any active failure backoff is respected. New giveaways will appear in the review channel.";
     }
 

@@ -41,8 +41,11 @@ public record FreebieOffer(String id, String sourceId, FreebieStore store, Strin
                 discoveredAt, state, reviewMessageId, reviewChannelId, decidedBy, fanoutDone, gone, revision, false);
     }
 
-    public String sourceLabel() { return id.startsWith("epic:") ? "Epic Games" : "GamerPower"; }
-    public String region() { return id.startsWith("epic:") ? "US (en-US); availability elsewhere may differ" : "Not specified by source"; }
+    public String sourceLabel() { return id.startsWith("epic:") ? "Epic Games" : id.startsWith("steam:") ? "Steam" : "GamerPower"; }
+    public String region() {
+        return id.startsWith("epic:") ? "US (en-US); availability elsewhere may differ"
+                : id.startsWith("steam:") ? "US store; availability elsewhere may differ" : "Not specified by source";
+    }
 
     public static String idFor(String sourceItemId) { return "gamerpower:" + sourceItemId; }
 

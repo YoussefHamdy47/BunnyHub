@@ -1,0 +1,394 @@
+{
+ "response": {
+  "store_items": [
+   {
+    "item_type": 0,
+    "id": 785890,
+    "success": 1,
+    "visible": true,
+    "name": "Hexologic",
+    "store_url_path": "app/785890/Hexologic",
+    "store_url_slug": "Hexologic",
+    "appid": 785890,
+    "type": 0,
+    "is_free": true,
+    "categories": {
+     "supported_player_categoryids": [
+      2
+     ],
+     "feature_categoryids": [
+      22,
+      29,
+      30,
+      23,
+      17,
+      43,
+      62
+     ],
+     "controller_categoryids": [
+      28,
+      55,
+      56,
+      57,
+      58,
+      59
+     ]
+    },
+    "basic_info": {
+     "short_description": "Immerse yourself in the beautiful world of Hexologic. Solve challenging, yet rewarding puzzles, listen to relaxing music, dive deep into the game’s atmosphere and fall in love in with Sudoku again!",
+     "publishers": [
+      {
+       "name": "MythicOwl",
+       "creator_clan_account_id": 33026592
+      }
+     ],
+     "developers": [
+      {
+       "name": "MythicOwl",
+       "creator_clan_account_id": 33026592
+      }
+     ]
+    },
+    "assets": {
+     "asset_url_format": "steam/apps/785890/${FILENAME}?t=1793292026",
+     "main_capsule": "capsule_616x353.jpg",
+     "small_capsule": "capsule_231x87.jpg",
+     "header": "header.jpg",
+     "page_background": "page_bg_generated_v6b.jpg",
+     "hero_capsule": "hero_capsule.jpg",
+     "library_capsule": "library_600x900.jpg",
+     "library_hero": "library_hero.jpg",
+     "community_icon": "7bedc0ef6e2d0fba292e2cad90d0166fb670319c",
+     "page_background_path": "app/785890?t=1793292026",
+     "raw_page_background": "page_bg_raw.jpg",
+     "last_modified": 1793292026
+    },
+    "release": {
+     "steam_release_date": 1527581691,
+     "original_release_date": 0
+    },
+    "best_purchase_option": {
+     "packageid": 1901258,
+     "purchase_option_name": "Hexologic Limited Free Promotional Package - Oct 2026",
+     "final_price_in_cents": "0",
+     "original_price_in_cents": "499",
+     "formatted_final_price": "$0.00",
+     "formatted_original_price": "$4.99",
+     "discount_pct": 100,
+     "is_free_to_keep": true,
+     "user_can_purchase_as_gift": false,
+     "hide_discount_pct_for_compliance": false,
+     "included_game_count": 1,
+     "free_to_keep_ends": 1793466000,
+     "must_purchase_as_set": false,
+     "package_group": "default",
+     "free_to_keep_base_package": 237275,
+     "price_cannot_be_displayed_as_discount": false
+    },
+    "purchase_options": [
+     {
+      "packageid": 1901258,
+      "purchase_option_name": "Hexologic Limited Free Promotional Package - Oct 2026",
+      "final_price_in_cents": "0",
+      "original_price_in_cents": "499",
+      "formatted_final_price": "$0.00",
+      "formatted_original_price": "$4.99",
+      "discount_pct": 100,
+      "is_free_to_keep": true,
+      "user_can_purchase_as_gift": false,
+      "hide_discount_pct_for_compliance": false,
+      "included_game_count": 1,
+      "free_to_keep_ends": 1793466000,
+      "must_purchase_as_set": false,
+      "package_group": "default",
+      "free_to_keep_base_package": 237275,
+      "price_cannot_be_displayed_as_discount": false
+     },
+     {
+      "packageid": 237275,
+      "purchase_option_name": "Hexologic",
+      "final_price_in_cents": "499",
+      "formatted_final_price": "$4.99",
+      "user_can_purchase_as_gift": true,
+      "hide_discount_pct_for_compliance": false,
+      "included_game_count": 1,
+      "must_purchase_as_set": false,
+      "package_group": "default",
+      "price_cannot_be_displayed_as_discount": false
+     },
+     {
+      "bundleid": 29728,
+      "purchase_option_name": "Best of MythicOwl Bundle",
+      "final_price_in_cents": "4120",
+      "formatted_final_price": "$41.20",
+      "bundle_discount_pct": 25,
+      "price_before_bundle_discount": "5495",
+      "formatted_price_before_bundle_discount": "$54.95",
+      "user_can_purchase_as_gift": true,
+      "hide_discount_pct_for_compliance": false,
+      "included_game_count": 5,
+      "must_purchase_as_set": false,
+      "package_group": "default",
+      "price_cannot_be_displayed_as_discount": false,
+      "combined_discount_pct": 25
+     },
+     {
+      "bundleid": 8846,
+      "purchase_option_name": "Fun relaxing family-friendly puzzlers",
+      "final_price_in_cents": "867",
+      "formatted_final_price": "$8.67",
+      "bundle_discount_pct": 33,
+      "price_before_bundle_discount": "1296",
+      "formatted_price_before_bundle_discount": "$12.96",
+      "user_can_purchase_as_gift": true,
+      "hide_discount_pct_for_compliance": false,
+      "included_game_count": 4,
+      "must_purchase_as_set": false,
+      "package_group": "default",
+      "price_cannot_be_displayed_as_discount": false,
+      "combined_discount_pct": 33
+     },
+     {
+      "bundleid": 7516,
+      "purchase_option_name": "Logic Puzzles to Relax Your Brain",
+      "final_price_in_cents": "1271",
+      "formatted_final_price": "$12.71",
+      "bundle_discount_pct": 15,
+      "price_before_bundle_discount": "1496",
+      "formatted_price_before_bundle_discount": "$14.96",
+      "user_can_purchase_as_gift": true,
+      "hide_discount_pct_for_compliance": false,
+      "included_game_count": 4,
+      "must_purchase_as_set": false,
+      "package_group": "default",
+      "price_cannot_be_displayed_as_discount": false,
+      "combined_discount_pct": 15
+     },
+     {
+      "bundleid": 8676,
+      "purchase_option_name": "Unique Casual Indie Puzzle Games",
+      "final_price_in_cents": "1361",
+      "formatted_final_price": "$13.61",
+      "bundle_discount_pct": 35,
+      "price_before_bundle_discount": "2096",
+      "formatted_price_before_bundle_discount": "$20.96",
+      "user_can_purchase_as_gift": true,
+      "hide_discount_pct_for_compliance": false,
+      "included_game_count": 4,
+      "must_purchase_as_set": false,
+      "package_group": "default",
+      "price_cannot_be_displayed_as_discount": false,
+      "combined_discount_pct": 35
+     }
+    ],
+    "is_free_temporarily": true
+   },
+   {
+    "item_type": 0,
+    "id": 5340370,
+    "success": 1,
+    "visible": true,
+    "name": "Popcorn & Premieren - Ausgehviertel",
+    "store_url_path": "app/5340370/Popcorn_Premieren_Ausgehviertel",
+    "store_url_slug": "Popcorn_Premieren_Ausgehviertel",
+    "appid": 5340370,
+    "type": 4,
+    "related_items": {
+     "parent_appid": 5125170
+    },
+    "categories": {
+     "supported_player_categoryids": [
+      2
+     ],
+     "feature_categoryids": [
+      22,
+      23,
+      62
+     ]
+    },
+    "basic_info": {
+     "short_description": "Expand your cinema with a leisure district featuring a pizzeria, beach club, restaurant, ice cream café, arcade, bowling, mini golf, stage and event hall. Upgrade businesses, manage your investment and collect parking fees, with real financial risks as well as opportunities.",
+     "developers": [
+      {
+       "name": "Jodelsoft"
+      }
+     ]
+    },
+    "assets": {
+     "asset_url_format": "steam/apps/5340370/${FILENAME}?t=1792688582",
+     "main_capsule": "4b19d60cbb4aa1b2ebdaa964c3e3c654188fcf95/capsule_616x353.jpg",
+     "main_capsule_2x": "4b19d60cbb4aa1b2ebdaa964c3e3c654188fcf95/capsule_616x353_2x.jpg",
+     "small_capsule": "d86ca80108ef45e832ffefb4a43c913186269930/capsule_231x87.jpg",
+     "small_capsule_2x": "d86ca80108ef45e832ffefb4a43c913186269930/capsule_231x87_2x.jpg",
+     "header": "843485bcea45d0475504553f148de79e2cdf2da8/header.jpg",
+     "header_2x": "843485bcea45d0475504553f148de79e2cdf2da8/header_2x.jpg",
+     "hero_capsule": "38271279f72573dbdd9cba606018f77a92f37d84/hero_capsule.jpg",
+     "hero_capsule_2x": "38271279f72573dbdd9cba606018f77a92f37d84/hero_capsule_2x.jpg",
+     "page_background_path": "app/5340370?t=1792688582",
+     "last_modified": 1792688582
+    },
+    "release": {
+     "steam_release_date": 1792688583
+    },
+    "best_purchase_option": {
+     "packageid": 1845189,
+     "purchase_option_name": "Popcorn & Premieren - Ausgehviertel",
+     "final_price_in_cents": "499",
+     "formatted_final_price": "$4.99",
+     "user_can_purchase_as_gift": true,
+     "hide_discount_pct_for_compliance": false,
+     "included_game_count": 0,
+     "must_purchase_as_set": false,
+     "package_group": "default",
+     "price_cannot_be_displayed_as_discount": false
+    },
+    "purchase_options": [
+     {
+      "packageid": 1845189,
+      "purchase_option_name": "Popcorn & Premieren - Ausgehviertel",
+      "final_price_in_cents": "499",
+      "formatted_final_price": "$4.99",
+      "user_can_purchase_as_gift": true,
+      "hide_discount_pct_for_compliance": false,
+      "included_game_count": 0,
+      "must_purchase_as_set": false,
+      "package_group": "default",
+      "price_cannot_be_displayed_as_discount": false
+     }
+    ]
+   },
+   {
+    "item_type": 0,
+    "id": 4693960,
+    "success": 1,
+    "visible": true,
+    "name": "Hunting Simulator 3 - Classic American Hunter Pack",
+    "store_url_path": "app/4693960/Hunting_Simulator_3_Classic_American_Hunter_Pack",
+    "store_url_slug": "Hunting_Simulator_3_Classic_American_Hunter_Pack",
+    "appid": 4693960,
+    "type": 4,
+    "is_free": true,
+    "related_items": {
+     "parent_appid": 2482760
+    },
+    "categories": {
+     "supported_player_categoryids": [
+      2
+     ],
+     "feature_categoryids": [
+      22,
+      67,
+      68,
+      69,
+      74,
+      78,
+      79,
+      23,
+      15,
+      25,
+      62
+     ],
+     "controller_categoryids": [
+      28,
+      55,
+      56,
+      57,
+      58
+     ]
+    },
+    "basic_info": {
+     "short_description": "This open-world game lets you experience the thrill of the hunt, with your faithful dog by your side! Choose your equipment from official brands, and explore the wilderness in search of your next game.",
+     "publishers": [
+      {
+       "name": "Nacon",
+       "creator_clan_account_id": 33118426
+      }
+     ],
+     "developers": [
+      {
+       "name": "Nacon Studio Ghent"
+      }
+     ]
+    },
+    "assets": {
+     "asset_url_format": "steam/apps/4693960/${FILENAME}?t=1793269525",
+     "main_capsule": "a7c05bd20486f445d8fc27ee93f4e96d9adfd4d2/capsule_616x353.jpg",
+     "main_capsule_2x": "a7c05bd20486f445d8fc27ee93f4e96d9adfd4d2/capsule_616x353_2x.jpg",
+     "small_capsule": "9e3e8660dd02d739eaa1a36cfd398853b802f7f8/capsule_231x87.jpg",
+     "small_capsule_2x": "9e3e8660dd02d739eaa1a36cfd398853b802f7f8/capsule_231x87_2x.jpg",
+     "header": "d37423b5b7941444dfe63d8b185ed680ff03009d/header.jpg",
+     "header_2x": "d37423b5b7941444dfe63d8b185ed680ff03009d/header_2x.jpg",
+     "page_background": "b8134927089a1d22a42e4ba64a62946993c25d88/page_bg_v6.jpg",
+     "hero_capsule": "394e478050e8e030d7cf17cc70c735eb815ec383/hero_capsule.jpg",
+     "hero_capsule_2x": "394e478050e8e030d7cf17cc70c735eb815ec383/hero_capsule_2x.jpg",
+     "page_background_path": "app/4693960?t=1793269525",
+     "raw_page_background": "b8134927089a1d22a42e4ba64a62946993c25d88/page_bg_raw.jpg",
+     "last_modified": 1793269525
+    },
+    "release": {
+     "steam_release_date": 1793264459
+    },
+    "best_purchase_option": {
+     "packageid": 1782986,
+     "purchase_option_name": "Hunting Simulator 3 - Classic American Hunter Pack Limited Free Promotional Package - Oct 2026",
+     "final_price_in_cents": "0",
+     "original_price_in_cents": "499",
+     "formatted_final_price": "$0.00",
+     "formatted_original_price": "$4.99",
+     "discount_pct": 100,
+     "is_free_to_keep": true,
+     "user_can_purchase_as_gift": false,
+     "hide_discount_pct_for_compliance": false,
+     "included_game_count": 0,
+     "free_to_keep_ends": 1794506400,
+     "must_purchase_as_set": false,
+     "package_group": "default",
+     "free_to_keep_base_package": 1633607,
+     "price_cannot_be_displayed_as_discount": false
+    },
+    "purchase_options": [
+     {
+      "packageid": 1782986,
+      "purchase_option_name": "Hunting Simulator 3 - Classic American Hunter Pack Limited Free Promotional Package - Oct 2026",
+      "final_price_in_cents": "0",
+      "original_price_in_cents": "499",
+      "formatted_final_price": "$0.00",
+      "formatted_original_price": "$4.99",
+      "discount_pct": 100,
+      "is_free_to_keep": true,
+      "user_can_purchase_as_gift": false,
+      "hide_discount_pct_for_compliance": false,
+      "included_game_count": 0,
+      "free_to_keep_ends": 1794506400,
+      "must_purchase_as_set": false,
+      "package_group": "default",
+      "free_to_keep_base_package": 1633607,
+      "price_cannot_be_displayed_as_discount": false
+     },
+     {
+      "packageid": 1633607,
+      "purchase_option_name": "Hunting Simulator 3 - Classic American Hunter Pack",
+      "final_price_in_cents": "499",
+      "formatted_final_price": "$4.99",
+      "user_can_purchase_as_gift": true,
+      "hide_discount_pct_for_compliance": false,
+      "included_game_count": 0,
+      "must_purchase_as_set": false,
+      "package_group": "default",
+      "price_cannot_be_displayed_as_discount": false
+     }
+    ],
+    "is_free_temporarily": true,
+    "package_groups": [
+     {
+      "name": "default"
+     },
+     {
+      "name": "subscriptions",
+      "display_type": 1
+     }
+    ]
+   }
+  ]
+ }
+}
