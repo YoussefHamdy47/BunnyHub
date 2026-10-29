@@ -88,7 +88,13 @@ class FreebieAnnouncementCardsTest {
         assertTrue(labels(FreebieAnnouncementCards.components(members, false, now)).stream().noneMatch(l -> l.contains("PC games")));
         var noIdentity = new FreebieAnnouncementCards.Member(epic("b", "Game b"), FreebieFacts.NONE, "epic:b|" + CHANNEL, LIVE);
         assertTrue(FreebieAnnouncementCards.combined(List.of(noIdentity), now).isEmpty());
-        assertEquals("Instant Checkout", FreebieAnnouncementCards.combined(List.of(member("a", LIVE), noIdentity), now).orElseThrow().getLabel());
+        assertEquals("Instant Checkout: Game a", FreebieAnnouncementCards.combined(List.of(member("a", LIVE), noIdentity), now).orElseThrow().getLabel());
+    }
+
+    @Test void aMultiGamePageNamesTheOneGameItsCheckoutBuys() {
+        var members = List.of(member("a", ENDED), member("b", LIVE), member("c", ENDED));
+        var labels = labels(FreebieAnnouncementCards.edit(members, true, now).getComponents().stream().map(c -> (ActionRow) c).toList());
+        assertEquals(List.of("Instant Checkout: Game b", "Claim Game b"), labels);
     }
 
     @Test void aSingleGameGetsInstantCheckoutAfterItsClaimButton() {
