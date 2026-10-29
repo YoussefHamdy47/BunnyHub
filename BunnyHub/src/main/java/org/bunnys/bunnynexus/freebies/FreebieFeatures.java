@@ -15,8 +15,8 @@ import java.util.function.Function;
  *   <li>{@code FREEBIE_PUBLISH_ENABLED} (default false) and {@code FREEBIE_PUBLISH_CHANNEL_IDS} (comma-separated
  *       channel IDs): automatic publishing of new announcement pages, only in these Announcement Channels. Both are
  *       required. Channels are never converted.</li>
- *   <li>{@code FREEBIE_EPIC_CHECKOUT} (default false): the combined "Claim all PC games" checkout button. Off until a
- *       signed-in checkout preview has been validated.</li>
+ *   <li>{@code FREEBIE_EPIC_CHECKOUT} (default false): the Epic checkout button ("Instant Checkout" for one game,
+ *       "Claim all PC games" for several).</li>
  *   <li>{@code FREEBIE_EGDATA_ENABLED} (default true): EGData region and mobile-offer enrichment.</li>
  *   <li>{@code FREEBIE_RESOLVE_GAMERPOWER_LINKS} (default false): follow GamerPower claim redirects to the Epic product
  *       page for automatic duplicate joining. Off: the redirect returned HTTP 520 when validated on 2026-10-24.</li>

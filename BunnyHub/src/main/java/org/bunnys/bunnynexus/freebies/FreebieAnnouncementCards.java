@@ -117,14 +117,15 @@ final class FreebieAnnouncementCards {
     static List<ActionRow> components(List<Member> members, boolean checkout, Instant now) {
         List<ActionRowChildComponent> buttons = new ArrayList<>();
         var live = members.stream().filter(m -> m.status() == Status.LIVE).toList();
-        if (checkout) combined(members, now).ifPresent(buttons::add);
+        if (checkout && members.size() > 1) combined(members, now).ifPresent(buttons::add);
         if (members.size() == 1) {
             Member m = members.getFirst();
             if (m.status() == Status.LIVE) {
                 buttons.add(FreebieCards.claimButton(m.offer()));
+                if (checkout) combined(members, now).ifPresent(buttons::add);
                 for (var v : m.facts().publicVariants(now)) buttons.add(Button.link(v.page().toString(), "Claim " + v.label() + " version"));
             }
-            buttons.add(Button.link(m.offer().pageUrl().toString(), "Offer details"));
+            buttons.add(Button.link(m.offer().pageUrl().toString(), "Offer Details"));
         } else for (Member m : live) buttons.add(Button.link(m.offer().claimUrl().toString(), label("Claim " + title(m.offer().title()))));
         List<ActionRow> rows = new ArrayList<>();
         for (int i = 0; i < buttons.size() && rows.size() < 5; i += 5) rows.add(ActionRow.of(buttons.subList(i, Math.min(i + 5, buttons.size()))));
@@ -132,15 +133,16 @@ final class FreebieAnnouncementCards {
     }
 
     /**
-     * Combined PC checkout for at least two live Epic games with exact catalog identities. Labelled "all" only when no
-     * game on the page was left out; never built when the URL would not fit.
+     * Epic checkout for the live Epic games with exact catalog identities: "Instant Checkout" for one game, otherwise
+     * "Claim all PC games" (or "eligible" when a game on the page was left out). Never built when the URL would not fit.
      */
     static Optional<Button> combined(List<Member> members, Instant now) {
         var eligible = members.stream().filter(m -> m.status() == Status.LIVE && m.offer().store() == FreebieStore.EPIC
                 && m.facts().epicOffer().isPresent() && !m.offer().ended(now)).toList();
-        if (eligible.size() < 2) return Optional.empty();
+        if (eligible.isEmpty()) return Optional.empty();
         var url = EpicLinks.checkout(eligible.stream().map(m -> m.facts().epicOffer().get()).toList());
         if (url.isEmpty()) return Optional.empty();
+        if (eligible.size() == 1) return Optional.of(Button.link(url.get().toString(), "Instant Checkout"));
         boolean all = eligible.size() == members.size();
         return Optional.of(Button.link(url.get().toString(), (all ? "Claim all PC games (" : "Claim eligible PC games (") + eligible.size() + ")"));
     }

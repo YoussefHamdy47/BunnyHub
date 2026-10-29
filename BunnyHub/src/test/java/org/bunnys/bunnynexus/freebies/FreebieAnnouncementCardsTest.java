@@ -46,7 +46,7 @@ class FreebieAnnouncementCardsTest {
         assertEquals("<@&" + ROLE + ">", data.getContent());
         assertEquals(Set.of(ROLE), data.getMentionedRoles());
         assertTrue(data.getAllowedMentions().stream().noneMatch(t -> t == Message.MentionType.EVERYONE || t == Message.MentionType.HERE));
-        assertEquals(List.of(FreebieCards.claimButton(m.offer()).getLabel(), "Offer details"), labels(data.getComponents().stream().map(c -> (ActionRow) c).toList()));
+        assertEquals(List.of(FreebieCards.claimButton(m.offer()).getLabel(), "Offer Details"), labels(data.getComponents().stream().map(c -> (ActionRow) c).toList()));
         String region = data.getEmbeds().getFirst().getFields().stream().filter(f -> "REGION".equals(f.getName())).findFirst().orElseThrow().getValue();
         assertTrue(region.contains("not fully verified"));
     }
@@ -83,11 +83,20 @@ class FreebieAnnouncementCardsTest {
         assertTrue(edit.getEmbeds().get(1).getDescription().contains(FreebieLifecycleMessages.WITHDRAWN_TEXT));
     }
 
-    @Test void checkoutStaysOffUnlessEnabledAndNeedsTwoExactIdentities() {
+    @Test void checkoutStaysOffUnlessEnabledAndNeedsAnExactIdentity() {
         var members = List.of(member("a", LIVE), member("b", LIVE));
         assertTrue(labels(FreebieAnnouncementCards.components(members, false, now)).stream().noneMatch(l -> l.contains("PC games")));
         var noIdentity = new FreebieAnnouncementCards.Member(epic("b", "Game b"), FreebieFacts.NONE, "epic:b|" + CHANNEL, LIVE);
-        assertTrue(FreebieAnnouncementCards.combined(List.of(member("a", LIVE), noIdentity), now).isEmpty());
+        assertTrue(FreebieAnnouncementCards.combined(List.of(noIdentity), now).isEmpty());
+        assertEquals("Instant Checkout", FreebieAnnouncementCards.combined(List.of(member("a", LIVE), noIdentity), now).orElseThrow().getLabel());
+    }
+
+    @Test void aSingleGameGetsInstantCheckoutAfterItsClaimButton() {
+        var m = member("a", LIVE);
+        var labels = labels(FreebieAnnouncementCards.components(List.of(m), true, now));
+        assertEquals(List.of(FreebieCards.claimButton(m.offer()).getLabel(), "Instant Checkout", "Offer Details"), labels);
+        assertTrue(labels(FreebieAnnouncementCards.components(List.of(m), false, now)).stream().noneMatch(l -> l.contains("Checkout")));
+        assertTrue(labels(FreebieAnnouncementCards.components(List.of(member("a", ENDED)), true, now)).stream().noneMatch(l -> l.contains("Checkout")));
     }
 
     @Test void reviewedMobileOffersGetTheirOwnLinksAndNeverImplyPcOwnership() {
