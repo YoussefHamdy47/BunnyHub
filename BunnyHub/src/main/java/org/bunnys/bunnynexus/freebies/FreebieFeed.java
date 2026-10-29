@@ -7,7 +7,7 @@ import java.util.*;
 /** Provider-neutral discovery. Provider adapters own validation; no candidate grants approval. */
 interface FreebieFeed extends AutoCloseable {
     enum Provider {
-        GAMERPOWER("gamerpower", "GamerPower"), EPIC("epic", "Epic Games");
+        GAMERPOWER("gamerpower", "GamerPower"), EPIC("epic", "Epic Games"), STEAM("steam", "Steam");
         final String id, label;
         Provider(String id, String label) { this.id = id; this.label = label; }
     }

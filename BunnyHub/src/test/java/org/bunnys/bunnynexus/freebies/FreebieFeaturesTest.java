@@ -17,6 +17,11 @@ class FreebieFeaturesTest {
         assertFalse(f.publishes(HUB));
         assertFalse(f.checkout());
         assertFalse(f.resolveGamerPowerLinks());
+        assertTrue(f.steam(), "Steam's own store is a source by default");
+        assertFalse(load(Map.of("FREEBIE_STEAM_ENABLED", "false"), new ArrayList<>()).steam());
+        var warnings = new ArrayList<String>();
+        assertTrue(load(Map.of("FREEBIE_STEAM_ENABLED", "nope"), warnings).steam());
+        assertEquals(1, warnings.size());
     }
 
     @Test void publishingNeedsBothTheSwitchAndAnExplicitAllowlist() {

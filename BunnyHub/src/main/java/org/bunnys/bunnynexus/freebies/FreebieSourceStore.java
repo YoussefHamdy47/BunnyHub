@@ -46,7 +46,9 @@ final class FreebieSourceStore {
         return offers.countDocuments(exists("sourceAliases", false)) == 0;
     }
     static String canonicalId(FreebieFeed.Candidate c) {
-        return c.provider() == FreebieFeed.Provider.GAMERPOWER ? c.identity() : "epic:" + FreebieMessages.nonce(c.identity()).substring(0, 16);
+        // GamerPower keeps its historical IDs; other providers get a short stable hash under their own prefix.
+        return c.provider() == FreebieFeed.Provider.GAMERPOWER ? c.identity()
+                : c.provider().id + ":" + FreebieMessages.nonce(c.identity()).substring(0, 16);
     }
     static Document fresh(FreebieFeed.Candidate c, Instant now) {
         var doc = new Document("_id", canonicalId(c)).append("schemaVersion", 1)

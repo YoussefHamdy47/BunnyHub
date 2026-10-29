@@ -20,13 +20,21 @@ import java.util.function.Function;
  *   <li>{@code FREEBIE_EGDATA_ENABLED} (default true): EGData region and mobile-offer enrichment.</li>
  *   <li>{@code FREEBIE_RESOLVE_GAMERPOWER_LINKS} (default false): follow GamerPower claim redirects to the Epic product
  *       page for automatic duplicate joining. Off: the redirect returned HTTP 520 when validated on 2026-10-24.</li>
+ *   <li>{@code FREEBIE_STEAM_ENABLED} (default true): Steam's own store as a source of free-to-keep games
+ *       ({@link SteamFeed}); false leaves Steam games to GamerPower.</li>
  * </ul>
  */
 public record FreebieFeatures(boolean grouped, boolean publishEnabled, Set<String> publishChannels, boolean checkout,
-                              boolean egdata, boolean resolveGamerPowerLinks) {
-    public static final FreebieFeatures DEFAULT = new FreebieFeatures(true, false, Set.of(), false, true, false);
+                              boolean egdata, boolean resolveGamerPowerLinks, boolean steam) {
+    public static final FreebieFeatures DEFAULT = new FreebieFeatures(true, false, Set.of(), false, true, false, true);
 
     public FreebieFeatures { publishChannels = Set.copyOf(publishChannels); }
+
+    /** Every feature but the Steam source chosen; Steam on, as by default. */
+    public FreebieFeatures(boolean grouped, boolean publishEnabled, Set<String> publishChannels, boolean checkout,
+                           boolean egdata, boolean resolveGamerPowerLinks) {
+        this(grouped, publishEnabled, publishChannels, checkout, egdata, resolveGamerPowerLinks, true);
+    }
 
     /** Whether a page sent to {@code channelId} must be published automatically. */
     public boolean publishes(String channelId) { return publishEnabled && publishChannels.contains(channelId); }
@@ -47,7 +55,7 @@ public record FreebieFeatures(boolean grouped, boolean publishEnabled, Set<Strin
         }
         return new FreebieFeatures(flag(env, "FREEBIE_GROUPED_ANNOUNCEMENTS", true, warn), publish, channels,
                 flag(env, "FREEBIE_EPIC_CHECKOUT", false, warn), flag(env, "FREEBIE_EGDATA_ENABLED", true, warn),
-                flag(env, "FREEBIE_RESOLVE_GAMERPOWER_LINKS", false, warn));
+                flag(env, "FREEBIE_RESOLVE_GAMERPOWER_LINKS", false, warn), flag(env, "FREEBIE_STEAM_ENABLED", true, warn));
     }
 
     static FreebieFeatures fromEnvironment(Consumer<String> warn) { return load(TokenLoader::getEnvQuietly, warn); }
