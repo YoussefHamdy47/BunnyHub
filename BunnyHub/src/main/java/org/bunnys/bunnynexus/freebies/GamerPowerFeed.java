@@ -3,7 +3,6 @@ package org.bunnys.bunnynexus.freebies;
 import okhttp3.*;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.Proxy;
 import java.net.UnknownHostException;
 import java.time.Clock;
 import java.time.Duration;
@@ -38,15 +37,14 @@ public final class GamerPowerFeed implements FreebieFeed {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
     private final OkHttpClient client;
+    private final FreebieHttp.Calls calls = new FreebieHttp.Calls();
     private final GamerPowerIntake intake = new GamerPowerIntake();
     private final Clock clock;
 
     public GamerPowerFeed() { this(Clock.systemUTC()); }
     GamerPowerFeed(Clock clock) {
         this.clock = clock;
-        client = new OkHttpClient.Builder().dns(GamerPowerFeed::publicOnly).proxy(Proxy.NO_PROXY)
-                .followRedirects(false).followSslRedirects(false)
-                .callTimeout(TIMEOUT).connectTimeout(TIMEOUT).readTimeout(TIMEOUT).writeTimeout(TIMEOUT).build();
+        client = FreebieHttp.client(GamerPowerFeed::publicOnly, TIMEOUT);
     }
 
     private static List<InetAddress> publicOnly(String host) throws UnknownHostException {
@@ -67,16 +65,18 @@ public final class GamerPowerFeed implements FreebieFeed {
     public Fetch fetch() {
         var request = new Request.Builder().url(GamerPowerIntake.ENDPOINT.toString())
                 .header("Accept", "application/json").header("User-Agent", "BunnyNexus-Freebies/2.0").get().build();
-        try (Response response = client.newCall(request).execute()) {
-            int status = response.code();
-            if (status == 429 || status == 503) return new Fetch(Optional.empty(), status,
-                    retryAfter(response.header("Retry-After"), clock.instant()), "rate limited");
-            if (status != 200 && status != 201) return new Fetch(Optional.empty(), status, Optional.empty(), "HTTP " + status);
-            ResponseBody body = response.body();
-            byte[] bytes = body.byteStream().readNBytes(GamerPowerIntake.MAX_BYTES + 1);
-            var batch = intake.decode(status, bytes, clock.instant());
-            return new Fetch(Optional.of(batch), status, Optional.empty(),
-                    batch.state() == GamerPowerIntake.State.FAILED ? "invalid feed: " + batch.problem() : "");
+        try {
+            return calls.execute(client, request, response -> {
+                int status = response.code();
+                if (status == 429 || status == 503) return new Fetch(Optional.empty(), status,
+                        retryAfter(response.header("Retry-After"), clock.instant()), "rate limited");
+                if (status != 200 && status != 201) return new Fetch(Optional.empty(), status, Optional.empty(), "HTTP " + status);
+                ResponseBody body = response.body();
+                byte[] bytes = body.byteStream().readNBytes(GamerPowerIntake.MAX_BYTES + 1);
+                var batch = intake.decode(status, bytes, clock.instant());
+                return new Fetch(Optional.of(batch), status, Optional.empty(),
+                        batch.state() == GamerPowerIntake.State.FAILED ? "invalid feed: " + batch.problem() : "");
+            });
         } catch (IOException failure) {
             return new Fetch(Optional.empty(), 0, Optional.empty(), "network: " + failure.getClass().getSimpleName());
         }
@@ -93,9 +93,7 @@ public final class GamerPowerFeed implements FreebieFeed {
         } catch (NumberFormatException | DateTimeParseException invalid) { return Optional.empty(); }
     }
 
-    @Override public void close() {
-        client.dispatcher().cancelAll();
-        client.connectionPool().evictAll();
-        client.dispatcher().executorService().shutdown();
-    }
+    OkHttpClient client() { return client; }
+
+    @Override public void close() { calls.close(); }
 }

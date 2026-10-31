@@ -2,6 +2,7 @@ package org.bunnys.handler;
 
 import org.bunnys.services.FreeGameAlerts;
 import org.bunnys.services.MailBridgeService;
+import org.bunnys.services.MemoryReport;
 import org.bunnys.services.StudyMenus;
 import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
@@ -22,7 +23,7 @@ class BunnyServicesTest {
 
     @Test void discoversTheBotsServicesByConvention() {
         var types = BunnyServices.discover(ClassScanner.of("org.bunnys.services"), "org.bunnys.services").stream().map(Object::getClass).toList();
-        assertEquals(List.of(FreeGameAlerts.class, MailBridgeService.class, StudyMenus.class), types);
+        assertEquals(List.of(FreeGameAlerts.class, MailBridgeService.class, MemoryReport.class, StudyMenus.class), types);
     }
 
     @Test void aFailedStartIsSkippedAndStopsRunInReverseOrder() {
@@ -77,7 +78,7 @@ class BunnyServicesTest {
 
     @Test void scannerMatchesWholePackagesOnly() {
         var scanner = ClassScanner.of("org.bunnys");
-        assertEquals(3, scanner.find(BunnyService.class, "org.bunnys.services").size());
+        assertEquals(4, scanner.find(BunnyService.class, "org.bunnys.services").size());
         assertTrue(scanner.find(BunnyService.class, "org.bunnys.serv").isEmpty(), "a name prefix is not a package");
         assertTrue(scanner.find(BunnyService.class, "org.bunnys.commands").isEmpty(), "wrong kind in a package");
     }

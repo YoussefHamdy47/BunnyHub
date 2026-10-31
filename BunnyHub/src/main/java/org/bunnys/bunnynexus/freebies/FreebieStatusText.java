@@ -21,6 +21,7 @@ final class FreebieStatusText {
                 + "Offers sending: " + overview.sending() + " • queued messages: " + overview.queuedDeliveries()
                 + " (" + overview.retrying() + " retrying)\n"
                 + "In flight now: " + inFlight + " • checked <t:" + now.getEpochSecond() + ":T>"
+                + "\nMemory: " + org.bunnys.utils.MemoryStats.read().line()
                 + blocked(repository.deliveries().blocked())
                 + lifecycle(repository.lifecycle().stats(FreebieLifecycle.Kind.EDIT, now),
                         repository.lifecycle().stats(FreebieLifecycle.Kind.REMIND, now), now)
