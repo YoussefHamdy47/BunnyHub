@@ -11,7 +11,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Logs one memory line at startup, every hour, and whenever heap use jumps sharply between hourly lines, so a
+ * Logs one memory line (printed even with action logs off, which the bot runs with) at startup, every hour, and whenever heap use jumps sharply between hourly lines, so a
  * Railway memory spike can be matched to the JVM part that grew. Reads MXBeans only; one daemon thread.
  */
 @SuppressWarnings("unused") // Discovered reflectively by BunnyServices.
@@ -37,7 +37,7 @@ public final class MemoryReport implements BunnyService {
             long at = System.nanoTime();
             String reason = due(now, at);
             if (reason == null) return;
-            BunnyLog.info("[Memory] " + reason + ": " + now.line());
+            BunnyLog.report("[Memory] " + reason + ": " + now.line());
             lastLogged = now;
             lastLoggedAt = at;
         } catch (RuntimeException failure) {

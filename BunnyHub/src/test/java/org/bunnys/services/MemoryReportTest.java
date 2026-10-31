@@ -23,6 +23,21 @@ class MemoryReportTest {
         assertEquals("heap jump", report.due(jumped, System.nanoTime()));
     }
 
+    @Test void lineIsPrintedEvenWithActionLogsOff() {
+        var out = new java.io.ByteArrayOutputStream();
+        var original = System.out;
+        org.bunnys.utils.BunnyLog.setLogActions(false); // As Main runs the bot.
+        try {
+            System.setOut(new java.io.PrintStream(out, true, java.nio.charset.StandardCharsets.UTF_8));
+            new MemoryReport().check();
+        } finally {
+            System.setOut(original);
+            org.bunnys.utils.BunnyLog.setLogActions(true);
+        }
+        String printed = out.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(printed.contains("[Memory] startup: heap "), printed);
+    }
+
     private static MemoryStats.Snapshot heap(long usedMb) {
         return new MemoryStats.Snapshot(usedMb * MB, 0, 0, 0, 0, 1, 0, OptionalLong.empty());
     }
