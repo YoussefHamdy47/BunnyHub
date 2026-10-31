@@ -5,7 +5,6 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import java.io.IOException;
-import java.net.Proxy;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.time.Clock;
@@ -21,18 +20,18 @@ final class SteamFeed implements FreebieFeed {
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
     private final Clock clock;
     private final OkHttpClient client;
+    private final FreebieHttp.Calls calls = new FreebieHttp.Calls();
     private final SteamIntake intake = new SteamIntake();
 
     SteamFeed(Clock clock) {
         this.clock = clock;
-        client = new OkHttpClient.Builder().proxy(Proxy.NO_PROXY).followRedirects(false).followSslRedirects(false)
-                .dns(host -> {
-                    if (!SteamIntake.SEARCH_HOST.equals(host) && !SteamIntake.API_HOST.equals(host))
-                        throw new UnknownHostException("Unapproved provider host");
-                    var addresses = Dns.SYSTEM.lookup(host).stream().filter(GamerPowerFeed::isPublic).toList();
-                    if (addresses.isEmpty()) throw new UnknownHostException("No public provider address");
-                    return addresses;
-                }).callTimeout(TIMEOUT).connectTimeout(TIMEOUT).readTimeout(TIMEOUT).writeTimeout(TIMEOUT).build();
+        client = FreebieHttp.client(host -> {
+            if (!SteamIntake.SEARCH_HOST.equals(host) && !SteamIntake.API_HOST.equals(host))
+                throw new UnknownHostException("Unapproved provider host");
+            var addresses = Dns.SYSTEM.lookup(host).stream().filter(GamerPowerFeed::isPublic).toList();
+            if (addresses.isEmpty()) throw new UnknownHostException("No public provider address");
+            return addresses;
+        }, TIMEOUT);
     }
 
     @Override public Provider provider() { return Provider.STEAM; }
@@ -59,21 +58,21 @@ final class SteamFeed implements FreebieFeed {
     private Fetched get(URI uri) throws IOException {
         var request = new Request.Builder().url(uri.toString()).header("Accept", "application/json")
                 .header("User-Agent", "BunnyNexus-Freebies/2.0").get().build();
-        try (Response response = client.newCall(request).execute()) {
+        return calls.execute(client, request, response -> {
             if (response.code() != 200)
                 return new Fetched(new byte[0], Optional.of(failed("HTTP " + response.code(),
                         GamerPowerFeed.retryAfter(response.header("Retry-After"), clock.instant()))));
             byte[] body = response.body().byteStream().readNBytes(SteamIntake.MAX_BYTES + 1);
             if (body.length > SteamIntake.MAX_BYTES) return new Fetched(new byte[0], Optional.of(failed("Steam response too large", Optional.empty())));
             return new Fetched(body, Optional.empty());
-        }
+        });
     }
 
     private static Result failed(String problem, Optional<Duration> retryAfter) {
         return new Result(State.FAILED, List.of(), retryAfter, problem);
     }
 
-    @Override public void close() {
-        client.dispatcher().cancelAll(); client.connectionPool().evictAll(); client.dispatcher().executorService().shutdown();
-    }
+    OkHttpClient client() { return client; }
+
+    @Override public void close() { calls.close(); }
 }

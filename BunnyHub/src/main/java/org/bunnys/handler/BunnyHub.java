@@ -53,8 +53,7 @@ public class BunnyHub implements AutoCloseable {
         BunnyLog.setLogActions(config.isLogActions());
 
         String mongoURI = TokenLoader.getEnv(config.getMongoUriKey());
-        this.mongoManager = new MongoManager(mongoURI, config.getDatabaseName(),
-                config.getCommandPoolSize() + config.getAutocompletePoolSize() + 8, config.getDatabaseTimeout());
+        this.mongoManager = new MongoManager(mongoURI, config.getDatabaseName(), mongoPoolSize(config), config.getDatabaseTimeout());
 
         DB.init(this.mongoManager);
 
@@ -223,6 +222,14 @@ public class BunnyHub implements AutoCloseable {
 
     public MongoManager getMongoManager() {
         return this.mongoManager;
+    }
+
+    /**
+     * Mongo connections allowed at once: one per command and autocomplete worker, plus 8 for services
+     * (free-game workers, schedulers). Each connection is a TLS socket with buffers, so it follows the worker pools.
+     */
+    public static int mongoPoolSize(BunnyHubConfig config) {
+        return config.getCommandPoolSize() + config.getAutocompletePoolSize() + 8;
     }
 
     public static BunnyHubBuilder create() {

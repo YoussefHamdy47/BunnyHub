@@ -5,7 +5,10 @@ import java.util.*;
 import java.util.concurrent.*;
 import org.bunnys.utils.BunnyLog;
 
-/** Bounded FIFO work per key, with round-robin scheduling between ready keys. */
+/**
+ * Bounded FIFO work per key, with round-robin scheduling between ready keys. Workers start on demand, up to the
+ * worker count, and exit after {@link #DEFAULT_IDLE_TIMEOUT} without work, so an idle bot keeps no worker threads.
+ */
 public final class InteractionExecutor extends AbstractExecutorService implements AutoCloseable {
     private record Job(Runnable action, long enqueuedAt) {}
     private static final class Lane {
@@ -18,16 +21,21 @@ public final class InteractionExecutor extends AbstractExecutorService implement
                            long completed, long failed, long rejected, long abandoned,
                            double averageQueueWaitMillis, double maxQueueWaitMillis, double oldestQueuedMillis) {}
 
+    /** How long a worker waits for work before it exits; a later submission starts a new one. */
+    public static final Duration DEFAULT_IDLE_TIMEOUT = Duration.ofSeconds(60);
+
     private final Object monitor = new Object();
     private final Map<Object, Lane> lanes = new HashMap<>();
     private final ArrayDeque<Lane> ready = new ArrayDeque<>();
-    private final List<Thread> workers = new ArrayList<>();
+    private final Set<Thread> workers = new HashSet<>();
+    private final String name;
+    private final int maxWorkers;
+    private final long idleTimeoutNanos;
     private final int capacity;
     private final int perUserCapacity;
     private boolean shutdown;
     private boolean stopNow;
-    private boolean workersStarted;
-    private int active, queued, liveWorkers;
+    private int active, queued, liveWorkers, workerNumber;
     private long accepted, completed, failed, rejected, abandoned, started, totalWaitNanos, maxWaitNanos;
 
     public InteractionExecutor() { this(24, 100); }
@@ -39,12 +47,24 @@ public final class InteractionExecutor extends AbstractExecutorService implement
 
     /** Limit includes a user's running action and all waiting actions. */
     public InteractionExecutor(String name, int workerCount, int queueCapacity, int perUserCapacity) {
+        this(name, workerCount, queueCapacity, perUserCapacity, DEFAULT_IDLE_TIMEOUT);
+    }
+
+    /** {@code idleTimeout}: how long a worker without work stays alive before it exits. */
+    public InteractionExecutor(String name, int workerCount, int queueCapacity, int perUserCapacity, Duration idleTimeout) {
         if (workerCount < 1 || queueCapacity < 1) throw new IllegalArgumentException("Worker and queue sizes must be positive.");
         if (perUserCapacity < 1) throw new IllegalArgumentException("Per-user capacity must be positive.");
+        if (idleTimeout == null || idleTimeout.isNegative() || idleTimeout.isZero())
+            throw new IllegalArgumentException("Idle timeout must be positive.");
+        this.name = Objects.requireNonNull(name, "name");
         this.perUserCapacity = perUserCapacity;
+        this.maxWorkers = workerCount;
+        this.idleTimeoutNanos = idleTimeout.toNanos();
         capacity = Math.addExact(workerCount, queueCapacity);
-        for (int i = 0; i < workerCount; i++) workers.add(Thread.ofPlatform().name(name + "-" + i).unstarted(this::runWorker));
     }
+
+    /** Worker threads currently alive (running, or waiting for work until their idle timeout). */
+    public int liveWorkers() { synchronized (monitor) { return liveWorkers; } }
 
     public ExecutorService executor() { return this; }
 
@@ -76,13 +96,19 @@ public final class InteractionExecutor extends AbstractExecutorService implement
             lane.jobs.addLast(new Job(action, System.nanoTime()));
             queued++;
             accepted++;
-            if (!workersStarted) {
-                workersStarted = true;
-                liveWorkers = workers.size();
-                workers.forEach(Thread::start);
-            }
+            // Start a worker when every live worker is busy or already claimed by another ready key.
+            if (liveWorkers < maxWorkers && liveWorkers - active < ready.size()) startWorker();
             monitor.notifyAll();
         }
+    }
+
+    /** Caller holds the monitor. */
+    private void startWorker() {
+        Thread worker = Thread.ofPlatform().name(name + "-" + workerNumber++).unstarted(this::runWorker);
+        workers.add(worker);
+        liveWorkers++;
+        try { worker.start(); }
+        catch (Throwable failure) { workers.remove(worker); liveWorkers--; throw failure; }
     }
 
     private void runWorker() {
@@ -91,8 +117,12 @@ public final class InteractionExecutor extends AbstractExecutorService implement
                 Lane lane;
                 Job job;
                 synchronized (monitor) {
+                    long idleSince = System.nanoTime();
                     while (ready.isEmpty() && !stopNow && !(shutdown && active + queued == 0)) {
-                        try { monitor.wait(); } catch (InterruptedException ignored) { /* Recheck shutdown state. */ }
+                        long left = idleTimeoutNanos - (System.nanoTime() - idleSince);
+                        if (left <= 0) return; // Idle too long: exit; the next submission starts a new worker.
+                        try { TimeUnit.NANOSECONDS.timedWait(monitor, left); }
+                        catch (InterruptedException ignored) { /* Recheck shutdown state. */ }
                     }
                     if (stopNow || (shutdown && active + queued == 0)) return;
                     lane = ready.removeFirst();
@@ -125,7 +155,7 @@ public final class InteractionExecutor extends AbstractExecutorService implement
                 }
             }
         } finally {
-            synchronized (monitor) { liveWorkers--; monitor.notifyAll(); }
+            synchronized (monitor) { liveWorkers--; workers.remove(Thread.currentThread()); monitor.notifyAll(); }
         }
     }
 
@@ -159,7 +189,9 @@ public final class InteractionExecutor extends AbstractExecutorService implement
             monitor.notifyAll();
         }
         for (Runnable action : pending) if (action instanceof Future<?> future) future.cancel(false);
-        workers.forEach(Thread::interrupt);
+        List<Thread> live;
+        synchronized (monitor) { live = List.copyOf(workers); }
+        live.forEach(Thread::interrupt);
         return pending;
     }
 

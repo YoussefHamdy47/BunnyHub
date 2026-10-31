@@ -9,7 +9,6 @@ import org.bunnys.utils.FailureDiagnostics;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.Proxy;
 import java.net.URI;
 import java.net.UnknownHostException;
 import java.time.Duration;
@@ -83,10 +82,11 @@ public final class GamerPowerLinks {
         return Optional.of(uri);
     }
 
+    /** One client for every instance, sharing the feeds' connection pool and dispatcher. */
+    static final OkHttpClient CLIENT = FreebieHttp.client(GamerPowerLinks::gamerPowerOnly, TIMEOUT);
+
     private static Transport okHttp() {
-        OkHttpClient client = new OkHttpClient.Builder().dns(GamerPowerLinks::gamerPowerOnly).proxy(Proxy.NO_PROXY)
-                .followRedirects(false).followSslRedirects(false)
-                .callTimeout(TIMEOUT).connectTimeout(TIMEOUT).readTimeout(TIMEOUT).writeTimeout(TIMEOUT).build();
+        OkHttpClient client = CLIENT;
         return uri -> {
             var request = new Request.Builder().url(uri.toString()).header("User-Agent", "BunnyNexus-Freebies/2.0").get().build();
             try (Response response = client.newCall(request).execute()) {
