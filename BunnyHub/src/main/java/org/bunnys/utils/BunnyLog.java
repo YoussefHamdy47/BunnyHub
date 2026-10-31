@@ -26,6 +26,11 @@ public class BunnyLog {
             System.out.println(CYAN + "[INFO] " + RESET + message);
     }
 
+    /** Always printed, even with action logs off: for operational lines such as the hourly memory report. */
+    public static void report(String message) {
+        System.out.println(CYAN + "[INFO] " + RESET + message);
+    }
+
     public static void success(String message) {
         System.out.println(GREEN + "[SUCCESS] " + RESET + message);
     }
