@@ -6,11 +6,11 @@ import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.interactions.modals.ModalMapping;
 import org.bunnys.bunnynexus.commands.freebies.FreebieCatchUp;
 import org.bunnys.bunnynexus.commands.freebies.FreebieDashboard;
+import org.bunnys.bunnynexus.commands.freebies.FreebieDashboardForms;
 import org.bunnys.bunnynexus.commands.freebies.FreebieServerSetup;
 import org.bunnys.bunnynexus.freebies.FreebieMessages;
 import org.bunnys.bunnynexus.freebies.FreebieSection;
 import org.bunnys.bunnynexus.freebies.FreebieStore;
-import org.bunnys.bunnynexus.freebies.FreebieSubscriptions;
 import org.bunnys.bunnynexus.freebies.FreebieSystem;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.modals.BunnyModal;
@@ -44,14 +44,17 @@ public class FreebieSectionModal extends BunnyModal {
 
         var subscriptions = system.subscriptions();
         // An older form without the reminder field keeps the saved setting.
-        Integer reminder = values(event, FreebieDashboard.REMINDER_FIELD).stream().findFirst()
-                .map(FreebieSectionModal::hours).filter(FreebieSubscriptions.REMINDER_CHOICES::contains).orElse(null);
+        Optional<String> choice = values(event, FreebieDashboard.REMINDER_FIELD).stream().findFirst()
+                .filter(c -> FreebieDashboardForms.reminderHours(c) >= 0);
+        Integer reminder = choice.map(FreebieDashboardForms::reminderHours).orElse(null);
+        Boolean reminderPing = choice.map(FreebieDashboardForms::reminderPing).orElse(null);
         var post = values(event, FreebieDashboard.POST_FIELD).stream().findFirst().map(FreebieCatchUp::of).orElse(FreebieCatchUp.AUTO);
         // New for this section = the channel had none of the section's launchers before this save.
         boolean fresh = channel == null || subscriptions.forGuild(guild.getId()).stream()
                 .noneMatch(s -> s.channelId().equals(channel.getId()) && s.store().section() == section);
         boolean keepPings = args.length == 4 && role.isEmpty();
-        var result = FreebieServerSetup.saveSection(guild, section, channel, role, stores, keepPings, reminder, event.getUser().getId(), subscriptions);
+        var result = FreebieServerSetup.saveSection(guild, section, channel, role, stores, keepPings, reminder, reminderPing,
+                event.getUser().getId(), subscriptions);
         String notice = result.notice();
         boolean posted = result.channelId().isPresent() && post.resolve(fresh);
         // Only queued here; the sends run on the freebie sender at catch-up priority.
@@ -66,10 +69,6 @@ public class FreebieSectionModal extends BunnyModal {
         if (live > 0) event.getHook().sendMessage("Some approved games are still free for this section.")
                 .setComponents(FreebieMessages.catchUpAllControls(guild.getId(), result.channelId().get(), live))
                 .setEphemeral(true).setAllowedMentions(List.of()).queue();
-    }
-
-    private static Integer hours(String value) {
-        try { return Integer.parseInt(value); } catch (NumberFormatException malformed) { return -1; }
     }
 
     private static List<String> values(ModalInteractionEvent event, String field) {

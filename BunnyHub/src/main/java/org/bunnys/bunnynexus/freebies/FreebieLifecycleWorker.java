@@ -15,8 +15,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -86,10 +89,8 @@ final class FreebieLifecycleWorker {
         Instant now = clock.instant();
         if (job.attempts() > FreebieLifecycle.MAX_ATTEMPTS) { jobs().failed(job, "attempts exhausted", now); return false; }
         if (job.recipientId() != null) return startPrivateEdit(client, job, release);
-        FreebieOffer offer = repository.offer(job.offerId()).orElse(null);
-        if (job.kind() == Kind.REMIND && job.groupKey() != null) offer = groupDue(job, offer, now).stream().findFirst().orElse(offer);
         if (job.kind() == Kind.REMIND) {
-            var cancel = reminderCancel(job, offer, now);
+            var cancel = blocked(job, due(job, now), now);
             if (cancel.isPresent()) { jobs().cancelled(job, cancel.get(), now); return false; }
         }
         long guildId = Long.parseLong(job.guildId());
@@ -123,7 +124,7 @@ final class FreebieLifecycleWorker {
                 existing = job.verifyFirst()
                         ? channel.getHistory().retrievePast(50).timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit()
                             .thenApply(messages -> messages.stream().filter(m -> m.getAuthor().getId().equals(selfId))
-                                    .filter(m -> FreebieLifecycleMessages.carriesReminderReference(m, job.offerId(), job.channelId())).findFirst())
+                                    .filter(m -> FreebieLifecycleMessages.carriesReminderReference(m, referenceKey(job))).findFirst())
                         : CompletableFuture.completedFuture(Optional.empty());
             } catch (RuntimeException failure) { existing = CompletableFuture.failedFuture(failure); }
             work = existing.thenComposeAsync(found -> found.isPresent()
@@ -173,25 +174,85 @@ final class FreebieLifecycleWorker {
 
     private CompletableFuture<String> remind(Job job, Guild guild, StandardGuildMessageChannel channel) {
         Instant now = clock.instant();
-        // Re-check right before posting: the offer may have ended or the setting changed since the claim.
-        var offer = repository.offer(job.offerId()).orElse(null);
-        List<FreebieOffer> due = job.groupKey() == null ? (offer == null ? List.of() : List.of(offer)) : groupDue(job, offer, now);
-        if (job.groupKey() != null) offer = due.stream().findFirst().orElse(offer);
-        var cancel = due.isEmpty() ? Optional.of(Cancel.OFFER_ENDED) : reminderCancel(job, offer, now);
+        // Re-check right before posting: games may have ended or the setting changed since the claim.
+        var due = due(job, now);
+        var cancel = blocked(job, due, now);
         if (cancel.isPresent()) return CompletableFuture.failedFuture(new Cancelled(cancel.get()));
-        if (closed || !jobs().submitting(job, now)) return CompletableFuture.failedFuture(new LeaseLost());
-        // A game sent without a ping also gets its ending-soon reminder without one.
-        Optional<String> role = repository.quiet(offer.id()) ? Optional.empty() : subscriptions.find(job.guildId(), job.channelId(), offer.store())
-                .flatMap(FreebieSubscriptions.Subscription::roleId).filter(id -> guild.getRoleById(id) != null);
-        return channel.sendMessage(FreebieLifecycleMessages.reminder(due, job.offerId(), job.channelId(), role, now))
-                .setMessageReference(job.messageId()).failOnInvalidReply(false)
-                .setNonce(FreebieLifecycleMessages.reminderNonce(job.offerId(), job.channelId()))
+        boolean claimed = job.bucket() == null ? jobs().submitting(job, now)
+                : jobs().submitting(job, now, due.stream().map(d -> d.offer().id()).toList());
+        if (closed || !claimed) return CompletableFuture.failedFuture(new LeaseLost());
+        return channel.sendMessage(FreebieLifecycleMessages.reminder(due, referenceKey(job), pings(job, guild, due), now))
+                .setNonce(FreebieLifecycleMessages.reminderNonce(referenceKey(job)))
                 .timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit().thenApply(Message::getId);
     }
 
+    /** History reference of a reminder: the job ID for channel reminders, the per-offer key for older jobs. */
+    static String referenceKey(Job job) {
+        return job.bucket() != null ? job.id() : FreebieLifecycleStore.remindId(job.offerId(), job.channelId());
+    }
+
     /**
-     * The games of a grouped reminder: every live member of the announcement's pages in this channel that ends at the
-     * same moment as the job's offer.
+     * Roles the reminder pings: only for games whose section turned the reminder ping on, that were not sent quietly,
+     * and whose saved role still exists. Off by default, so a reminder normally pings no one.
+     */
+    private Set<String> pings(Job job, Guild guild, List<FreebieLifecycleMessages.Due> due) {
+        Set<String> roles = new TreeSet<>();
+        for (var d : due) {
+            if (repository.quiet(d.offer().id())) continue;
+            subscriptions.find(job.guildId(), job.channelId(), d.offer().store()).filter(FreebieSubscriptions.Subscription::reminderPing)
+                    .flatMap(FreebieSubscriptions.Subscription::roleId).filter(id -> guild.getRoleById(id) != null).ifPresent(roles::add);
+        }
+        return roles;
+    }
+
+    /** The games the reminder lists right now. */
+    private List<FreebieLifecycleMessages.Due> due(Job job, Instant now) {
+        if (job.bucket() != null) return channelDue(job, now);
+        Optional<String> alert = Optional.ofNullable(job.messageId())
+                .map(id -> FreebieLifecycleMessages.alertUrl(job.guildId(), job.channelId(), id));
+        FreebieOffer anchor = repository.offer(job.offerId()).orElse(null);
+        List<FreebieOffer> offers = job.groupKey() != null ? groupDue(job, anchor, now)
+                : FreebieLifecycle.live(anchor, now) ? List.of(anchor) : List.of();
+        return offers.stream().map(o -> new FreebieLifecycleMessages.Due(o, alert)).toList();
+    }
+
+    /**
+     * A channel reminder's games: every live game ending in the job's bucket whose alert was sent in this channel and
+     * whose section here still asks for a reminder at the job's hours, each only once its own reminder is due.
+     */
+    private List<FreebieLifecycleMessages.Due> channelDue(Job job, Instant now) {
+        List<FreebieLifecycleMessages.Due> due = new ArrayList<>();
+        for (var offer : jobs().endingBetween(job.bucket(), job.bucket().plus(FreebieLifecycleStore.BUCKET), now, MAX_GAMES)) {
+            var setting = subscriptions.find(job.guildId(), job.channelId(), offer.store());
+            if (setting.isEmpty() || setting.get().reminderHours() != job.hours()) continue;
+            for (var delivery : jobs().sentIn(offer.id(), List.of(job.channelId()))) {
+                Date posted = delivery.getDate("finishedAt");
+                var verdict = FreebieLifecycle.reminder(offer, job.hours(), delivery.getString("state"), delivery.getString("messageId"),
+                        posted == null ? null : posted.toInstant(), now);
+                if (verdict != FreebieLifecycle.Reminder.DUE) continue;
+                due.add(new FreebieLifecycleMessages.Due(offer,
+                        Optional.of(FreebieLifecycleMessages.alertUrl(job.guildId(), job.channelId(), delivery.getString("messageId")))));
+                break;
+            }
+        }
+        return due;
+    }
+
+    /** At most this many games in one reminder (Discord's description limit keeps each line readable). */
+    static final int MAX_GAMES = 25;
+
+    /** Why the reminder must not post, if any. */
+    private Optional<Cancel> blocked(Job job, List<FreebieLifecycleMessages.Due> due, Instant now) {
+        if (job.bucket() == null) return due.isEmpty() ? Optional.of(Cancel.OFFER_ENDED) : reminderCancel(job, due.getFirst().offer(), now);
+        if (!due.isEmpty()) return Optional.empty();
+        var anchor = repository.offer(job.offerId()).orElse(null);
+        if (!FreebieLifecycle.live(anchor, now)) return Optional.of(Cancel.OFFER_ENDED);
+        return reminderCancel(job, anchor, now).or(() -> Optional.of(Cancel.OFFER_ENDED));
+    }
+
+    /**
+     * The games of an older grouped reminder: every live member of the announcement's pages in this channel that ends
+     * at the same moment as the job's offer.
      */
     private List<FreebieOffer> groupDue(Job job, FreebieOffer anchor, Instant now) {
         if (anchor == null || anchor.realEnd().isEmpty()) return List.of();

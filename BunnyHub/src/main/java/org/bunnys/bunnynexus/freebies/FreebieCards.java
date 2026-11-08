@@ -10,9 +10,17 @@ import org.bunnys.utils.Embeds;
 import static org.bunnys.bunnynexus.freebies.FreebieMessages.text;
 import static org.bunnys.bunnynexus.freebies.FreebieMessages.title;
 
-/** Launcher-specific public cards, built only from the reviewed offer's saved metadata. */
+/**
+ * The one public game card and its claim button, built only from the reviewed offer's saved metadata. Every store and
+ * every surface (channel post, DM, review preview) uses the same fields in the same order; the store only changes the
+ * emoji, the author icon and the launcher name.
+ */
 final class FreebieCards {
     private FreebieCards() {}
+
+    static final String PRICE = "Price", ENDS = "Ends", LAUNCHER = "Launcher", REGION = "Region", MOBILE = "Mobile",
+            HOW_TO_CLAIM = "How to claim";
+    static final String CLAIM_LABEL = "Claim Free Game";
 
     static String emoji(FreebieStore store) {
         return switch (store) {
@@ -22,71 +30,62 @@ final class FreebieCards {
         };
     }
 
-    /** Prefix of the two disabled spacer buttons that center the claim button; they never route anywhere. */
-    static final String SPACER_PREFIX = "freebie_pad";
-    /** Hangul filler: renders as nothing, but unlike a space Discord accepts it as a button label. */
-    /** Hangul fillers render as blank but, unlike spaces, are not trimmed, so they set the spacers' width. */
-    private static final String INVISIBLE = "\u3164".repeat(8);
-    /** Heading above the claim link. Lifecycle edits look for it to strip the link once an offer ends. */
-    static final String CLAIM_HEADING = "**Claim Game**";
+    private static String icon(FreebieStore store) {
+        return switch (store) {
+            case EPIC -> "https://cdn.discordapp.com/emojis/824679104220626954.png";
+            case STEAM -> "https://cdn.discordapp.com/emojis/705062577817780315.png";
+            default -> null;
+        };
+    }
 
     /**
-     * The claim button between two empty, disabled buttons. Discord always left-aligns buttons, so this is the
-     * only way to show it centered on desktop.
+     * Custom ID prefix of the disabled spacer buttons older cards were posted with. No longer created; kept so ended
+     * edits of those cards remove them together with the claim button.
      */
-    static ActionRow claimRow(FreebieOffer offer) {
-        return ActionRow.of(spacer("l"), claimButton(offer), spacer("r"));
-    }
-
-    private static Button spacer(String side) {
-        return Button.secondary(SPACER_PREFIX + ":" + side, INVISIBLE).asDisabled();
-    }
+    static final String SPACER_PREFIX = "freebie_pad";
+    /** Heading above the claim link on older cards. Lifecycle edits look for it to strip the link once an offer ends. */
+    static final String CLAIM_HEADING = "**Claim Game**";
 
     static boolean isSpacer(ActionRowChildComponent component) {
         return component instanceof Button button && button.getCustomId() != null && button.getCustomId().startsWith(SPACER_PREFIX + ":");
     }
 
+    /** The claim button: same label everywhere, the launcher's emoji. */
     static Button claimButton(FreebieOffer offer) {
-        String label = switch (offer.store()) {
-            case EPIC -> "Claim Epic Offer";
-            case STEAM -> "Claim Steam Offer";
-            default -> "Claim Free Game";
-        };
-        return Button.link(offer.claimUrl().toString(), label).withEmoji(Emoji.fromFormatted(emoji(offer.store())));
+        return Button.link(offer.claimUrl().toString(), CLAIM_LABEL).withEmoji(Emoji.fromFormatted(emoji(offer.store())));
     }
 
+    /** The button row of a single-game card when no Epic catalog facts are known: the claim button only. */
+    static ActionRow claimRow(FreebieOffer offer) {
+        return ActionRow.of(claimButton(offer));
+    }
+
+    /** The channel card: no claim steps, since the store's own page shows them and the button does the claiming. */
     static MessageEmbed embed(FreebieOffer offer, String footer) {
-        boolean epic = offer.store() == FreebieStore.EPIC;
-        boolean steam = offer.store() == FreebieStore.STEAM;
-        boolean featured = epic || steam;
+        return embed(offer, footer, false);
+    }
+
+    /** {@code steps}: include the source's claim steps (DMs and the owner's review preview). */
+    static MessageEmbed embed(FreebieOffer offer, String footer, boolean steps) {
         String mark = emoji(offer.store());
-        String heading = epic ? "BunnyNexus • EPIC GAMES" : steam ? "BunnyNexus • STEAM"
-                : "BunnyNexus • FREE GAME • " + offer.store().label();
-        String icon = epic ? "https://cdn.discordapp.com/emojis/824679104220626954.png"
-                : steam ? "https://cdn.discordapp.com/emojis/705062577817780315.png" : null;
         var card = Embeds.of(mark, text(title(offer.title()), 250 - mark.length()))
-                .setAuthor(heading, null, icon)
+                .setAuthor("BunnyNexus • FREE GAME • " + offer.store().label(), null, icon(offer.store()))
                 .setUrl(offer.claimUrl().toString())
-                .setDescription(text(offer.description(), 500)
-                        + "\n\n" + CLAIM_HEADING + "\n[" + text(title(offer.title()), 200) + "](" + offer.claimUrl().toASCIIString() + ")")
-                .addField(featured ? "THE DEAL" : "PRICE", offer.worth()
-                        .map(w -> "~~" + text(w, 40) + "~~ → **FREE**\nListed value")
-                        .orElse("**FREE**\nNo price listed"), true)
-                .addField(featured ? "CLAIM WINDOW" : "OFFER ENDS", deadline(offer), true);
-        if (featured) card.addField("PLATFORMS", text(offer.platforms(), 200), false);
-        else card.addField("LAUNCHER", offer.store().label(), true);
-        if (offer.instructions() != null && !offer.instructions().isBlank())
-            card.addField(epic ? "GET STARTED ON EPIC" : steam ? "GET STARTED ON STEAM" : "HOW TO CLAIM",
-                    text(offer.instructions(), 650), false);
-        if (offer.id().startsWith("epic:")) card.addField("REGION", offer.region(), false);
+                .setDescription(text(offer.description(), 300))
+                .addField(PRICE, offer.worth().map(w -> "~~" + text(w, 40) + "~~ → **FREE**").orElse("**FREE**"), true)
+                .addField(ENDS, deadline(offer), true)
+                .addField(LAUNCHER, offer.store().label(), true);
+        if (offer.id().startsWith("epic:")) card.addField(REGION, text(offer.region(), 1000), false);
+        if (steps && offer.instructions() != null && !offer.instructions().isBlank())
+            card.addField(HOW_TO_CLAIM, text(offer.instructions(), 650), false);
         offer.image().ifPresent(image -> card.setImage(image.toString()));
         return card.setFooter(footer).setTimestamp(null).build();
     }
 
-    private static String deadline(FreebieOffer offer) {
-        return offer.endsAt().map(end -> "<t:" + end.getEpochSecond() + ":R>\n"
-                + (offer.id().startsWith("epic:") ? "Ends: <t:" : "Estimated: <t:") + end.getEpochSecond() + ":f>")
-                .orElse("No end date listed\nClaim while available");
+    /** Relative and absolute end; "estimated" only when the saved date really is a guess. */
+    static String deadline(FreebieOffer offer) {
+        return offer.endsAt().map(end -> "<t:" + end.getEpochSecond() + ":R>\n<t:" + end.getEpochSecond() + ":f>"
+                + (offer.realEnd().isEmpty() ? " (estimated)" : ""))
+                .orElse("No end date listed");
     }
 }
-
