@@ -56,7 +56,7 @@ final class FreebieAnnouncementCards {
         return embeds;
     }
 
-    /** The single-game card: the existing launcher card plus region and verified mobile details. */
+    /** The single-game card: the shared card plus region and verified mobile details. */
     static MessageEmbed full(Member m, Instant now) {
         MessageEmbed built = decorate(FreebieCards.embed(m.offer(), m.footer()), m.facts(), m.facts().publicVariants(now), now);
         return m.status() == Status.LIVE ? built : FreebieLifecycleMessages.endedEmbed(built, m.status() == Status.WITHDRAWN);
@@ -64,17 +64,17 @@ final class FreebieAnnouncementCards {
 
     /** The owner's review preview: the public card as it would be posted, with every live variant awaiting approval. */
     static MessageEmbed preview(FreebieOffer offer, FreebieFacts facts, Instant now) {
-        return decorate(FreebieCards.embed(offer, "Powered by " + offer.sourceLabel() + " • ref preview"), facts,
+        return decorate(FreebieCards.embed(offer, "Powered by " + offer.sourceLabel() + " • ref preview", true), facts,
                 facts.variants().stream().filter(v -> v.liveAt(now)).toList(), now);
     }
 
     private static MessageEmbed decorate(MessageEmbed base, FreebieFacts facts, List<FreebieFacts.Variant> mobile, Instant now) {
         var card = new EmbedBuilder(base);
         if (facts.official()) {
-            card.getFields().removeIf(f -> "REGION".equals(f.getName()));
-            card.addField("REGION", text(FreebieRegions.describe(facts.regions(), true, now), 1000), false);
+            card.getFields().removeIf(f -> FreebieCards.REGION.equals(f.getName()));
+            card.addField(FreebieCards.REGION, text(FreebieRegions.describe(facts.regions(), true, now), 1000), false);
         }
-        if (!mobile.isEmpty()) card.addField("ALSO FREE ON MOBILE", mobileText(mobile, now), false);
+        if (!mobile.isEmpty()) card.addField(FreebieCards.MOBILE, mobileText(mobile, now), false);
         return card.build();
     }
 
@@ -113,7 +113,11 @@ final class FreebieAnnouncementCards {
         return card.build();
     }
 
-    /** One claim button per live game (plus details/mobile for a single game) and, when enabled, combined checkout. */
+    /**
+     * The one button policy. A single live game: Claim, then Instant Checkout (only with an exact Epic catalog identity
+     * and checkout enabled), then one link per reviewed mobile version. Several games: the combined checkout when
+     * available, then one Claim per live game. Ended or withdrawn games have no buttons.
+     */
     static List<ActionRow> components(List<Member> members, boolean checkout, Instant now) {
         List<ActionRowChildComponent> buttons = new ArrayList<>();
         var live = members.stream().filter(m -> m.status() == Status.LIVE).toList();
@@ -125,7 +129,6 @@ final class FreebieAnnouncementCards {
                 if (checkout) combined(members, now).ifPresent(buttons::add);
                 for (var v : m.facts().publicVariants(now)) buttons.add(Button.link(v.page().toString(), "Claim " + v.label() + " version"));
             }
-            buttons.add(Button.link(m.offer().pageUrl().toString(), "Offer Details"));
         } else for (Member m : live) buttons.add(Button.link(m.offer().claimUrl().toString(), label("Claim " + title(m.offer().title()))));
         List<ActionRow> rows = new ArrayList<>();
         for (int i = 0; i < buttons.size() && rows.size() < 5; i += 5) rows.add(ActionRow.of(buttons.subList(i, Math.min(i + 5, buttons.size()))));

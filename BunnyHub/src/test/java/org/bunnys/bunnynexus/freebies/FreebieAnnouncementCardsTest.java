@@ -46,8 +46,8 @@ class FreebieAnnouncementCardsTest {
         assertEquals("<@&" + ROLE + ">", data.getContent());
         assertEquals(Set.of(ROLE), data.getMentionedRoles());
         assertTrue(data.getAllowedMentions().stream().noneMatch(t -> t == Message.MentionType.EVERYONE || t == Message.MentionType.HERE));
-        assertEquals(List.of(FreebieCards.claimButton(m.offer()).getLabel(), "Offer Details"), labels(data.getComponents().stream().map(c -> (ActionRow) c).toList()));
-        String region = data.getEmbeds().getFirst().getFields().stream().filter(f -> "REGION".equals(f.getName())).findFirst().orElseThrow().getValue();
+        assertEquals(List.of(FreebieCards.claimButton(m.offer()).getLabel()), labels(data.getComponents().stream().map(c -> (ActionRow) c).toList()));
+        String region = data.getEmbeds().getFirst().getFields().stream().filter(f -> "Region".equals(f.getName())).findFirst().orElseThrow().getValue();
         assertTrue(region.contains("not fully verified"));
     }
 
@@ -100,7 +100,7 @@ class FreebieAnnouncementCardsTest {
     @Test void aSingleGameGetsInstantCheckoutAfterItsClaimButton() {
         var m = member("a", LIVE);
         var labels = labels(FreebieAnnouncementCards.components(List.of(m), true, now));
-        assertEquals(List.of(FreebieCards.claimButton(m.offer()).getLabel(), "Instant Checkout", "Offer Details"), labels);
+        assertEquals(List.of(FreebieCards.claimButton(m.offer()).getLabel(), "Instant Checkout"), labels);
         assertTrue(labels(FreebieAnnouncementCards.components(List.of(m), false, now)).stream().noneMatch(l -> l.contains("Checkout")));
         assertTrue(labels(FreebieAnnouncementCards.components(List.of(member("a", ENDED)), true, now)).stream().noneMatch(l -> l.contains("Checkout")));
     }
@@ -117,7 +117,7 @@ class FreebieAnnouncementCardsTest {
         var labels = labels(data.getComponents().stream().map(c -> (ActionRow) c).toList());
         assertTrue(labels.contains("Claim Android version"));
         assertFalse(labels.contains("Claim iOS version"), "a variant found after approval is not added automatically");
-        String mobile = data.getEmbeds().getFirst().getFields().stream().filter(f -> f.getName().equals("ALSO FREE ON MOBILE")).findFirst().orElseThrow().getValue();
+        String mobile = data.getEmbeds().getFirst().getFields().stream().filter(f -> f.getName().equals("Mobile")).findFirst().orElseThrow().getValue();
         assertTrue(mobile.contains("a PC claim does not include mobile") && mobile.contains("Saudi Arabia, Taiwan"));
         assertEquals("", data.getContent(), "no ping without a saved role");
     }

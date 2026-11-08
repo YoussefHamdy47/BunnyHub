@@ -31,7 +31,7 @@ final class FreebieLifecycleMessages {
             WITHDRAWN_TEXT = "This giveaway was withdrawn.";
     /** The current claim heading, plus the older wording still on cards posted before it changed. */
     private static final List<String> CLAIM_BLOCKS = List.of("\n\n" + FreebieCards.CLAIM_HEADING + "\n", "\n\n**Claim your game**\n");
-    private static final Set<String> DEADLINE_FIELDS = Set.of("CLAIM WINDOW", "OFFER ENDS");
+    private static final Set<String> DEADLINE_FIELDS = Set.of(FreebieCards.ENDS, "CLAIM WINDOW", "OFFER ENDS");
 
     /**
      * Edit for a posted alert: grey, "Ended:" title, the claim link line replaced by the ended sentence, deadline
@@ -81,9 +81,10 @@ final class FreebieLifecycleMessages {
         return FreebieMessages.isAlertFooter(embed, reference);
     }
 
-    /** The claim button is the link button labelled "Claim …"; anything else (such as Unsubscribe) stays. */
+    /** The claim buttons are link buttons labelled "Claim …" (and Instant Checkout); anything else (such as Unsubscribe) stays. */
     static boolean isClaim(ActionRowChildComponent component) {
-        return component instanceof Button button && button.getStyle() == ButtonStyle.LINK && button.getLabel().startsWith("Claim");
+        return component instanceof Button button && button.getStyle() == ButtonStyle.LINK
+                && (button.getLabel().startsWith("Claim") || button.getLabel().startsWith("Instant Checkout"));
     }
 
     static List<ActionRow> withoutClaim(List<? extends MessageTopLevelComponent> components) {
@@ -105,58 +106,70 @@ final class FreebieLifecycleMessages {
 
     // ------------------------------------------------------------------ reminder
 
+    /** One game of a reminder, with a link to its alert in the channel when known. */
+    record Due(FreebieOffer offer, Optional<String> alertUrl) {}
+
+    /** {@code key}: the reminder job ID for channel reminders, or {@code remind|<offerId>|<channelId>} for older ones. */
+    static String reminderReference(String key) {
+        return "Ending soon • ref " + FreebieMessages.nonce(key).substring(0, 12);
+    }
+
+    static String reminderNonce(String key) { return FreebieMessages.nonce(key); }
+
     static String reminderReference(String offerId, String channelId) {
-        return "Ending soon • ref " + FreebieMessages.nonce("remind|" + offerId + "|" + channelId).substring(0, 12);
+        return reminderReference(FreebieLifecycleStore.remindId(offerId, channelId));
     }
 
     static String reminderNonce(String offerId, String channelId) {
-        return FreebieMessages.nonce("remind|" + offerId + "|" + channelId);
+        return reminderNonce(FreebieLifecycleStore.remindId(offerId, channelId));
     }
 
-    static boolean carriesReminderReference(Message message, String offerId, String channelId) {
-        String reference = reminderReference(offerId, channelId);
+    static boolean carriesReminderReference(Message message, String key) {
+        String reference = reminderReference(key);
         return message.getEmbeds().stream().anyMatch(e -> e.getFooter() != null && reference.equals(e.getFooter().getText()));
     }
 
-    /**
-     * Short reply to the original alert, with the claim button. Only {@code roleId} may be pinged, never
-     * everyone/here or users, and the reply does not ping the replied-to author.
-     */
+    static String alertUrl(String guildId, String channelId, String messageId) {
+        return "https://discord.com/channels/" + guildId + "/" + channelId + "/" + messageId;
+    }
+
+    /** A single-game reminder for an older per-offer job (tests and history references). */
     static MessageCreateData reminder(FreebieOffer offer, String channelId, Optional<String> roleId, Instant now) {
-        return reminder(List.of(offer), offer.id(), channelId, roleId, now);
+        return reminder(List.of(new Due(offer, Optional.empty())), FreebieLifecycleStore.remindId(offer.id(), channelId),
+                roleId.map(Set::of).orElse(Set.of()), now);
     }
 
     /**
-     * One reminder for several games ending at the same time (an announcement group). {@code referenceOfferId} keeps
-     * the history reference stable across retries.
+     * One message for every game in a channel ending at about the same time: a line per game (its claim link and a link
+     * back to its alert), one claim button per game (at most five) and the time left until the earliest end. A normal
+     * message, not a reply. Only {@code roleIds} may be pinged, never everyone/here or users; empty means no ping.
      */
-    static MessageCreateData reminder(List<FreebieOffer> offers, String referenceOfferId, String channelId, Optional<String> roleId, Instant now) {
-        if (offers.size() > 1) {
-            Instant end = offers.getFirst().realEnd().orElseThrow();
-            long hours = FreebieLifecycle.hoursLeft(end, now);
-            var lines = new StringBuilder();
-            for (var o : offers) lines.append("**[").append(text(title(o.title()), 150)).append("](").append(o.claimUrl().toASCIIString()).append(")**\n");
-            var embed = Embeds.of("⏰", "Ending soon")
-                    .setDescription(lines + "Ends in about " + hours + (hours == 1 ? " hour" : " hours") + " (<t:" + end.getEpochSecond() + ":f>).")
-                    .setTimestamp(null).setFooter(reminderReference(referenceOfferId, channelId)).build();
-            List<Button> buttons = new ArrayList<>();
-            for (var o : offers.subList(0, Math.min(5, offers.size())))
-                buttons.add(Button.link(o.claimUrl().toString(), FreebieMessages.label("Claim " + title(o.title()))));
-            var builder = new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(buttons))
-                    .setAllowedMentions(List.of()).mentionRepliedUser(false);
-            roleId.ifPresent(role -> builder.setContent("<@&" + role + ">").mentionRoles(role));
-            return builder.build();
-        }
-        FreebieOffer offer = offers.getFirst();
-        Instant end = offer.realEnd().orElseThrow();
+    static MessageCreateData reminder(List<Due> due, String key, Set<String> roleIds, Instant now) {
+        Instant end = due.stream().map(d -> d.offer().realEnd().orElseThrow()).min(Comparator.naturalOrder()).orElseThrow();
         long hours = FreebieLifecycle.hoursLeft(end, now);
+        int room = Math.max(60, 3500 / due.size() - 120);
+        var lines = new StringBuilder();
+        for (var d : due) {
+            lines.append("**[").append(text(title(d.offer().title()), Math.min(150, room))).append("](")
+                    .append(d.offer().claimUrl().toASCIIString()).append(")**");
+            d.alertUrl().ifPresent(url -> lines.append(" · [alert](").append(url).append(")"));
+            lines.append("\n");
+        }
+        String games = due.size() == 1 ? "" : due.size() + " games · ";
         var embed = Embeds.of("⏰", "Ending soon")
-                .setDescription("**[" + text(title(offer.title()), 200) + "](" + offer.claimUrl().toASCIIString() + ")**\n"
-                        + "Ends in about " + hours + (hours == 1 ? " hour" : " hours") + " (<t:" + end.getEpochSecond() + ":f>).")
-                .setTimestamp(null).setFooter(reminderReference(referenceOfferId, channelId)).build();
-        var builder = new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(FreebieCards.claimButton(offer)))
+                .setDescription(lines + games + "Ends in about " + hours + (hours == 1 ? " hour" : " hours")
+                        + " (<t:" + end.getEpochSecond() + ":f>).")
+                .setTimestamp(null).setFooter(reminderReference(key)).build();
+        List<Button> buttons = new ArrayList<>();
+        if (due.size() == 1) buttons.add(FreebieCards.claimButton(due.getFirst().offer()));
+        else for (var d : due.subList(0, Math.min(5, due.size())))
+            buttons.add(Button.link(d.offer().claimUrl().toString(), FreebieMessages.label("Claim " + title(d.offer().title()))));
+        var builder = new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(buttons))
                 .setAllowedMentions(List.of()).mentionRepliedUser(false);
-        roleId.ifPresent(role -> builder.setContent("<@&" + role + ">").mentionRoles(role));
+        if (!roleIds.isEmpty()) {
+            var sorted = new TreeSet<>(roleIds);
+            builder.setContent(String.join(" ", sorted.stream().map(r -> "<@&" + r + ">").toList())).mentionRoles(sorted);
+        }
         return builder.build();
     }
 }

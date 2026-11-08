@@ -50,6 +50,14 @@ public final class FreebieServerSetup {
     public static SectionSaved saveSection(Guild guild, FreebieSection section, StandardGuildMessageChannel channel,
                                            Optional<Role> role, Set<FreebieStore> stores, boolean keepLauncherPings,
                                            Integer reminderHours, String actorId, FreebieSubscriptions subscriptions) {
+        return saveSection(guild, section, channel, role, stores, keepLauncherPings, reminderHours, null, actorId, subscriptions);
+    }
+
+    /** As above; a non-null {@code reminderPing} also sets whether the reminder pings the section's role. */
+    public static SectionSaved saveSection(Guild guild, FreebieSection section, StandardGuildMessageChannel channel,
+                                           Optional<Role> role, Set<FreebieStore> stores, boolean keepLauncherPings,
+                                           Integer reminderHours, Boolean reminderPing, String actorId,
+                                           FreebieSubscriptions subscriptions) {
         Set<FreebieStore> picked = EnumSet.noneOf(FreebieStore.class);
         stores.stream().filter(s -> s.section() == section).forEach(picked::add);
         if (picked.isEmpty()) {
@@ -61,14 +69,15 @@ public final class FreebieServerSetup {
         var problem = FreebieSettingsCommands.validate(guild, channel, role);
         if (problem.isPresent()) return failed("⚠️ " + problem.get());
         var result = subscriptions.setSection(guild.getId(), section, channel.getId(), picked, role.map(Role::getId),
-                keepLauncherPings, reminderHours, actorId, Instant.now());
+                keepLauncherPings, reminderHours, reminderPing, actorId, Instant.now());
         if (result == SaveResult.LIMIT_REACHED)
             return failed("⚠️ This server already uses " + FreebieSubscriptions.MAX_CHANNELS_PER_GUILD
                     + " alert channels. Put this section in one of those, or turn another section off first.");
         return new SectionSaved("✅ **" + section.label() + "** now posts " + labels(picked) + " in " + channel.getAsMention()
                 + (keepLauncherPings ? ", each launcher keeping its own ping"
                         : role.map(r -> ", pinging " + r.getAsMention()).orElse(" without a ping")) + "."
-                + (reminderHours != null && reminderHours > 0 ? " Reminder " + reminderHours + " hours before a game ends." : "")
+                + (reminderHours != null && reminderHours > 0 ? " Reminder " + reminderHours + " hours before a game ends"
+                        + (Boolean.TRUE.equals(reminderPing) ? ", with a ping." : ", without a ping.") : "")
                 + (guild.getSelfMember().hasPermission(channel, Permission.MESSAGE_HISTORY) ? ""
                 : "\n⚠️ Please also give me **Read Message History** there, so retries can never double-post."),
                 Optional.of(channel.getId()), picked);

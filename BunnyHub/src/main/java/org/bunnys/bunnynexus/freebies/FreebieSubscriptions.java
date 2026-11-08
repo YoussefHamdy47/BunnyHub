@@ -25,8 +25,15 @@ public final class FreebieSubscriptions {
     /** Every launcher in every allowed channel; bounds per-server reads. */
     public static final int MAX_PER_GUILD = MAX_CHANNELS_PER_GUILD * FreebieStore.values().length;
 
-    /** {@code reminderHours}: ending-soon reminder for the section (0 = off, the default; 6 or 24). */
-    public record Subscription(String guildId, String channelId, FreebieStore store, Optional<String> roleId, int reminderHours) {
+    /**
+     * {@code reminderHours}: ending-soon reminder for the section (0 = off, the default; 6 or 24).
+     * {@code reminderPing}: the reminder pings the saved role too (off by default; set only by the dashboard form).
+     */
+    public record Subscription(String guildId, String channelId, FreebieStore store, Optional<String> roleId, int reminderHours,
+                               boolean reminderPing) {
+        public Subscription(String guildId, String channelId, FreebieStore store, Optional<String> roleId, int reminderHours) {
+            this(guildId, channelId, store, roleId, reminderHours, false);
+        }
         public Subscription(String guildId, String channelId, FreebieStore store, Optional<String> roleId) {
             this(guildId, channelId, store, roleId, 0);
         }
@@ -129,6 +136,13 @@ public final class FreebieSubscriptions {
     public SaveResult setSection(String guildId, FreebieSection section, String channelId, Set<FreebieStore> stores,
                                  Optional<String> roleId, boolean keepLauncherPings, Integer reminderHours,
                                  String actorId, Instant now) {
+        return setSection(guildId, section, channelId, stores, roleId, keepLauncherPings, reminderHours, null, actorId, now);
+    }
+
+    /** As above; a non-null {@code reminderPing} also sets whether the section's reminder pings (null keeps it). */
+    public SaveResult setSection(String guildId, FreebieSection section, String channelId, Set<FreebieStore> stores,
+                                 Optional<String> roleId, boolean keepLauncherPings, Integer reminderHours, Boolean reminderPing,
+                                 String actorId, Instant now) {
         if (reminderHours != null && !REMINDER_CHOICES.contains(reminderHours))
             throw new IllegalArgumentException("Unsupported reminder setting.");
         List<String> wanted = section.stores().stream().filter(stores::contains).map(FreebieStore::id).toList();
@@ -144,7 +158,7 @@ public final class FreebieSubscriptions {
         if (keepLauncherPings) for (Subscription s : current) if (s.store().section() == section) kept.putIfAbsent(s.store(), s.roleId());
         for (String id : wanted) {
             FreebieStore store = FreebieStore.byId(id).orElseThrow();
-            upsert(new Subscription(guildId, channelId, store, kept.getOrDefault(store, roleId)), reminderHours, actorId, now);
+            upsert(new Subscription(guildId, channelId, store, kept.getOrDefault(store, roleId)), reminderHours, reminderPing, actorId, now);
         }
         subscriptions.deleteMany(and(eq("guildId", guildId), in("store", sectionIds),
                 or(ne("channelId", channelId), nin("store", wanted))));
@@ -207,15 +221,16 @@ public final class FreebieSubscriptions {
         return false;
     }
 
-    private void upsert(Subscription s, String actorId, Instant now) { upsert(s, null, actorId, now); }
+    private void upsert(Subscription s, String actorId, Instant now) { upsert(s, null, null, actorId, now); }
 
-    /** Sets the saved fields and keeps any other (such as the section's reminder) unless {@code reminderHours} is given. */
-    private void upsert(Subscription s, Integer reminderHours, String actorId, Instant now) {
+    /** Sets the saved fields and keeps any other (such as the section's reminder) unless a reminder value is given. */
+    private void upsert(Subscription s, Integer reminderHours, Boolean reminderPing, String actorId, Instant now) {
         String id = id(s.guildId(), s.channelId(), s.store());
         var fields = new Document("schemaVersion", 1).append("guildId", s.guildId())
                 .append("channelId", s.channelId()).append("store", s.store().id()).append("roleId", s.roleId().orElse(null))
                 .append("updatedBy", actorId).append("updatedAt", Date.from(now));
         if (reminderHours != null) fields.append("reminderHours", reminderHours);
+        if (reminderPing != null) fields.append("reminderPing", reminderPing);
         subscriptions.updateOne(eq("_id", id), new Document("$set", fields), new UpdateOptions().upsert(true));
     }
 
@@ -236,6 +251,6 @@ public final class FreebieSubscriptions {
         Object hours = d.get("reminderHours");
         return new Subscription(d.getString("guildId"), d.getString("channelId"),
                 FreebieStore.byId(d.getString("store")).orElse(FreebieStore.OTHER), Optional.ofNullable(d.getString("roleId")),
-                hours instanceof Number n ? n.intValue() : 0);
+                hours instanceof Number n ? n.intValue() : 0, d.getBoolean("reminderPing", false));
     }
 }

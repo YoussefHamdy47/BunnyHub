@@ -51,7 +51,12 @@ public final class FreebieMessages {
     }
 
     static MessageEmbed alertEmbed(FreebieOffer offer, String reference) {
-        return FreebieCards.embed(offer, "Powered by " + offer.sourceLabel() + " • ref " + reference);
+        return alertEmbed(offer, reference, false);
+    }
+
+    /** {@code steps}: include the claim steps (personal DMs). */
+    static MessageEmbed alertEmbed(FreebieOffer offer, String reference, boolean steps) {
+        return FreebieCards.embed(offer, "Powered by " + offer.sourceLabel() + " • ref " + reference, steps);
     }
 
     /** Every review pings the owners, whatever the section. */

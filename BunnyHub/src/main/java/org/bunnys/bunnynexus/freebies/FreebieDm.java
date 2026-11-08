@@ -77,7 +77,7 @@ public final class FreebieDm {
 
     /** The channel alert card with no ping and no mentions at all, plus a stateless Unsubscribe button. */
     static MessageCreateData card(FreebieOffer offer, String jobId) {
-        return new MessageCreateBuilder().setEmbeds(FreebieMessages.alertEmbed(offer, reference(jobId)))
+        return new MessageCreateBuilder().setEmbeds(FreebieMessages.alertEmbed(offer, reference(jobId), true))
                 .setComponents(ActionRow.of(FreebieCards.claimButton(offer), unsubscribeButton()))
                 .setAllowedMentions(List.of()).mentionRepliedUser(false).build();
     }

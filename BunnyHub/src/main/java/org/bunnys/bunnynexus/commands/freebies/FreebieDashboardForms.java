@@ -40,11 +40,14 @@ public final class FreebieDashboardForms {
             if (!FreebieDashboard.NONE.equals(args[5]) && !FreebieDashboard.MIXED.equals(args[5])) role.setDefaultValues(DefaultValue.role(args[5]));
         } catch (NumberFormatException malformed) { return Optional.empty(); }
         String reminderNow = args.length == 8 ? args[7] : "0";
-        if (!FreebieSubscriptions.REMINDER_CHOICES.contains(parse(reminderNow))) return Optional.empty();
+        if (reminderHours(reminderNow) < 0) return Optional.empty();
+        if ("0p".equals(reminderNow)) reminderNow = "0";
         var reminder = StringSelectMenu.create(FreebieDashboard.REMINDER_FIELD).setRequiredRange(1, 1)
                 .addOption("Off", "0", "No reminder")
-                .addOption("24 hours before", "24", "A short reply to the alert a day before a game ends")
-                .addOption("6 hours before", "6", "A short reply to the alert 6 hours before a game ends")
+                .addOption("24 hours before", "24", "One message listing every game ending then; no ping")
+                .addOption("6 hours before", "6", "One message listing every game ending then; no ping")
+                .addOption("24 hours before, with ping", "24p", "As above, pinging this section's role")
+                .addOption("6 hours before, with ping", "6p", "As above, pinging this section's role")
                 .setDefaultValues(reminderNow);
         var post = StringSelectMenu.create(FreebieDashboard.POST_FIELD).setRequiredRange(1, 1);
         for (FreebieCatchUp choice : FreebieCatchUp.values()) post.addOption(choice.option(), String.valueOf(choice.code()));
@@ -63,15 +66,26 @@ public final class FreebieDashboardForms {
                         Label.of("Role to ping", mixed ? "Launchers have their own pings. Pick one role to replace them all."
                                 : "Leave empty to post without a ping", role.build()),
                         Label.of("Launchers", "Untick everything to turn this section off", launchers.build()),
-                        Label.of("Ending-soon reminder", "Only for games with a real end date; pings like new alerts",
+                        Label.of("Ending-soon reminder", "Only for games with a real end date; one message per end time",
                                 reminder.build()),
                         Label.of("Post current games now", "Approved games that are still free; each at most once per channel",
                                 post.build()))
                 .build());
     }
 
-    private static int parse(String value) {
-        try { return Integer.parseInt(value); } catch (NumberFormatException malformed) { return -1; }
+    /** Hours of a reminder choice ("24", "6p"), or -1 when it is not one of the offered choices. */
+    public static int reminderHours(String choice) {
+        if (choice == null) return -1;
+        String hours = choice.endsWith("p") ? choice.substring(0, choice.length() - 1) : choice;
+        try {
+            int parsed = Integer.parseInt(hours);
+            return FreebieSubscriptions.REMINDER_CHOICES.contains(parsed) ? parsed : -1;
+        } catch (NumberFormatException malformed) { return -1; }
+    }
+
+    /** Whether a reminder choice pings ("24p"); only meaningful when the reminder is on. */
+    public static boolean reminderPing(String choice) {
+        return choice != null && choice.endsWith("p") && reminderHours(choice) > 0;
     }
 
     /** One channel, the sections to post there and an optional ping: everything a first setup needs. */

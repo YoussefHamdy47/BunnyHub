@@ -56,7 +56,7 @@ final class FreebieLifecyclePlanner {
         return planned;
     }
 
-    /** One reminder per offer and channel, when the channel's section asks for one and it is due now. */
+    /** One reminder per channel and end time, when the channel's section asks for one and a game of it is due now. */
     int reminders(Instant now) {
         int queued = 0;
         for (var offer : jobs().endingWithin(now, REMINDER_WINDOW, OFFERS_PER_RUN)) {
@@ -68,10 +68,7 @@ final class FreebieLifecyclePlanner {
                 var verdict = FreebieLifecycle.reminder(offer, hours, delivery.getString("state"), delivery.getString("messageId"),
                         posted == null ? null : posted.toInstant(), now);
                 if (verdict != FreebieLifecycle.Reminder.DUE) continue;
-                String group = delivery.getString("announcementKey");
-                boolean planned = group == null ? jobs().planReminder(offer.id(), delivery, hours, now)
-                        : jobs().planGroupReminder(offer.id(), group, delivery, hours, offer.realEnd().orElseThrow(), now);
-                if (planned) queued++;
+                if (jobs().planChannelReminder(offer.id(), delivery, hours, offer.realEnd().orElseThrow(), now)) queued++;
             }
         }
         return queued;

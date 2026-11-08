@@ -16,6 +16,7 @@ import org.bunnys.bunnynexus.freebies.FreebieLifecycle.Skip;
 import org.bunnys.bunnynexus.freebies.FreebieLifecycleStore.Job;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
+import java.net.URI;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -182,7 +183,7 @@ class FreebieLifecycleWorkerTest {
         return action;
     }
 
-    @Test void reminderRepliesToTheAlertPingingOnlyTheSectionRole() {
+    @Test void reminderIsANormalMessageThatPingsOnlyWhenTheSectionAsks() {
         var job = job(Kind.REMIND, 1, false);
         when(guild.getRoleById(ROLE)).thenReturn(mock(Role.class));
         var sent = mock(Message.class); when(sent.getId()).thenReturn("reminder");
@@ -190,13 +191,61 @@ class FreebieLifecycleWorkerTest {
         run();
         var captor = ArgumentCaptor.forClass(MessageCreateData.class);
         verify(channel).sendMessage(captor.capture());
-        assertEquals(Set.of(ROLE), captor.getValue().getMentionedRoles());
+        assertTrue(captor.getValue().getMentionedRoles().isEmpty(), "reminders do not ping by default");
+        assertTrue(captor.getValue().getContent().isEmpty());
         assertTrue(captor.getValue().getAllowedMentions().isEmpty());
-        verify(action).setMessageReference(MESSAGE);
-        verify(action).failOnInvalidReply(false);
+        verify(action, never()).setMessageReference(anyString());
         verify(action).setNonce(FreebieLifecycleMessages.reminderNonce(offer.id(), CHANNEL));
         verify(store).submitting(job, now);
         verify(store).done(job, "reminder", now);
+
+        reset(channel);
+        when(guild.getChannelById(StandardGuildMessageChannel.class, CHANNEL)).thenReturn(channel);
+        job(Kind.REMIND, 1, false);
+        when(subscriptions.find(GUILD, CHANNEL, offer.store())).thenReturn(Optional.of(
+                new FreebieSubscriptions.Subscription(GUILD, CHANNEL, offer.store(), Optional.of(ROLE), 24, true)));
+        sendable(CompletableFuture.completedFuture(sent));
+        run();
+        verify(channel).sendMessage(captor.capture());
+        assertEquals(Set.of(ROLE), captor.getValue().getMentionedRoles(), "only the saved role, and only when asked");
+        assertTrue(captor.getValue().getAllowedMentions().isEmpty());
+    }
+
+    @Test void oneChannelReminderListsEveryGameEndingInTheSameBucket() {
+        Instant end = FreebieLifecycleTest.END;
+        Instant bucket = FreebieLifecycleStore.bucket(end);
+        var other = FreebieLifecycleTest.offer(FreebieOffer.State.APPROVED, false, Optional.of(end.plusSeconds(60)), false, true);
+        var second = new FreebieOffer("gamerpower:2", "2", other.store(), other.platforms(), "Second Game", other.description(),
+                other.instructions(), other.worth(), other.image(), URI.create("https://example.com/second"), other.pageUrl(),
+                other.endsAt(), other.discoveredAt(), other.state(), other.reviewMessageId(), other.reviewChannelId(),
+                other.decidedBy(), other.fanoutDone(), other.gone(), other.revision());
+        String id = FreebieLifecycleStore.channelRemindId(CHANNEL, 24, bucket);
+        var job = new Job(id, Kind.REMIND, offer.id(), offer.id() + "|" + CHANNEL, GUILD, CHANNEL, MESSAGE, false, 24, 1, false,
+                "token", null, null, bucket);
+        when(store.claim(any(), any())).thenReturn(Optional.of(job)).thenReturn(Optional.empty());
+        when(store.endingBetween(eq(bucket), eq(bucket.plus(FreebieLifecycleStore.BUCKET)), any(), anyInt()))
+                .thenReturn(List.of(offer, second));
+        Date posted = Date.from(now.minus(Duration.ofDays(2)));
+        when(store.sentIn(offer.id(), List.of(CHANNEL))).thenReturn(List.of(new org.bson.Document("state", "SENT")
+                .append("messageId", MESSAGE).append("finishedAt", posted)));
+        when(store.sentIn(second.id(), List.of(CHANNEL))).thenReturn(List.of(new org.bson.Document("state", "SENT")
+                .append("messageId", "900000000000000001").append("finishedAt", posted)));
+        when(store.submitting(any(), any(), any())).thenReturn(true);
+        Instant late = bucket.plus(FreebieLifecycleStore.BUCKET).minus(Duration.ofHours(24));
+        worker = new FreebieLifecycleWorker(repository, subscriptions, work::add, Clock.fixed(late, ZoneOffset.UTC));
+        var sent = mock(Message.class); when(sent.getId()).thenReturn("reminder");
+        var action = sendable(CompletableFuture.completedFuture(sent));
+        run();
+        var captor = ArgumentCaptor.forClass(MessageCreateData.class);
+        verify(channel, times(1)).sendMessage(captor.capture());
+        var embed = captor.getValue().getEmbeds().getFirst();
+        assertTrue(embed.getDescription().contains("Second Game") && embed.getDescription().contains("2 games"), embed.getDescription());
+        assertTrue(embed.getDescription().contains("/" + CHANNEL + "/" + MESSAGE), "links back to each alert");
+        assertEquals(2, FreebieLifecycleMessagesTest.buttons(captor.getValue().getComponents()).size());
+        assertTrue(captor.getValue().getMentionedRoles().isEmpty());
+        verify(action).setNonce(FreebieLifecycleMessages.reminderNonce(id));
+        verify(store).submitting(job, late, List.of(offer.id(), second.id()));
+        verify(store).done(job, "reminder", late);
     }
 
     @Test void aSectionWithoutAPingRoleRemindsQuietly() {

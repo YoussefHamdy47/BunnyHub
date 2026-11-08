@@ -14,7 +14,7 @@ class FreebieSourceMessagesTest {
         try (var alert = FreebieMessages.alert(offer, Optional.of("200000000000000001"), ref)) {
             var embed = alert.getEmbeds().getFirst();
             assertEquals("Powered by Epic Games • ref " + ref, embed.getFooter().getText());
-            assertTrue(embed.getFields().stream().anyMatch(f -> "REGION".equals(f.getName()) && f.getValue().contains("US")));
+            assertTrue(embed.getFields().stream().anyMatch(f -> "Region".equals(f.getName()) && f.getValue().contains("US")));
             assertTrue(FreebieMessages.isAlertFooter(embed, ref)); assertFalse(FreebieMessages.isAlertFooter(embed, ref + "a"));
             String json = alert.toData().toString();
             assertFalse(json.contains("purchase?")); assertFalse(json.contains("offers=1-"));

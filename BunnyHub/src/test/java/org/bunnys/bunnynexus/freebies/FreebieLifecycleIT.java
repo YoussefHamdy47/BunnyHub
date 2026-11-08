@@ -84,16 +84,39 @@ class FreebieLifecycleIT {
         assertEquals(1, marked.getInteger("endMarkSkipped"));
     }
 
-    @Test void oneReminderPerOfferAndChannelUnderARace() throws Exception {
+    String channelReminder(String channel) {
+        return FreebieLifecycleStore.channelRemindId(channel, 24, FreebieLifecycleStore.bucket(end));
+    }
+
+    @Test void oneReminderPerChannelAndEndTimeUnderARace() throws Exception {
         String offer = approved("2");
         remindersOn("200000000000000010", 24);
         var delivery = deliveries.find(eq("_id", sent(offer, "200000000000000010", "900000000000000010", now.minus(Duration.ofDays(2))))).first();
-        var created = race(8, () -> jobs.planReminder(offer, delivery, 24, now));
+        var created = race(8, () -> jobs.planChannelReminder(offer, delivery, 24, end, now));
         assertEquals(1, created.stream().filter(b -> b).count());
         var planner = new FreebieLifecyclePlanner(repository, subscriptions);
         var planned = race(6, () -> planner.reminders(now));
         assertEquals(0, planned.stream().mapToInt(Integer::intValue).sum(), "the planner finds the existing reminder");
-        assertEquals(1, lifecycle.countDocuments(eq("_id", FreebieLifecycleStore.remindId(offer, "200000000000000010"))));
+        assertEquals(1, lifecycle.countDocuments(eq("_id", channelReminder("200000000000000010"))));
+    }
+
+    @Test void gamesEndingTogetherShareOneReminderPerChannel() {
+        remindersOn("200000000000000010", 24);
+        for (String id : List.of("20", "21", "22", "23")) {
+            String offer = approved(id);
+            sent(offer, "200000000000000010", "9000000000000000" + id, now.minus(Duration.ofDays(2)));
+        }
+        var planner = new FreebieLifecyclePlanner(repository, subscriptions);
+        assertEquals(1, planner.reminders(now), "four games ending at the same minute: one reminder");
+        assertEquals(0, planner.reminders(now));
+        var job = lifecycle.find(eq("_id", channelReminder("200000000000000010"))).first();
+        assertNotNull(job);
+        Instant bucket = FreebieLifecycleStore.bucket(end);
+        assertEquals(bucket, job.getDate("bucket").toInstant());
+        assertEquals(bucket.plus(FreebieLifecycleStore.BUCKET).minus(Duration.ofHours(24)), job.getDate("dueAt").toInstant(),
+                "due once every game of the bucket is due");
+        assertEquals(4, jobs.endingBetween(bucket, bucket.plus(FreebieLifecycleStore.BUCKET), now, 25).size());
+        assertEquals(0, jobs.cancelReminders(job.getString("offerId"), now), "one game ending never cancels the shared reminder");
     }
 
     @Test void plannerQueuesOnlyDueEligibleReminders() {
@@ -107,8 +130,10 @@ class FreebieLifecycleIT {
         var planner = new FreebieLifecyclePlanner(repository, subscriptions);
         assertEquals(0, planner.reminders(now.minusSeconds(1)), "not due yet");
         assertEquals(1, planner.reminders(now), "only the long-running alert in the channel that asks for reminders");
-        assertNotNull(lifecycle.find(eq("_id", FreebieLifecycleStore.remindId(offer, "200000000000000011"))).first());
-        assertNull(lifecycle.find(eq("_id", FreebieLifecycleStore.remindId(late, "200000000000000011"))).first(), "posted under 12 h before");
+        var planned = lifecycle.find(eq("_id", channelReminder("200000000000000011"))).first();
+        assertNotNull(planned);
+        assertEquals(offer, planned.getString("offerId"), "planned for the long-running alert, not the one posted under 12 h before");
+        assertNull(lifecycle.find(eq("_id", channelReminder("200000000000000010"))).first());
         offers.updateOne(eq("_id", late), set("endsAtEstimated", true));
         assertEquals(0, planner.reminders(now));
     }
