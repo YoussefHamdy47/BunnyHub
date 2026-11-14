@@ -34,14 +34,12 @@ class FreebieLifecycleMessagesTest {
         assertTrue(ended.getDescription().endsWith("**This giveaway has ended.**"), ended.getDescription());
         assertFalse(ended.getDescription().contains("Claim Game"));
         assertFalse(ended.getDescription().contains(offer.claimUrl().toString()), "no claim link left in the text");
-        assertTrue(ended.getFields().stream().anyMatch(f -> f.getName().equals("CLAIM WINDOW") && "Ended".equals(f.getValue())));
+        assertTrue(ended.getFields().stream().anyMatch(f -> f.getName().equals("Ends") && "Ended".equals(f.getValue())));
         assertTrue(ended.getFields().stream().noneMatch(f -> f.getValue().contains("<t:")), "no countdown left");
 
         var row = buttons(alert.getComponents());
-        assertEquals(3, row.size(), "claim centered between two spacers");
-        assertTrue(row.get(1).getLabel().startsWith("Claim"));
-        assertTrue(row.get(0).isDisabled() && row.get(2).isDisabled());
-        assertNotEquals(row.get(0).getCustomId(), row.get(2).getCustomId());
+        assertEquals(1, row.size(), "the claim button only, no spacers");
+        assertEquals("Claim Free Game", row.getFirst().getLabel());
         var before = row.stream().map(Button::getLabel).toList();
         var after = buttons(edit.getComponents()).stream().map(Button::getLabel).toList();
         assertTrue(before.stream().anyMatch(l -> l.startsWith("Claim")));
@@ -73,19 +71,43 @@ class FreebieLifecycleMessagesTest {
         assertTrue(ended.getTitle().startsWith("Ended: "));
     }
 
+    /** A card in the layout posted before 2026-11-08: claim heading in the text, store-specific fields, spacer buttons. */
+    private Legacy legacyCard(String heading) {
+        var card = new EmbedBuilder(alert.getEmbeds().getFirst()).clearFields()
+                .setDescription("A game.\n\n" + heading + "\n[" + offer.title() + "](" + offer.claimUrl() + ")")
+                .addField("THE DEAL", "~~$9.99~~ → **FREE**", true).addField("CLAIM WINDOW", "<t:1:R>", true)
+                .addField("PLATFORMS", "PC", false).build();
+        String blank = "\u3164".repeat(8);
+        var row = ActionRow.of(Button.secondary(FreebieCards.SPACER_PREFIX + ":l", blank).asDisabled(),
+                Button.link(offer.claimUrl().toString(), "Claim Epic Offer"),
+                Button.secondary(FreebieCards.SPACER_PREFIX + ":r", blank).asDisabled(),
+                Button.link(offer.pageUrl().toString(), "Offer Details"));
+        return new Legacy(List.of(card), List.of(row));
+    }
+    private record Legacy(List<net.dv8tion.jda.api.entities.MessageEmbed> embeds, List<ActionRow> rows) {}
+
     @Test void cardsPostedWithTheOldClaimHeadingStillLoseTheirLink() {
-        var card = alert.getEmbeds().getFirst();
-        var legacy = new EmbedBuilder(card).setDescription(card.getDescription().replace("**Claim Game**", "**Claim your game**")).build();
-        var ended = FreebieLifecycleMessages.ended(List.of(legacy), alert.getComponents(), reference, false).getEmbeds().getFirst();
-        assertFalse(ended.getDescription().contains("Claim your game"), ended.getDescription());
-        assertFalse(ended.getDescription().contains(offer.claimUrl().toString()));
+        for (String heading : List.of("**Claim Game**", "**Claim your game**")) {
+            var legacy = legacyCard(heading);
+            var ended = FreebieLifecycleMessages.ended(legacy.embeds(), legacy.rows(), reference, false).getEmbeds().getFirst();
+            assertFalse(ended.getDescription().contains(heading), ended.getDescription());
+            assertFalse(ended.getDescription().contains(offer.claimUrl().toString()));
+        }
     }
 
-    @Test void claimButtonIsTitleCasedBetweenWideSpacers() {
-        var row = buttons(alert.getComponents());
-        assertEquals(3, row.size());
-        assertTrue(row.get(1).getLabel().matches("Claim (Epic|Steam) Offer|Claim Free Game"), row.get(1).getLabel());
-        assertTrue(row.get(0).getLabel().length() >= 8 && row.get(0).getLabel().equals(row.get(2).getLabel()));
+    @Test void oldLayoutCardsEndCleanly() {
+        var legacy = legacyCard("**Claim Game**");
+        var edit = FreebieLifecycleMessages.ended(legacy.embeds(), legacy.rows(), reference, false);
+        var ended = edit.getEmbeds().getFirst();
+        assertTrue(ended.getFields().stream().anyMatch(f -> f.getName().equals("CLAIM WINDOW") && "Ended".equals(f.getValue())));
+        assertEquals(List.of("Offer Details"), buttons(edit.getComponents()).stream().map(Button::getLabel).toList(),
+                "spacers go with the claim button; other links stay");
+    }
+
+    @Test void instantCheckoutIsRemovedWithTheClaimButton() {
+        var checkout = Button.link("https://store.epicgames.com/purchase?offers=1-ns-o", "Instant Checkout");
+        var rows = List.of(ActionRow.of(FreebieCards.claimButton(offer), checkout));
+        assertEquals(List.of(), buttons(FreebieLifecycleMessages.ended(alert.getEmbeds(), rows, reference, false).getComponents()));
     }
 
     @Test void anEmbedWithoutTheReferenceIsNotRewritten() {

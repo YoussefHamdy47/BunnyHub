@@ -37,6 +37,34 @@ class FreebieSourcesIT {
         assertTrue(repository.sources().resolve("gamerpower:123", token(), "same", "owner", now));
         repository.recordSeen(epic(), now);
     }
+    @Test void anOwnersSameDecisionAdoptsEpicsExactIdentityAtOnce() throws Exception {
+        assertTrue(epic().epicOffer().isPresent(), "the captured Epic report carries its catalog identity");
+        String id = parent(); repository.transition(id, FreebieOffer.State.PENDING, FreebieOffer.State.APPROVED, "owner", now);
+        repository.recordSeen(epic(), now);
+        assertNull(offers.find(com.mongodb.client.model.Filters.eq("_id", id)).first().get("epicOffer"), "held: no identity before the owner decides");
+        assertTrue(repository.sources().resolve(id, token(), "same", "owner", now));
+        // No further Epic poll: the promotion may already be over by then.
+        var facts = FreebieFacts.read(offers.find(com.mongodb.client.model.Filters.eq("_id", id)).first());
+        assertEquals(epic().epicOffer(), facts.epicOffer(), "Epic's own identity, copied on the owner's decision");
+        assertEquals(FreebieOffer.State.APPROVED, repository.offer(id).orElseThrow().state(), "never reapproved");
+    }
+
+    @Test void ignoredReportsAndKnownIdentitiesAreNeverChanged() throws Exception {
+        String id = parent(); repository.recordSeen(epic(), now);
+        assertTrue(repository.sources().resolve(id, token(), "ignore", "owner", now));
+        assertNull(offers.find(com.mongodb.client.model.Filters.eq("_id", id)).first().get("epicOffer"));
+
+        // A giveaway that already has an identity keeps it.
+        db.getCollection(FreebieRepository.OFFERS).drop(); repository = new FreebieRepository(db); repository.installIndexes();
+        offers = db.getCollection(FreebieRepository.OFFERS);
+        id = parent();
+        var known = new org.bson.Document("namespace", "known-ns").append("offerId", "known-offer");
+        offers.updateOne(com.mongodb.client.model.Filters.eq("_id", id), com.mongodb.client.model.Updates.set("epicOffer", known));
+        repository.recordSeen(epic(), now);
+        assertTrue(repository.sources().resolve(id, token(), "same", "owner", now));
+        assertEquals(known, offers.find(com.mongodb.client.model.Filters.eq("_id", id)).first().get("epicOffer"));
+    }
+
     @Test void concurrentDiscoveryReservesOneReviewAndOneOwnerQuestion() throws Exception {
         var g = gp(); var e = epic();
         try (var pool = Executors.newFixedThreadPool(12)) {
@@ -92,6 +120,16 @@ class FreebieSourcesIT {
         var tombstone = offers.find().first(); assertEquals("PURGED", tombstone.getString("state"));
         assertEquals(2, tombstone.getList("sourceAliases", String.class).size()); assertNotNull(tombstone.getString("matchKey"));
         assertFalse(repository.recordSeen(epic(), now.plus(Duration.ofDays(201)))); assertEquals(1, offers.countDocuments());
+    }
+    @Test void aFinishedMigrationIsRememberedAndNotScannedAgain() {
+        assertTrue(repository.sources().backfill(), "an empty collection has nothing to migrate");
+        // Only a process running old code could add a row without its alias; this process no longer looks for one.
+        offers.insertOne(new Document("_id", "gamerpower:9").append("schemaVersion", 1).append("source", "gamerpower")
+                .append("sourceId", "9").append("state", "PURGED"));
+        assertTrue(repository.sources().backfill());
+        assertNull(offers.find(eq("_id", "gamerpower:9")).first().get("sourceAliases"), "no second scan in this process");
+        assertTrue(new FreebieRepository(db).sources().backfill(), "the next start migrates it");
+        assertNotNull(offers.find(eq("_id", "gamerpower:9")).first().get("sourceAliases"));
     }
     @Test void boundedLegacyBackfillResumesWithoutChangingIdsOrStates() {
         for (int i = 1; i <= 205; i++) offers.insertOne(new Document("_id", "gamerpower:" + i).append("schemaVersion", 1)

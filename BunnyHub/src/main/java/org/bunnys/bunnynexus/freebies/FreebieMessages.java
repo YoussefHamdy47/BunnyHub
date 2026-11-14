@@ -35,10 +35,17 @@ public final class FreebieMessages {
     public static boolean carriesReference(Message message, String reference) {
         return message.getEmbeds().stream().anyMatch(embed -> isAlertFooter(embed, reference));
     }
+    /**
+     * The exact footer of a card with this reference: {@code Powered by <provider> • ref …} for every provider a card can
+     * name ({@link FreebieOffer#sourceLabel()}), or the original {@code Source: GamerPower • ref …} wording.
+     */
     static boolean isAlertFooter(MessageEmbed embed, String reference) {
-        return embed.getFooter() != null && ((FOOTER_PREFIX + reference).equals(embed.getFooter().getText())
-                || (LEGACY_FOOTER_PREFIX + reference).equals(embed.getFooter().getText())
-                || ("Powered by Epic Games • ref " + reference).equals(embed.getFooter().getText()));
+        if (embed.getFooter() == null || embed.getFooter().getText() == null) return false;
+        String footer = embed.getFooter().getText();
+        if ((FOOTER_PREFIX + reference).equals(footer) || (LEGACY_FOOTER_PREFIX + reference).equals(footer)) return true;
+        for (var provider : FreebieFeed.Provider.values())
+            if (("Powered by " + provider.label + " • ref " + reference).equals(footer)) return true;
+        return false;
     }
 
     /** The public alert. Only {@code roleId} may be pinged - never @everyone/@here or users. */
@@ -51,7 +58,12 @@ public final class FreebieMessages {
     }
 
     static MessageEmbed alertEmbed(FreebieOffer offer, String reference) {
-        return FreebieCards.embed(offer, "Powered by " + offer.sourceLabel() + " • ref " + reference);
+        return alertEmbed(offer, reference, false);
+    }
+
+    /** {@code steps}: include the claim steps (personal DMs). */
+    static MessageEmbed alertEmbed(FreebieOffer offer, String reference, boolean steps) {
+        return FreebieCards.embed(offer, "Powered by " + offer.sourceLabel() + " • ref " + reference, steps);
     }
 
     /** Every review pings the owners, whatever the section. */

@@ -2,6 +2,7 @@ package org.bunnys.handler.database;
 
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
+import com.mongodb.MongoCompressor;
 import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
@@ -13,6 +14,7 @@ import org.bson.Document;
 import org.bson.codecs.pojo.PojoCodecProvider;
 import org.bunnys.utils.BunnyLog;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
@@ -63,8 +65,13 @@ public final class MongoManager {
         if (poolSize < 1 || timeout == null || timeout.toMillis() < 1)
             throw new IllegalArgumentException("Pool size and database timeout must be positive.");
         long millis = timeout.toMillis();
-        return MongoClientSettings.builder()
-                .applyConnectionString(new ConnectionString(uri))
+        ConnectionString connection = new ConnectionString(uri);
+        var builder = MongoClientSettings.builder().applyConnectionString(connection);
+        // Wire compression: replies carry whole offer documents. zlib is built into the driver and the server picks it
+        // only if it supports it (otherwise the connection stays uncompressed). A compressors= setting in the
+        // connection string always wins.
+        if (connection.getCompressorList().isEmpty()) builder.compressorList(List.of(MongoCompressor.createZlibCompressor()));
+        return builder
                 .timeout(millis, TimeUnit.MILLISECONDS)
                 .applyToClusterSettings(cluster -> cluster.serverSelectionTimeout(Math.min(5000, millis), TimeUnit.MILLISECONDS))
                 .applyToSocketSettings(socket -> socket.connectTimeout((int) Math.min(5000, millis), TimeUnit.MILLISECONDS)

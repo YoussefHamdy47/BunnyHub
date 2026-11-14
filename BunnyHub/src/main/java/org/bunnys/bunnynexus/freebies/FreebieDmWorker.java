@@ -38,13 +38,13 @@ final class FreebieDmWorker {
     private FreebieDmJobs jobs() { return repository.dmJobs(); }
     private FreebieDmSubscribers subscribers() { return repository.dmSubscribers(); }
 
-    /** Everything due, within the caps; the sender instead calls {@link #prepare} and {@link #claimOne}. */
+    /** Everything due, within the caps. The sender calls only {@link #claimOne}; housekeeping recovers leases. */
     void tick(JDA client, AtomicInteger shared, AtomicInteger background) {
         prepare();
         while (claimOne(client, shared, background)) { /* Until a cap is reached or nothing is due. */ }
     }
 
-    /** Once per sender tick: expired leases go back to the queue. */
+    /** Expired leases go back to the queue. Housekeeping does this for the running bot, not the sender tick. */
     void prepare() { if (!closed) jobs().recover(clock.instant()); }
 
     /**

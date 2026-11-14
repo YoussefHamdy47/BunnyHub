@@ -16,9 +16,13 @@ public final class FreebieDmService {
     private final FreebieConfig config;
     private final FreebieRepository repository;
     private final Clock clock;
+    private final Runnable wake;
 
-    FreebieDmService(FreebieConfig config, FreebieRepository repository, Clock clock) {
-        this.config = config; this.repository = repository; this.clock = clock;
+    FreebieDmService(FreebieConfig config, FreebieRepository repository, Clock clock) { this(config, repository, clock, () -> {}); }
+
+    /** {@code wake}: wakes the sender ({@link FreebieSender#wake}) once a subscription is saved. */
+    FreebieDmService(FreebieConfig config, FreebieRepository repository, Clock clock, Runnable wake) {
+        this.config = config; this.repository = repository; this.clock = clock; this.wake = wake;
     }
 
     public boolean enabled() { return config.dmEnabled(); }
@@ -44,7 +48,9 @@ public final class FreebieDmService {
         catch (RuntimeException failure) { repository.dmSubscribers().release(userId); throw failure; }
         if (!delivered) { repository.dmSubscribers().release(userId); return Subscribed.DM_REFUSED; }
         // A slow consent DM may have outlived the hold; then the slot was freed and the user must try again.
-        return repository.dmSubscribers().activate(userId, clock.instant()) ? Subscribed.SUBSCRIBED : Subscribed.BUSY;
+        if (!repository.dmSubscribers().activate(userId, clock.instant())) return Subscribed.BUSY;
+        wake.run(); // Only schedules a tick; anything queued for the new subscriber goes out without an idle wait.
+        return Subscribed.SUBSCRIBED;
     }
 
     /** Removes only {@code userId}'s own subscription and ends DMs still queued for them. */

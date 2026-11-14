@@ -40,6 +40,18 @@ final class FreebieAnnouncementSender {
     /** Needed for owner retries: the destination is revalidated against current settings right before resubmitting. */
     FreebieAnnouncementSender withSubscriptions(FreebieSubscriptions value) { subscriptions = value; return this; }
 
+    private FreebiePings pings;
+    /** The per-channel ping budget; without one every page that may ping does. */
+    FreebieAnnouncementSender withPings(FreebiePings value) { pings = value; return this; }
+
+    private boolean pingAllowed(String guildId, String channelId, String key, Instant now) {
+        if (pings == null) return true;
+        var take = pings.take(guildId, channelId, key, now);
+        if (!take.allowed())
+            BunnyLog.info("[Freebies] No ping for " + key + " in channel " + channelId + ": " + FreebiePings.since(take, now) + ".");
+        return take.allowed();
+    }
+
     private FreebieAnnouncementStore store() { return repository.announcements(); }
 
     /** @return true when Discord work is in flight and its completion runs {@code release} exactly once */
@@ -55,25 +67,52 @@ final class FreebieAnnouncementSender {
             repository.release(job, now.plusSeconds(10), now); // Wait for that post, then join it silently.
             return false;
         }
+        int capacity = FreebieAnnouncementStore.capacity(key);
         if (last != null && "SENT".equals(last.getString("state"))
-                && last.getList("members", String.class, List.of()).size() < FreebieAnnouncementStore.PAGE_SIZE) {
+                && last.getList("members", String.class, List.of()).size() < last.getInteger("capacity", FreebieAnnouncementStore.PAGE_SIZE)) {
             if (store().join(last.getString("_id"), job.offerId(), job.id(), now)) repository.markSent(job, last.getString("messageId"), now);
             else repository.release(job, now.plusSeconds(2), now);
             return false;
         }
         int next = pages.size() + 1;
-        if (next > FreebieAnnouncementStore.MAX_PAGES) {
+        if (next > FreebieAnnouncementStore.maxPages(key)) {
             repository.markCancelled(job, "announcement page limit reached", now);
             return false;
         }
+        boolean drop = FreebieDrops.isDrop(key);
+        // Games already on an earlier page are never repeated, even while their rows are not yet marked sent (another
+        // process, or a crash between the page's SENT write and its rows').
+        Set<String> placed = new HashSet<>();
+        for (Document page : pages) placed.addAll(page.getList("members", String.class, List.of()));
+        // The drop's ping goes on the first page that is posted: page 1, or a later page when every earlier page was
+        // withdrawn or rejected without a post. Later pages never ping.
+        boolean lead = !drop ? next == 1 : pages.stream().noneMatch(p -> "SENT".equals(p.getString("state")) || "SUBMITTING".equals(p.getString("state")));
         List<String> members = new ArrayList<>(List.of(job.offerId())), rows = new ArrayList<>(List.of(job.id()));
-        for (Document peer : repository.routes().announcementPeers(key, job.channelId(), job.offerId(), FreebieAnnouncementStore.PAGE_SIZE * 2)) {
-            if (members.size() >= FreebieAnnouncementStore.PAGE_SIZE) break;
+        // A drop pings every saved role of its queued games, including games that only fit on a later page (never for
+        // quiet games or catch-up); older pages the claimer's role.
+        Set<String> roles = new LinkedHashSet<>();
+        if (drop && !job.catchUp()) role.ifPresent(roles::add);
+        int scan = drop && lead ? capacity * FreebieAnnouncementStore.maxPages(key) : capacity * 2;
+        for (Document peer : repository.routes().announcementPeers(key, job.channelId(), job.offerId(), scan)) {
             String offerId = peer.getString("offerId");
-            if (members.contains(offerId) || !eligible(repository.offer(offerId).orElse(null), now) || !authorized(repository, key, offerId)) continue;
-            members.add(offerId); rows.add(peer.getString("_id"));
+            if (members.contains(offerId) || placed.contains(offerId)) continue;
+            // Eligibility fields only: the card itself is built from a full read in members() right before submission.
+            var status = repository.offerStatus(offerId).orElse(null);
+            if (!FreebieRepository.eligible(status, now) || !authorized(repository, key, offerId)) continue;
+            String peerRole = peer.getString("roleId");
+            if (drop && !peer.getBoolean("catchUp", false) && peerRole != null && guild.getRoleById(peerRole) != null
+                    && !FreebieRepository.quiet(status))
+                roles.add(peerRole);
+            if (members.size() < capacity) { members.add(offerId); rows.add(peer.getString("_id")); }
+            else if (!drop || !lead) break;
         }
-        var created = store().create(key, job.guildId(), job.channelId(), next, role, members, rows, job.token(), LEASE, now);
+        // The channel's ping budget: a page that would mention a role first takes the channel's ping, keyed by the page
+        // key so every lead page and retry of this drop gets the same answer. Held: the page posts without a mention.
+        boolean mentions = drop ? lead && !roles.isEmpty() : next == 1 && role.isPresent();
+        boolean ping = mentions && pingAllowed(job.guildId(), job.channelId(), key, now);
+        var created = drop
+                ? store().createWithRoles(key, job.guildId(), job.channelId(), next, ping ? List.copyOf(roles) : List.of(), members, rows, job.token(), LEASE, now)
+                : store().create(key, job.guildId(), job.channelId(), next, ping ? role : Optional.empty(), members, rows, job.token(), LEASE, now);
         if (created.isEmpty()) { repository.release(job, now.plusSeconds(2), now); return false; }
         return submit(client, job, created.get(), guild, channel, role, release);
     }
@@ -86,7 +125,7 @@ final class FreebieAnnouncementSender {
             case "CANCELLED" -> repository.markCancelled(job, "announcement withdrawn before posting", now);
             case "FAILED" -> {
                 // An owner retry confirmed after the page failed reopens it (history is checked first).
-                if (retriedAfter(job, page)) {
+                if (retriedAfter(job, page.getDate("finishedAt"))) {
                     var reopened = store().reopen(page, job.token(), LEASE, now);
                     if (reopened.isPresent()) return submit(client, job, reopened.get(), guild, channel, role, release);
                 }
@@ -98,7 +137,11 @@ final class FreebieAnnouncementSender {
                 Date lease = page.getDate("leaseUntil");
                 if (job.token().equals(page.getString("token")) && lease != null && lease.toInstant().isAfter(now))
                     return submit(client, job, page, guild, channel, role, release);
-                var taken = store().takeOver(page, job.token(), LEASE, now);
+                // An owner retry confirmed after the page's last submission gets a fresh send budget at once; every
+                // other row waits for the page's own retry time, so member rows cannot retry in quick succession.
+                Optional<Document> taken = retriedAfter(job, page.getDate("submittedAt"))
+                        ? store().retake(page, job.token(), LEASE, now) : Optional.empty();
+                if (taken.isEmpty()) taken = store().takeOver(page, job.token(), LEASE, now);
                 if (taken.isEmpty()) { repository.release(job, now.plusSeconds(10), now); return false; }
                 return submit(client, job, taken.get(), guild, channel, role, release);
             }
@@ -153,9 +196,10 @@ final class FreebieAnnouncementSender {
                         store().release(id, job.token(), at);
                         repository.deliveries().block(job, FreebieDeliveryStore.Block.EXHAUSTED, at);
                     } else {
-                        int number = page.getInteger("page", 1);
-                        Optional<String> ping = number == 1 ? role.filter(r -> r.equals(page.getString("roleId"))) : Optional.empty();
-                        var request = channel.sendMessage(FreebieAnnouncementCards.create(members, ping, features.checkout(), at))
+                        var pings = pings(page, role, guild);
+                        var data = page.getBoolean("drop", false) ? FreebieAnnouncementCards.create(members, pings, features.checkout(), at)
+                                : FreebieAnnouncementCards.create(members, pings.stream().findFirst(), features.checkout(), at);
+                        var request = channel.sendMessage(data)
                                 .setNonce(FreebieAnnouncementStore.nonce(id)).timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit();
                         submitted = true;
                         request.whenComplete((message, sendError) -> dispatch(release, () -> {
@@ -175,7 +219,12 @@ final class FreebieAnnouncementSender {
 
     private void accepted(FreebieRepository.Claimed job, Document page, String messageId) {
         Instant now = clock.instant();
-        store().sent(page.getString("_id"), job.token(), messageId, features.publishes(page.getString("channelId")), now);
+        if (!store().sent(page.getString("_id"), job.token(), messageId, features.publishes(page.getString("channelId")), now)) {
+            // The page's lease was lost meanwhile: its new holder decides (history first finds this message). Only this
+            // row waits for that outcome; the other rows are never recorded from a write that did not land.
+            repository.deliveries().block(job, FreebieDeliveryStore.Block.UNCERTAIN, now);
+            return;
+        }
         repository.markSent(job, messageId, now);
         var others = new ArrayList<>(page.getList("deliveries", String.class, List.of()));
         others.remove(job.id());
@@ -194,7 +243,7 @@ final class FreebieAnnouncementSender {
         }
         Duration delay = failure.retryable() ? FreebieFailure.backoff(job.attempts()) : null;
         if (delay != null) {
-            store().release(id, job.token(), now);
+            store().release(id, job.token(), now.plus(delay), now);
             repository.markRetry(job, failure, detail, now.plus(delay), true, now);
             return;
         }
@@ -216,17 +265,37 @@ final class FreebieAnnouncementSender {
         return offer != null && subscriptions != null && FreebieDeliveryAdmin.destination(row, offer, subscriptions, client);
     }
 
-    /** Whether this row's latest owner retry was confirmed after its page failed. */
-    private boolean retriedAfter(FreebieRepository.Claimed job, Document page) {
+    /**
+     * Whether this row's latest owner retry was confirmed after {@code since}: the time its page failed, or the page's
+     * last submission while it is still open. Never true for a page without that time.
+     */
+    private boolean retriedAfter(FreebieRepository.Claimed job, Date since) {
+        if (since == null) return false;
         var row = repository.deliveries().get(job.id()).orElse(null);
-        Date failed = page.getDate("finishedAt");
-        if (row == null || failed == null || row.getInteger("manualRetries", 0) == 0) return false;
+        if (row == null || row.getInteger("manualRetries", 0) == 0) return false;
         var audit = row.getList("retryAudit", Document.class, List.of());
-        return !audit.isEmpty() && audit.getLast().getDate("at") != null && audit.getLast().getDate("at").after(failed);
+        return !audit.isEmpty() && audit.getLast().getDate("at") != null && audit.getLast().getDate("at").after(since);
     }
 
-    /** Release-keyed pages need the release snapshot; pages of single offers follow the offer's own approval. */
+    /**
+     * The roles this page's post mentions: none after page 1. A drop page mentions the saved roles recorded at creation
+     * that still exist; an older page the claimer's role only when it is the one saved on the page.
+     */
+    static List<String> pings(Document page, Optional<String> role, Guild guild) {
+        boolean first = page.getInteger("page", 1) == 1;
+        if (page.getBoolean("drop", false))
+            return !page.getBoolean("lead", first) ? List.of()
+                    : FreebieAnnouncementStore.roles(page).stream().filter(r -> guild.getRoleById(r) != null).toList();
+        if (!first) return List.of();
+        return role.filter(r -> r.equals(page.getString("roleId"))).map(List::of).orElse(List.of());
+    }
+
+    /**
+     * Release-keyed games need the release snapshot; single offers follow the offer's own approval. A drop mixes games,
+     * so each member is checked against its own saved route key.
+     */
     static boolean authorized(FreebieRepository repository, String key, String offerId) {
+        if (FreebieDrops.isDrop(key)) key = repository.routes() == null ? null : repository.routes().announcementKey(offerId).orElse(null);
         return key == null || !key.startsWith("epic|") || repository.releases() == null || repository.releases().approved(key, offerId);
     }
 

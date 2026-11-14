@@ -81,6 +81,17 @@ class FreebieCleanupIT {
         assertEquals(0, repository.counts(offer.id()).open());
     }
 
+    /** Audit finding 8: the sweep's list of settings reads destination fields only. */
+    @Test void theSweepListReadsOnlyDestinationFields() {
+        subscriptions.setSection(guild, FreebieStore.STEAM.section(), "200000000000000077", Set.of(FreebieStore.STEAM), Optional.of(role),
+                24, "1", now);
+        assertTrue(subscriptions.forGuild(guild).stream().anyMatch(s -> s.reminderHours() == 24), "the reminder is saved");
+        var listed = subscriptions.all(10).stream().filter(s -> s.channelId().equals("200000000000000077")).findFirst().orElseThrow();
+        assertEquals(new FreebieSubscriptions.Subscription(guild, "200000000000000077", FreebieStore.STEAM, Optional.of(role), 0, false), listed,
+                "reminder settings are not read");
+        assertEquals(java.util.List.of("guildId", "channelId", "store", "roleId"), FreebieSubscriptions.DESTINATION_FIELDS);
+    }
+
     @Test void deletedRoleOnlyClearsThePingInThatServer() {
         subscribe(guild, kept, FreebieStore.STEAM, role); subscribe(guild, kept, FreebieStore.EPIC, role);
         subscribe(guild, gone, FreebieStore.GOG, "300000000000000002");

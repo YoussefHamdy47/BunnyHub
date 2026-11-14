@@ -35,6 +35,15 @@ class MongoMailLedgerIT {
         assertEquals(t0, ledger().cutoff(t0.plus(Duration.ofDays(3))), "a later start doesn't move it");
     }
 
+    @Test void knownReturnsOnlyTheListedIdsThatHaveAnEntry() {
+        var ledger = ledger();
+        ledger.save(new Entry("a", Status.SENT, MailCategory.EEE_TRAINING, t0, 1, t0, Optional.of("1"), "posted", t0));
+        ledger.save(new Entry("b", Status.IGNORED, MailCategory.UNKNOWN, t0, 0, t0, Optional.empty(), "", t0));
+        assertEquals(java.util.Set.of("a", "b"), ledger.known(java.util.List.of("a", "b", "c")));
+        assertEquals(java.util.Set.of(), ledger.known(java.util.List.of()));
+        assertEquals(java.util.Set.of(), ledger.known(java.util.List.of("c")));
+    }
+
     @Test void entriesRoundTripAndOnlyUnfinishedOnesAreDue() {
         var ledger = ledger();
         ledger.save(new Entry("p", Status.PENDING, MailCategory.EEE_TRAINING, t0, 0, t0, Optional.empty(), "", t0));

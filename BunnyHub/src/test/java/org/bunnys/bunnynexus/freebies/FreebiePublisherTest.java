@@ -175,7 +175,7 @@ class FreebiePublisherTest {
     @Test void disablingStopsPendingPublicationsAndDropsUnplannedPages() {
         features = new FreebieFeatures(true, false, Set.of(), false, true, false);
         var publisher = publisher();
-        publisher.prepare();
+        publisher.housekeeping();
         verify(jobs).cancelOpen(Optional.empty(), now);
         verify(pages).dropPublishPending(Optional.empty());
         verify(pages, never()).publishPending(anyInt());
@@ -185,7 +185,7 @@ class FreebiePublisherTest {
 
     @Test void enabledPlanningIsIdempotentAndOnlyForMarkedPages() {
         when(pages.publishPending(anyInt())).thenReturn(List.of(page));
-        publisher().prepare();
+        publisher().housekeeping();
         verify(jobs).plan(page, now);
         verify(pages).publishPlanned(page.getString("_id"));
         verify(jobs).cancelOpen(Optional.of(Set.of(CHANNEL)), now);

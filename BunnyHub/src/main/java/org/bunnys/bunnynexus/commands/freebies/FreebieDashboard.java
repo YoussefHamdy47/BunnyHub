@@ -50,12 +50,20 @@ public final class FreebieDashboard {
 
     /** One section as saved: its channel(s) with their launchers, and the role(s) pinged. */
     public record SectionState(FreebieSection section, Map<String, Set<FreebieStore>> channels, Set<Optional<String>> roles,
-                               Set<Integer> reminders) {
+                               Set<Integer> reminders, Set<Boolean> reminderPings) {
+        public SectionState(FreebieSection section, Map<String, Set<FreebieStore>> channels, Set<Optional<String>> roles,
+                            Set<Integer> reminders) {
+            this(section, channels, roles, reminders, new TreeSet<>());
+        }
         public SectionState(FreebieSection section, Map<String, Set<FreebieStore>> channels, Set<Optional<String>> roles) {
             this(section, channels, roles, new TreeSet<>());
         }
         /** Hours before the end for the ending-soon reminder; 0 (off) unless the whole section agrees. */
         public int reminder() { return reminders.size() == 1 ? reminders.iterator().next() : 0; }
+        /** The reminder pings only when it is on and the whole section asks for the ping. */
+        public boolean reminderPing() { return reminder() > 0 && reminderPings.equals(Set.of(true)); }
+        /** The form's reminder choice: hours, with a trailing {@code p} when it pings ("0", "24", "6p"). */
+        public String reminderChoice() { return reminder() + (reminderPing() ? "p" : ""); }
         public boolean on() { return !channels.isEmpty(); }
         public Set<FreebieStore> enabled() {
             Set<FreebieStore> all = EnumSet.noneOf(FreebieStore.class);
@@ -81,6 +89,7 @@ public final class FreebieDashboard {
             state.channels().computeIfAbsent(s.channelId(), k -> EnumSet.noneOf(FreebieStore.class)).add(s.store());
             state.roles().add(s.roleId());
             state.reminders().add(s.reminderHours());
+            state.reminderPings().add(s.reminderPing());
         }
         return states;
     }
@@ -154,7 +163,8 @@ public final class FreebieDashboard {
             text.append("**Pings** · ").append(mentions(state.roles()));
             text.append("\n**Launchers** · ").append(String.join(" · ", state.enabled().stream().sorted().map(FreebieStore::label).toList()));
         }
-        if (state.reminder() > 0) text.append("\n**Reminder** · ").append(state.reminder()).append(" hours before a game ends");
+        if (state.reminder() > 0) text.append("\n**Reminder** · ").append(state.reminder()).append(" hours before a game ends")
+                .append(state.reminderPing() ? ", with a ping" : ", no ping");
         var off = state.section().stores().stream().filter(s -> !state.enabled().contains(s)).map(FreebieStore::label).toList();
         if (!off.isEmpty()) text.append("\n**Off** · ").append(String.join(", ", off));
         return text.toString();
@@ -168,7 +178,7 @@ public final class FreebieDashboard {
         String channel = state.mainChannel().filter(c -> guild.getGuildChannelById(c) != null).orElse(NONE);
         String role = state.mixedPings() ? MIXED : state.role().filter(r -> guild.getRoleById(r) != null).orElse(NONE);
         String id = String.join(":", NAV_PREFIX, OPEN_SECTION, guild.getId(), String.valueOf(state.section().code()),
-                channel, role, Integer.toHexString(mask(state.section(), state.enabled())), String.valueOf(state.reminder()));
+                channel, role, Integer.toHexString(mask(state.section(), state.enabled())), state.reminderChoice());
         return Button.of(state.on() ? ButtonStyle.SUCCESS : ButtonStyle.SECONDARY, id, state.section().label());
     }
 

@@ -19,6 +19,14 @@ class MongoSettingsTest {
         assertEquals(10000, settings.getSocketSettings().getReadTimeout(TimeUnit.MILLISECONDS));
     }
 
+    @Test void repliesAreCompressedUnlessTheConnectionStringChoosesItsOwnCompressors() {
+        var defaults = MongoManager.settings("mongodb://localhost", 4, Duration.ofSeconds(10)).getCompressorList();
+        assertEquals(java.util.List.of("zlib"), defaults.stream().map(com.mongodb.MongoCompressor::getName).toList());
+        var chosen = MongoManager.settings("mongodb://localhost/?compressors=snappy,zstd", 4, Duration.ofSeconds(10)).getCompressorList();
+        assertEquals(java.util.List.of("snappy", "zstd"), chosen.stream().map(com.mongodb.MongoCompressor::getName).toList(),
+                "an explicit compressors= setting is kept as written");
+    }
+
     @Test void shortBudgetsApplyToAllWaitsAndInvalidConfigurationFails() {
         var settings = MongoManager.settings("mongodb://localhost", 4, Duration.ofMillis(500));
         assertEquals(500, settings.getConnectionPoolSettings().getMaxWaitTime(TimeUnit.MILLISECONDS));

@@ -14,7 +14,7 @@ class FreebieSourceMessagesTest {
         try (var alert = FreebieMessages.alert(offer, Optional.of("200000000000000001"), ref)) {
             var embed = alert.getEmbeds().getFirst();
             assertEquals("Powered by Epic Games • ref " + ref, embed.getFooter().getText());
-            assertTrue(embed.getFields().stream().anyMatch(f -> "REGION".equals(f.getName()) && f.getValue().contains("US")));
+            assertTrue(embed.getFields().stream().anyMatch(f -> "Region".equals(f.getName()) && f.getValue().contains("US")));
             assertTrue(FreebieMessages.isAlertFooter(embed, ref)); assertFalse(FreebieMessages.isAlertFooter(embed, ref + "a"));
             String json = alert.toData().toString();
             assertFalse(json.contains("purchase?")); assertFalse(json.contains("offers=1-"));
@@ -27,12 +27,26 @@ class FreebieSourceMessagesTest {
         }
     }
     @Test void historicalFootersRemainExactAndRecoverable() {
-        for (String prefix : List.of("Source: GamerPower • ref ", "Powered by GamerPower • ref ", "Powered by Epic Games • ref ")) {
+        for (String prefix : List.of("Source: GamerPower • ref ", "Powered by GamerPower • ref ", "Powered by Epic Games • ref ",
+                "Powered by Steam • ref ")) {
             Message message = mock(Message.class);
             when(message.getEmbeds()).thenReturn(List.of(new EmbedBuilder().setDescription("old card").setFooter(prefix + "abc123").build()));
             assertTrue(FreebieMessages.carriesReference(message, "abc123"));
             assertFalse(FreebieMessages.carriesReference(message, "abc12"));
         }
+    }
+    /** History recovery, ended edits and publishing all find a card by its footer; no provider's cards may be invisible. */
+    @Test void everyProvidersCardFooterIsRecognised() {
+        for (var provider : FreebieFeed.Provider.values()) {
+            Message message = mock(Message.class);
+            when(message.getEmbeds()).thenReturn(List.of(new EmbedBuilder().setDescription("card")
+                    .setFooter("Powered by " + provider.label + " • ref abc123").build()));
+            assertTrue(FreebieMessages.carriesReference(message, "abc123"), provider.label);
+            assertFalse(FreebieMessages.carriesReference(message, "abc12"), provider.label);
+        }
+        Message other = mock(Message.class);
+        when(other.getEmbeds()).thenReturn(List.of(new EmbedBuilder().setDescription("card").setFooter("Powered by Someone • ref abc123").build()));
+        assertFalse(FreebieMessages.carriesReference(other, "abc123"));
     }
     @Test void gamerPowerEpicLauncherNeverAcquiresEpicAttributionOrCheckout() {
         var offer = FreebieOffer.read(FreebieOffer.newDocument(FreebieRepositoryIT.candidate("9", "PC, Epic Games Store"), EpicIntakeTest.NOW));

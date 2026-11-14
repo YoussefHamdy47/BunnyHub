@@ -50,7 +50,7 @@ class FreebieLifecyclePriorityTest {
     }
 
     @Test void theGlobalPauseHoldsEditsAndRemindersToo() {
-        when(repository.sendingPaused()).thenReturn(true);
+        when(repository.sendingPausedCached()).thenReturn(true);
         sender.tick();
         verify(lifecycle, never()).claimOne(any(), any(), any());
     }

@@ -41,6 +41,13 @@ public final class MongoMailLedger implements MailLedger {
         return doc.getDate("at").toInstant();
     }
 
+    @Override public Set<String> known(Collection<String> ids) {
+        Set<String> known = new HashSet<>();
+        if (ids.isEmpty()) return known;
+        for (Document d : entries.find(in("_id", ids)).projection(Projections.include("_id"))) known.add(d.getString("_id"));
+        return known;
+    }
+
     @Override public Optional<Entry> find(String id) {
         return Optional.ofNullable(entries.find(eq("_id", id)).first()).map(MongoMailLedger::read);
     }

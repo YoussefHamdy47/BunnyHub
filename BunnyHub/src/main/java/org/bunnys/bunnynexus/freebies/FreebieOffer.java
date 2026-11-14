@@ -81,6 +81,14 @@ public record FreebieOffer(String id, String sourceId, FreebieStore store, Strin
         return doc;
     }
 
+    /**
+     * Every field {@link #read} uses, so a query that only needs the offer can leave out enrichment, evidence, source
+     * joins and audit fields. Add a field here whenever {@link #read} starts reading one (FreebieUnitTest checks it).
+     */
+    static final List<String> FIELDS = List.of("_id", "schemaVersion", "sourceId", "store", "platforms", "title", "description",
+            "instructions", "worth", "image", "claimUrl", "pageUrl", "endsAt", "discoveredAt", "state", "reviewMessageId",
+            "reviewChannelId", "decidedBy", "fanoutDone", "gone", "revision", "endsAtEstimated");
+
     static FreebieOffer read(Document d) {
         if (d.getInteger("schemaVersion", 0) != 1) throw new IllegalStateException("Unsupported freebie offer schema.");
         return new FreebieOffer(d.getString("_id"), d.getString("sourceId"),

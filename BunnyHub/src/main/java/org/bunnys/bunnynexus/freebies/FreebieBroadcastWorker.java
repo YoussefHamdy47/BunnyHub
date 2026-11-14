@@ -60,8 +60,6 @@ final class FreebieBroadcastWorker {
         return message.getEmbeds().stream().anyMatch(e -> e.getFooter() != null && reference.equals(e.getFooter().getText()));
     }
 
-    void prepare() { if (!closed && store() != null) store().recover(clock.instant()); }
-
     boolean claimOne(JDA client, AtomicInteger shared, AtomicInteger background) {
         if (closed || store() == null || own >= MAX_IN_FLIGHT || shared.get() >= FreebieSender.MAX_IN_FLIGHT
                 || background.get() >= FreebieSender.BACKGROUND_SLOTS) return false;

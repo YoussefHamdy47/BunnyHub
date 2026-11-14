@@ -1,9 +1,12 @@
 package org.bunnys.bunnynexus.mailbridge;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * What the bridge has done with each Gmail message, keyed by Gmail's message ID. This is what makes processing
@@ -37,6 +40,13 @@ public interface MailLedger {
     Instant cutoff(Instant firstStart);
 
     Optional<Entry> find(String id);
+
+    /** Which of these message IDs already have an entry. One query in MongoDB; a loop over {@link #find} otherwise. */
+    default Set<String> known(Collection<String> ids) {
+        Set<String> known = new HashSet<>();
+        for (String id : ids) if (find(id).isPresent()) known.add(id);
+        return known;
+    }
 
     void save(Entry entry);
 

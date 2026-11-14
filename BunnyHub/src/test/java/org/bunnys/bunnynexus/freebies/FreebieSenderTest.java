@@ -56,7 +56,7 @@ class FreebieSenderTest {
 
     @Test void pausedSendingClaimsNothing() {
         var sender = sender();
-        when(repository.sendingPaused()).thenReturn(true);
+        when(repository.sendingPausedCached()).thenReturn(true);
         sender.tick();
         verify(repository, never()).claim(any(), any());
     }

@@ -83,6 +83,52 @@ class FreebieRepositoryIT {
         assertEquals(0, stored.getInteger("missingPolls"));
     }
 
+    /** Audit finding 5: a drop's peers are checked from a small projected read that agrees with the full offer. */
+    @Test void theStatusReadCarriesOnlyEligibilityFieldsAndAgreesWithTheFullOffer() {
+        assertTrue(repository.recordSeen(candidate("q", "PC, Epic Games Store"), now));
+        String id = FreebieOffer.idFor("q");
+        assertFalse(FreebieRepository.eligible(repository.offerStatus(id).orElseThrow(), now), "pending");
+        repository.approve(id, "333644367539470337", now, true);
+        var status = repository.offerStatus(id).orElseThrow();
+        assertTrue(FreebieRepository.STATUS_FIELDS.containsAll(status.keySet()), "no description, art or evidence: " + status.keySet());
+        assertTrue(status.containsKey("state") && status.containsKey("endsAt"));
+        assertTrue(FreebieRepository.quiet(status));
+        var full = repository.offer(id).orElseThrow();
+        for (var at : List.of(now, Instant.parse("2026-10-02T23:58:00Z"), Instant.parse("2026-10-03T00:00:00Z")))
+            assertEquals(FreebieAnnouncementSender.eligible(full, at), FreebieRepository.eligible(status, at), at.toString());
+        assertTrue(repository.offerStatus("gamerpower:missing").isEmpty());
+    }
+
+    /** offer() and offersIn() read FreebieOffer.FIELDS only and still return exactly the offer the whole document holds. */
+    @Test void projectedOfferReadsMatchTheWholeDocument() {
+        var offer = approved("proj");
+        replica.client.getDatabase(dbName).getCollection(FreebieRepository.OFFERS).updateOne(new org.bson.Document("_id", offer.id()),
+                new org.bson.Document("$set", new org.bson.Document("regions", "x".repeat(5000)).append("evidence", List.of("a", "b"))));
+        var whole = FreebieOffer.read(repository.offerDocument(offer.id()).orElseThrow());
+        assertEquals(whole, repository.offer(offer.id()).orElseThrow());
+        assertEquals(whole, repository.offersIn(FreebieOffer.State.APPROVED, 10).stream().filter(o -> o.id().equals(offer.id())).findFirst().orElseThrow());
+        assertTrue(repository.offerDocument(offer.id()).orElseThrow().containsKey("regions"), "offerDocument keeps the whole document");
+    }
+
+    /** The correction check uses the partial cardRevision index and still reaches every corrected offer once. */
+    @Test void correctionsArePropagatedOnceThroughThePartialIndex() {
+        var corrected = approved("c1");
+        approved("c2"); // never corrected: not in the index
+        var offers = replica.client.getDatabase(dbName).getCollection(FreebieRepository.OFFERS);
+        offers.updateOne(new org.bson.Document("_id", corrected.id()), new org.bson.Document("$set", new org.bson.Document("cardRevision", 2L)));
+        assertEquals(1, repository.announcements().propagateCorrections(now, 50));
+        assertEquals(2L, offers.find(new org.bson.Document("_id", corrected.id())).first().get("cardRevisionSeen"));
+        assertEquals(0, repository.announcements().propagateCorrections(now, 50), "seen corrections are not repeated");
+        offers.updateOne(new org.bson.Document("_id", corrected.id()), new org.bson.Document("$inc", new org.bson.Document("cardRevision", 1L)));
+        assertEquals(1, repository.announcements().propagateCorrections(now, 50), "a newer correction is picked up");
+        var filter = new org.bson.Document("cardRevision", new org.bson.Document("$exists", true)).append("$expr",
+                new org.bson.Document("$gt", List.of("$cardRevision", new org.bson.Document("$ifNull", List.of("$cardRevisionSeen", 0L)))));
+        var plan = replica.client.getDatabase(dbName).runCommand(new org.bson.Document("explain",
+                new org.bson.Document("find", FreebieRepository.OFFERS).append("filter", filter)).append("verbosity", "queryPlanner"));
+        String winning = plan.get("queryPlanner", org.bson.Document.class).get("winningPlan", org.bson.Document.class).toJson();
+        assertTrue(winning.contains("offer_card_revision"), winning);
+    }
+
     @Test void concurrentApprovalClicksApproveExactlyOnce() throws Exception {
         repository.recordSeen(candidate("1", "PC, Steam"), now);
         var pool = Executors.newFixedThreadPool(8);
