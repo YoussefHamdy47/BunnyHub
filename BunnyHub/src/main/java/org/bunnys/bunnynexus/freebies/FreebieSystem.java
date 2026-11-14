@@ -51,7 +51,12 @@ public final class FreebieSystem {
     private FreebieEnrichment enrichment;
     private final FreebieReviewDecisions decisions;
     private Instant nextSweep = Instant.MIN; // Discovery thread only.
-    static final Duration SWEEP_EVERY = Duration.ofMinutes(10);
+    private boolean refreshDueSettled; // Discovery thread only.
+    /**
+     * The deleted channel/role sweep only catches deletions missed while the bot was offline; live delete events handle
+     * the rest. It also runs once right after each start (nextSweep starts at MIN).
+     */
+    static final Duration SWEEP_EVERY = Duration.ofMinutes(30);
 
     // Package-private for tests; production code goes through start().
     FreebieSystem(FreebieConfig config, FreebieRepository repository, FreebieSubscriptions subscriptions,
@@ -61,10 +66,21 @@ public final class FreebieSystem {
 
     FreebieSystem(FreebieConfig config, FreebieFeatures features, FreebieRepository repository, FreebieSubscriptions subscriptions,
                   Supplier<JDA> jda, Clock clock, GamerPowerFeed feed) {
+        this(config, features, repository, subscriptions, jda, clock, feed, Executors.newSingleThreadScheduledExecutor(daemon("FreebieSender")));
+    }
+
+    /** {@code sendingThread}: the one thread every send runs on; tests pass a scheduler they control. */
+    FreebieSystem(FreebieConfig config, FreebieFeatures features, FreebieRepository repository, FreebieSubscriptions subscriptions,
+                  Supplier<JDA> jda, Clock clock, GamerPowerFeed feed, ScheduledExecutorService sendingThread) {
         this.config = config; this.features = features; this.repository = repository; this.subscriptions = subscriptions;
         this.jda = jda; this.clock = clock; this.feed = feed;
-        discoveryThread = Executors.newSingleThreadScheduledExecutor(daemon("FreebieDiscovery"));
-        sendingThread = Executors.newSingleThreadScheduledExecutor(daemon("FreebieSender"));
+        // New first posts are collected into per-channel drops; FREEBIE_GROUPED_ANNOUNCEMENTS=false posts per game.
+        repository.dropWindow(features.drops());
+        // One ping per channel per FREEBIE_PING_COOLDOWN_MINUTES (0: off). Null only for a mocked repository.
+        FreebiePings pings = repository.pings();
+        if (pings != null) pings.cooldown(features.pingCooldown());
+        discoveryThread =Executors.newSingleThreadScheduledExecutor(daemon("FreebieDiscovery"));
+        this.sendingThread = sendingThread;
         reviews = new FreebieReviewChannel(config, repository, subscriptions, jda, sendingThread, clock);
         discovery = new FreebieDiscovery(config, repository, feed, clock, reviews, this::ended);
         // Only GamerPower links go through a redirect; Epic's feed already gives the store page.
@@ -72,7 +88,7 @@ public final class FreebieSystem {
             discovery.afterPoll(new FreebieClaimLinks(repository, new GamerPowerLinks(), clock));
         notifier = new FreebieNotifier(repository, jda, clock, sendingThread);
         lifecycle = new FreebieLifecyclePlanner(repository, subscriptions);
-        lifecycleWorker = new FreebieLifecycleWorker(repository, subscriptions, sendingThread, clock);
+        lifecycleWorker = new FreebieLifecycleWorker(repository, subscriptions, sendingThread, clock).withPings(pings);
         dmWorker = new FreebieDmWorker(repository, sendingThread, clock);
         approvals = new FreebieApprovals(repository, subscriptions, reviews, features, this::fanOut, clock);
         announcementWorker = new FreebieAnnouncementWorker(repository, features, sendingThread, clock);
@@ -80,8 +96,9 @@ public final class FreebieSystem {
         broadcastWorker = new FreebieBroadcastWorker(repository, sendingThread, clock);
         publisher = new FreebiePublisher(repository, features, sendingThread, clock);
         sender = new FreebieSender(repository, jda, sendingThread, clock, notifier).withSubscriptions(subscriptions)
-                .withLifecycle(lifecycleWorker).withDms(dmWorker).withBroadcasts(broadcastWorker)
-                .withAnnouncements(new FreebieAnnouncementSender(repository, features, sendingThread, clock, notifier).withSubscriptions(subscriptions), announcementWorker, publisher);
+                .withLifecycle(lifecycleWorker).withDms(dmWorker).withBroadcasts(broadcastWorker).withPings(pings)
+                .withAnnouncements(new FreebieAnnouncementSender(repository, features, sendingThread, clock, notifier)
+                        .withSubscriptions(subscriptions).withPings(pings), announcementWorker, publisher);
         decisions = new FreebieReviewDecisions(config, repository, subscriptions, reviews, clock, this::fanOut,
                 offerId -> background("withdrawn cards", () -> markEnded(offerId)));
     }
@@ -94,8 +111,17 @@ public final class FreebieSystem {
     public FreebieSubscriptions subscriptions() { return subscriptions; }
     private FreebieCleanup cleanup() { return new FreebieCleanup(subscriptions, repository.deliveries(), repository.notices()); }
     /** Personal DM alerts: subscribe, unsubscribe, consent. */
-    public FreebieDmService dms() { return new FreebieDmService(config, repository, clock); }
-    public FreebieDeliveryAdmin deliveryAdmin() { return new FreebieDeliveryAdmin(config, repository, subscriptions, jda, clock); }
+    public FreebieDmService dms() { return new FreebieDmService(config, repository, clock, sender::wake); }
+    public FreebieDeliveryAdmin deliveryAdmin() { return new FreebieDeliveryAdmin(config, repository, subscriptions, jda, clock, sender::wake); }
+
+    /**
+     * Starts the two self-rescheduling ticks on the sender thread. Both slow down while their queues are idle, so
+     * everything that queues work due now wakes them ({@link FreebieSender#wake}, {@link FreebieNotifier#wake}).
+     */
+    void startSending(Duration initialDelay) {
+        sender.start(initialDelay);
+        notifier.start(sendingThread, initialDelay);
+    }
 
     /** Starts only when FREEBIE_REVIEW_CHANNEL_ID and FREEBIE_OWNER_IDS are set; otherwise logs why and stays off. */
     public static synchronized void start(BunnyHub client) {
@@ -137,10 +163,13 @@ public final class FreebieSystem {
         system.epicDiscovery.start(system.discoveryThread, 25);
         if (system.steamDiscovery != null) system.steamDiscovery.start(system.discoveryThread, 35);
         if (system.enrichment != null) system.enrichment.start(system.discoveryThread, 45);
-        system.sendingThread.scheduleWithFixedDelay(guarded("sender", system.sender::tick), 10, 1, TimeUnit.SECONDS);
-        system.sendingThread.scheduleWithFixedDelay(guarded("notices", system.notifier::tick), 10, 5, TimeUnit.SECONDS);
+        // Publications left open for a channel that is no longer enabled stop before the first tick can claim one.
+        system.discoveryThread.execute(guarded("publishing clean-up", system.publisher::cleanUp));
+        system.startSending(Duration.ofSeconds(10));
         BunnyLog.success("[Freebies] Started. Review channel " + config.get().reviewChannelId() + ", polling every "
-                + config.get().pollMinutes() + " min. Grouped announcements " + (features.grouped() ? "on" : "off")
+                + config.get().pollMinutes() + " min. Grouped announcements " + (features.grouped() ? "on (drop window "
+                + features.dropWindow().toSeconds() + " s)" : "off")
+                + ", ping cooldown " + (features.pingCooldown().isZero() ? "off" : features.pingCooldown().toMinutes() + " min")
                 + ", automatic publishing " + (features.publishEnabled() ? "on for " + features.publishChannels().size() + " channel(s)" : "off")
                 + ", Steam source " + (features.steam() ? "on" : "off") + ".");
     }
@@ -188,21 +217,36 @@ public final class FreebieSystem {
                 BunnyLog.info("[Freebies] Retention purge removed " + purged.deliveries() + " alert(s), " + purged.offers()
                         + " offer(s) and " + purged.notices() + " notice record(s).");
         }
-        // Lifecycle jobs are database-planned; expired leases are also recovered here, so a pause cannot strand them.
-        repository.lifecycle().recover(now);
-        lifecycle.run(now);
-        repository.dmJobs().recover(now);
+        // The kill switch as the database has it (another process may have written it); the sender's tick uses this copy.
+        repository.refreshSendingPaused();
+        // Expired leases of every sender queue are recovered here, every 30 s against a 3-minute lease, and not on the
+        // sender's tick: a recovered row is due at once and still "verify first", so the sender is woken for it and
+        // checks the channel's history before any resend. A pause cannot strand them either.
+        long due = repository.recoverExpiredLeases(now) + repository.lifecycle().recover(now);
+        // Lifecycle jobs are database-planned.
+        var planned = lifecycle.run(now);
+        due += planned.edits() + planned.reminders() + repository.dmJobs().recover(now);
+        if (repository.broadcasts() != null) due += repository.broadcasts().recover(now);
+        // Publications: crashed leases, jobs of channels no longer enabled, and pages not planned yet.
+        if (publisher.housekeeping()) due++;
+        // Interrupted notice enqueues and reconciliations are replayed; a notice queued by that is sent at once.
+        if (repository.notices() != null && repository.notices().recover(now) > 0) notifier.wake();
         repository.dmSubscribers().expirePending(now);
         // Corrections and region changes saved on offers reach their posted announcement pages as silent edits.
-        if (repository.announcements() != null) repository.announcements().propagateCorrections(now, 50);
+        if (repository.announcements() != null) due += repository.announcements().propagateCorrections(now, 50);
+        // Once per process: pages refreshed before refreshed() cleared their due time stop matching the refresh claim.
+        if (!refreshDueSettled && repository.announcements() != null)
+            refreshDueSettled = repository.announcements().settleRefreshDue(now, 200) == 0;
         // Release approvals committed before a crash finish reconciling into per-game state and planning.
         approvals.recover();
-        broadcasts.housekeeping();
+        due += broadcasts.housekeeping();
+        if (due > 0) sender.wake();
         JDA client = jda.get();
         if (client == null || client.getStatus() != JDA.Status.CONNECTED) return;
         if (!now.isBefore(nextSweep)) {
-            cleanup().sweep(client, now);
+            var swept = cleanup().sweep(client, now);
             nextSweep = now.plus(SWEEP_EVERY);
+            if (swept.channels() + swept.roles() > 0) notifier.wake(); // Each one may have queued a notice.
         }
         // Held source reports are announced once with their decision buttons, so none is suppressed unnoticed.
         if (repository.sources() != null)
@@ -264,7 +308,10 @@ public final class FreebieSystem {
         if (repository.offer(offer.id()).map(FreebieOffer::state).orElse(null) == FreebieOffer.State.STOPPED) {
             repository.cancelPending(offer.id(), "stopped while sending was being planned", now);
             repository.dmJobs().cancelForOffer(offer.id(), now);
+            return;
         }
+        // Approval click or housekeeping: the rows (and DMs) just planned are sent without waiting for an idle poll.
+        sender.wake();
     }
 
     /** Recorded as the approver of auto-sent offers; never a real user ID, so it is never mentioned. */
@@ -302,19 +349,28 @@ public final class FreebieSystem {
         if (offer == null) return;
         // Owner stops are recorded on the offer itself; housekeeping reads the same flag.
         boolean owner = offer.state() == FreebieOffer.State.STOPPED && repository.stoppedByOwner(offerId);
-        FreebieLifecycle.endTrigger(offer, owner, now).ifPresent(end -> lifecycle.ended(offerId, end, now));
+        FreebieLifecycle.endTrigger(offer, owner, now).ifPresent(end -> {
+            lifecycle.ended(offerId, end, now);
+            sender.wake(); // Ended-card edits and the touched announcement pages are due now.
+        });
     }
 
     // ------------------------------------------------------------------ deletion events (gateway threads)
 
     /** A guild channel was deleted; the database work runs on the freebie discovery thread. */
     public void channelDeleted(String guildId, String channelId, String name) {
-        background("channel cleanup", () -> cleanup().channelDeleted(guildId, channelId, Optional.ofNullable(name), clock.instant()));
+        background("channel cleanup", () -> {
+            cleanup().channelDeleted(guildId, channelId, Optional.ofNullable(name), clock.instant());
+            notifier.wake(); // The owner's notice, when one was queued.
+        });
     }
 
     /** A role was deleted; settings that pinged it keep posting without a ping. */
     public void roleDeleted(String guildId, String roleId, String name) {
-        background("role cleanup", () -> cleanup().roleDeleted(guildId, roleId, Optional.ofNullable(name), clock.instant()));
+        background("role cleanup", () -> {
+            cleanup().roleDeleted(guildId, roleId, Optional.ofNullable(name), clock.instant());
+            notifier.wake();
+        });
     }
 
     private void background(String name, Runnable task) {
@@ -396,7 +452,9 @@ public final class FreebieSystem {
         boolean quiet = action.startsWith(FreebieBroadcasts.SEND_QUIET);
         String token = action.substring((quiet ? FreebieBroadcasts.SEND_QUIET : FreebieBroadcasts.SEND).length());
         if (!token.matches("[0-9a-f]{24}")) return "This control is malformed.";
-        return broadcasts.confirm(actorId, id, token, !quiet);
+        String reply = broadcasts.confirm(actorId, id, token, !quiet);
+        sender.wake(); // One job per server was just planned (nothing is claimed when the draft had expired).
+        return reply;
     }
 
     public String stopAnnouncement(String actorId, String id) {
@@ -431,19 +489,37 @@ public final class FreebieSystem {
      */
     public CatchUp catchUpChannel(String guildId, String channelId, java.util.function.Predicate<FreebieStore> stores) {
         int live = 0, queued = 0;
+        // One request is one drop: every game it queues in this channel shares one message, without a ping.
+        Optional<String> drop = catchUpDrop(channelId);
         for (var subscription : subscriptions.forGuild(guildId))
             if (subscription.channelId().equals(channelId) && stores.test(subscription.store())) {
                 live += liveFor(subscription.store()).size();
-                queued += catchUp(subscription);
+                queued += catchUp(subscription, drop);
             }
+        // Only now, with every row of the request inserted, do they become due together.
+        drop.ifPresent(key -> repository.releaseDrop(key, clock.instant()));
+        if (queued > 0) sender.wake();
         return new CatchUp(live, queued);
     }
 
     public int catchUp(FreebieSubscriptions.Subscription subscription) {
+        var drop = catchUpDrop(subscription.channelId());
+        int queued = catchUp(subscription, drop);
+        drop.ifPresent(key -> repository.releaseDrop(key, clock.instant()));
+        if (queued > 0) sender.wake();
+        return queued;
+    }
+
+    private int catchUp(FreebieSubscriptions.Subscription subscription, Optional<String> drop) {
         int queued = 0;
         for (var offer : liveFor(subscription.store()))
-            if (repository.planDelivery(offer, subscription, clock.instant())) queued++;
+            if (repository.planDelivery(offer, subscription, drop, clock.instant())) queued++;
         return queued;
+    }
+
+    /** A fresh catch-up drop key, or empty for the per-game rollback. */
+    private Optional<String> catchUpDrop(String channelId) {
+        return features.drops().map(window -> FreebieDrops.catchUpKey(channelId, clock.instant()));
     }
 
     // ------------------------------------------------------------------ owner admin
@@ -463,7 +539,9 @@ public final class FreebieSystem {
     static String retentionStatus(int days, Optional<FreebieRetention.Last> last) { return FreebieStatusText.retention(days, last); }
     public String setPaused(String actorId, boolean paused) {
         requireOwner(actorId);
+        // The sender's in-memory copy changes with this write: a pause stops claims at once, a resume sends at once.
         repository.setSendingPaused(paused, actorId, clock.instant());
+        if (!paused) sender.wake();
         reviews.notifyOwners(paused ? "⏸️ Sending paused by <@" + actorId + ">. Queued alerts wait; nothing is lost."
                 : "▶️ Sending resumed by <@" + actorId + ">.");
         return paused ? "Paused. Up to " + FreebieSender.MAX_IN_FLIGHT + " messages already in flight may still arrive."

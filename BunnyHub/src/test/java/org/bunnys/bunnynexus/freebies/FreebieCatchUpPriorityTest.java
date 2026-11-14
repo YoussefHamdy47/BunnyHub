@@ -72,7 +72,7 @@ class FreebieCatchUpPriorityTest {
     }
 
     @Test void thePauseHoldsDmsToo() {
-        when(repository.sendingPaused()).thenReturn(true);
+        when(repository.sendingPausedCached()).thenReturn(true);
         sender.tick();
         verify(dms, never()).claimOne(any(), any(), any());
         verify(repository, never()).claimCatchUp(any(), any());
@@ -88,16 +88,38 @@ class FreebieCatchUpPriorityTest {
         when(subscriptions.forGuild(GUILD)).thenReturn(List.of(steam, epic, elsewhere));
         var a = FreebieUnitTest.offer("A", FreebieStore.STEAM);
         when(repository.liveApproved(FreebieStore.STEAM, now)).thenReturn(List.of(a));
-        when(repository.planDelivery(a, steam, now)).thenReturn(true);
+        // The whole request is one catch-up drop of this channel: one message, no ping.
+        var drop = Optional.of(FreebieDrops.catchUpKey(CHANNEL, now));
+        when(repository.planDelivery(a, steam, drop, now)).thenReturn(true);
         var system = new FreebieSystem(new FreebieConfig("100000000000000099", Set.of("333644367539470337"), 10),
                 repository, subscriptions, () -> client, Clock.fixed(now, ZoneOffset.UTC), new GamerPowerFeed());
         try {
             var result = system.catchUpChannel(GUILD, CHANNEL, s -> s == FreebieStore.STEAM);
             assertEquals(new FreebieSystem.CatchUp(1, 1), result);
             verify(repository, atLeastOnce()).liveApproved(FreebieStore.STEAM, now); // the same query as the button and /free-games
-            verify(repository).planDelivery(a, steam, now);
-            verify(repository, never()).planDelivery(any(), eq(epic), any());
-            verify(repository, never()).planDelivery(any(), eq(elsewhere), any());
+            // Finding 10: the held rows become due only once the whole request has inserted them.
+            var order = inOrder(repository);
+            order.verify(repository).planDelivery(a, steam, drop, now);
+            order.verify(repository).releaseDrop(drop.get(), now);
+            verify(repository, never()).planDelivery(any(), eq(epic), any(), any());
+            verify(repository, never()).planDelivery(any(), eq(elsewhere), any(), any());
+        } finally { system.close(); }
+    }
+
+    @Test void withGroupedAnnouncementsOffCatchUpPostsPerGame() {
+        var subscriptions = mock(FreebieSubscriptions.class);
+        var steam = new FreebieSubscriptions.Subscription(GUILD, CHANNEL, FreebieStore.STEAM, Optional.empty());
+        when(subscriptions.forGuild(GUILD)).thenReturn(List.of(steam));
+        var a = FreebieUnitTest.offer("A", FreebieStore.STEAM);
+        when(repository.liveApproved(FreebieStore.STEAM, now)).thenReturn(List.of(a));
+        when(repository.planDelivery(a, steam, Optional.empty(), now)).thenReturn(true);
+        var rollback = new FreebieFeatures(false, false, Set.of(), false, true, false);
+        var system = new FreebieSystem(new FreebieConfig("100000000000000099", Set.of("333644367539470337"), 10), rollback,
+                repository, subscriptions, () -> client, Clock.fixed(now, ZoneOffset.UTC), new GamerPowerFeed());
+        try {
+            assertEquals(new FreebieSystem.CatchUp(1, 1), system.catchUpChannel(GUILD, CHANNEL, s -> true));
+            verify(repository).planDelivery(a, steam, Optional.empty(), now);
+            verify(repository).dropWindow(Optional.empty());
         } finally { system.close(); }
     }
 }

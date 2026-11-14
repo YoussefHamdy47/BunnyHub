@@ -52,8 +52,8 @@ class FreebieDmTest {
         assertTrue(card.getMentionedRoles().isEmpty());
         assertTrue(card.getMentionedUsers().isEmpty());
         assertFalse(card.isMentionRepliedUser());
-        var channelCard = FreebieMessages.alertEmbed(epic, FreebieDm.reference(job));
-        assertEquals(channelCard, card.getEmbeds().getFirst(), "same card as channel alerts");
+        var channelCard = FreebieMessages.alertEmbed(epic, FreebieDm.reference(job), true);
+        assertEquals(channelCard, card.getEmbeds().getFirst(), "same card as channel alerts, plus the claim steps");
         assertEquals("Powered by GamerPower • ref " + FreebieDm.reference(job), card.getEmbeds().getFirst().getFooter().getText());
         var unsubscribe = buttons(card).getLast();
         assertEquals("Unsubscribe", unsubscribe.getLabel());

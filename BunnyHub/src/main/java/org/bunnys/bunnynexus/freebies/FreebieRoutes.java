@@ -4,6 +4,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.Sorts;
 import org.bson.Document;
+import org.bson.conversions.Bson;
 import java.time.Instant;
 import java.util.*;
 import static com.mongodb.client.model.Filters.*;
@@ -73,9 +74,14 @@ final class FreebieRoutes {
         return doc != null && "announcement".equals(doc.getString("route")) ? Optional.ofNullable(doc.getString("announcementKey")) : Optional.empty();
     }
 
-    /** Other queued rows of the same announcement and channel, oldest first, for one shared first post. */
+    /**
+     * Other queued rows of the same page key and channel, oldest first, for one shared first post. A drop key matches
+     * {@code dropKey}; an older release/offer key matches only rows without a drop, because a row that has a drop always
+     * posts through it and must never be frozen into an older page as well.
+     */
     List<Document> announcementPeers(String key, String channelId, String exceptOffer, int limit) {
-        return deliveries.find(and(eq("announcementKey", key), eq("channelId", channelId), in("state", "PENDING", "BLOCKED"),
+        Bson member = FreebieDrops.isDrop(key) ? eq("dropKey", key) : and(eq("announcementKey", key), exists("dropKey", false));
+        return deliveries.find(and(member, eq("channelId", channelId), in("state", "PENDING", "BLOCKED"),
                 ne("offerId", exceptOffer))).sort(Sorts.ascending("createdAt", "_id")).limit(limit).into(new ArrayList<>());
     }
 

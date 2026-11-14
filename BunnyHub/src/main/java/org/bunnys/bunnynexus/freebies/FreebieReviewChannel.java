@@ -29,6 +29,10 @@ final class FreebieReviewChannel {
     private final FreebieSubscriptions subscriptions;
     private final Supplier<JDA> jda;
     private final Map<String, Instant> lastProgress = new ConcurrentHashMap<>();
+    /** How long a sending offer's progress edits reuse its audience count; it is only shown, never used to send. */
+    static final Duration AUDIENCE_TTL = Duration.ofMinutes(10);
+    private record CachedAudience(FreebieSubscriptions.Audience audience, Instant at) {}
+    private final Map<String, CachedAudience> progressAudience = new ConcurrentHashMap<>();
 
     FreebieReviewChannel(FreebieConfig config, FreebieRepository repository, FreebieSubscriptions subscriptions, Supplier<JDA> jda, Executor executor, Clock clock) {
         this.config = config; this.repository = repository; this.subscriptions = subscriptions; this.jda = jda;
@@ -73,9 +77,14 @@ final class FreebieReviewChannel {
         }
     }
     void edit(FreebieOffer offer, String status, List<ActionRow> components) {
+        edit(offer, status, components, null);
+    }
+
+    /** {@code audience}: a count already read for this edit, or null to read it now. */
+    private void edit(FreebieOffer offer, String status, List<ActionRow> components, FreebieSubscriptions.Audience audience) {
         var channel = reviewChannelOf(jda.get(), offer);
         if (channel == null || offer.reviewMessageId().isEmpty()) return;
-        var audience = subscriptions.audience(offer.store());
+        if (audience == null) audience = subscriptions.audience(offer.store());
         var facts = facts(offer);
         channel.editMessageEmbedsById(offer.reviewMessageId().get(), FreebieAnnouncementCards.preview(offer, facts, clock.instant()),
                         FreebieMessages.reviewEmbed(offer, facts, audience.channels(), audience.guilds(), status, clock.instant()))
@@ -89,9 +98,22 @@ final class FreebieReviewChannel {
         if (last != null && Duration.between(last, now).compareTo(PROGRESS_INTERVAL) < 0) return;
         lastProgress.put(offer.id(), now);
         long total = counts.sent() + counts.failed() + counts.cancelled() + counts.open();
-        String paused = repository.sendingPaused() ? " **(sending is paused)**" : "";
-        edit(offer, "Sending… " + counts.sent() + "/" + total + " sent, " + counts.failed() + " failed, "
-                + counts.open() + " left." + paused, FreebieMessages.stopControls(offer));
+        // The in-process pause copy (refreshed by housekeeping) and an audience count reused for AUDIENCE_TTL: this
+        // text is informational, while every send still reads the pause flag from the database.
+        String paused = repository.sendingPausedCached() ? " **(sending is paused)**" : "";
+        if (channelReady(offer)) {
+            var cached = progressAudience.get(offer.id());
+            if (cached == null || Duration.between(cached.at(), now).compareTo(AUDIENCE_TTL) >= 0) {
+                cached = new CachedAudience(subscriptions.audience(offer.store()), now);
+                progressAudience.put(offer.id(), cached);
+            }
+            edit(offer, "Sending… " + counts.sent() + "/" + total + " sent, " + counts.failed() + " failed, "
+                    + counts.open() + " left." + paused, FreebieMessages.stopControls(offer), cached.audience());
+        }
+    }
+
+    private boolean channelReady(FreebieOffer offer) {
+        return offer.reviewMessageId().isPresent() && reviewChannelOf(jda.get(), offer) != null;
     }
 
     /**
@@ -128,6 +150,7 @@ final class FreebieReviewChannel {
 
     void finishReview(FreebieOffer offer, FreebieRepository.Counts counts) {
         lastProgress.remove(offer.id());
+        progressAudience.remove(offer.id());
         edit(offer, (offer.state() == FreebieOffer.State.COMPLETED ? "Done" : "Stopped") + " — sent " + counts.sent()
                 + ", failed " + counts.failed() + ", cancelled " + counts.cancelled() + ".", List.of());
     }

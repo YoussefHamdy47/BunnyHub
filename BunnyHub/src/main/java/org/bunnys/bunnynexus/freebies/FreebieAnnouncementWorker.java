@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -27,7 +28,9 @@ final class FreebieAnnouncementWorker {
     private final FreebieFeatures features;
     private final Executor executor;
     private final Clock clock;
+    private static final Duration ORPHAN_SCAN = Duration.ofSeconds(30);
     private int own; // Sender thread only.
+    private Instant nextOrphanScan = Instant.MIN; // Sender thread only.
     private volatile boolean closed;
 
     FreebieAnnouncementWorker(FreebieRepository repository, FreebieFeatures features, Executor executor, Clock clock) {
@@ -40,14 +43,61 @@ final class FreebieAnnouncementWorker {
     boolean claimOne(JDA client, AtomicInteger shared, AtomicInteger background) {
         if (closed || own >= MAX_IN_FLIGHT || shared.get() >= FreebieSender.MAX_IN_FLIGHT
                 || background.get() >= FreebieSender.BACKGROUND_SLOTS) return false;
-        var claimed = repository.announcements().claimRefresh(clock.instant(), LEASE);
-        if (claimed.isEmpty()) return false;
+        Instant now = clock.instant();
+        var claimed = repository.announcements().claimRefresh(now, LEASE);
+        // No edit is due: look, at most every ORPHAN_SCAN, for an uncertain page that no row can recover any more.
+        Optional<FreebieAnnouncementStore.Orphan> orphan = Optional.empty();
+        if (claimed.isEmpty()) {
+            if (now.isBefore(nextOrphanScan)) return false;
+            orphan = repository.announcements().claimOrphan(now, LEASE);
+            if (orphan == null || orphan.isEmpty()) { nextOrphanScan = now.plus(ORPHAN_SCAN); return false; }
+        }
         own++; shared.incrementAndGet(); background.incrementAndGet();
         Runnable release = () -> { own--; shared.decrementAndGet(); background.decrementAndGet(); };
         boolean handedOff = false;
-        try { handedOff = start(client, claimed.get(), release); }
+        try { handedOff = claimed.isPresent() ? start(client, claimed.get(), release) : reconcile(client, orphan.get(), release); }
         catch (RuntimeException failure) { log(failure); }
         finally { if (!handedOff) release.run(); }
+        return true;
+    }
+
+    /**
+     * An uncertain page whose rows are all final: history decides. Found: recorded as sent and due for a refresh, so
+     * ended or withdrawn games lose their claim. Not found: withdrawn. Unreadable history leaves it uncertain for a
+     * later check. Nothing is ever posted here.
+     */
+    private boolean reconcile(JDA client, FreebieAnnouncementStore.Orphan job, Runnable release) {
+        Instant now = clock.instant();
+        var store = repository.announcements();
+        var page = job.page();
+        String id = page.getString("_id"), channelId = page.getString("channelId");
+        long guildId = Long.parseLong(page.getString("guildId"));
+        if (client.isUnavailable(guildId)) { store.reconcileLater(id, job.token(), now.plus(Duration.ofMinutes(2)), now); return false; }
+        var guild = client.getGuildById(guildId);
+        var channel = guild == null ? null : guild.getChannelById(StandardGuildMessageChannel.class, channelId);
+        // The bot left or the channel is gone: no message can be read or edited any more.
+        if (channel == null) { store.cancel(id, job.token(), now); return false; }
+        if (!guild.getSelfMember().hasPermission(channel, Permission.VIEW_CHANNEL, Permission.MESSAGE_HISTORY)) {
+            store.reconcileLater(id, job.token(), now.plus(Duration.ofMinutes(30)), now);
+            return false;
+        }
+        String selfId = client.getSelfUser().getId();
+        List<String> references = page.getList("deliveries", String.class, List.of()).stream().map(FreebieMessages::reference).toList();
+        CompletableFuture<Optional<Message>> existing;
+        try {
+            existing = channel.getHistory().retrievePast(50).timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit()
+                    .thenApply(messages -> messages.stream().filter(m -> m.getAuthor().getId().equals(selfId))
+                            .filter(m -> references.stream().anyMatch(r -> FreebieMessages.carriesReference(m, r))).findFirst());
+        } catch (RuntimeException failure) { existing = CompletableFuture.failedFuture(failure); }
+        existing.whenComplete((found, error) -> dispatch(release, () -> {
+            try {
+                Instant at = clock.instant();
+                if (error != null) store.reconcileLater(id, job.token(), at.plus(Duration.ofMinutes(2)), at);
+                else if (found.isPresent()) store.reconciled(id, job.token(), found.get().getId(), features.publishes(channelId), at);
+                else store.cancel(id, job.token(), at);
+            } catch (RuntimeException storage) { log(storage); }
+            finally { release.run(); }
+        }));
         return true;
     }
 
@@ -89,7 +139,7 @@ final class FreebieAnnouncementWorker {
                 .orElse(job.page()), now);
         if (members.isEmpty()) return CompletableFuture.completedFuture("no members left");
         if (closed || !repository.announcements().ownsRefresh(job, now)) return CompletableFuture.failedFuture(new CancellationException("lease lost"));
-        return message.editMessage(FreebieAnnouncementCards.edit(members, features.checkout(), now))
+        return message.editMessage(FreebieAnnouncementCards.edit(members, features.checkout(), now, Optional.ofNullable(message.getContentRaw())))
                 .timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit().thenApply(edited -> "edited");
     }
 

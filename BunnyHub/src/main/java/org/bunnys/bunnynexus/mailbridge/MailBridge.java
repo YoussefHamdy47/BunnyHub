@@ -51,6 +51,7 @@ public final class MailBridge {
     private int transientFailures;
     private boolean authNoticePosted;
     private String lastChannelProblem = "";
+    private Instant cutoff; // The ledger's first-start cutoff, read on the first poll. Guarded by this.
 
     MailBridge(MailBridgeConfig config, MailSource source, MailLedger ledger, MailPoster poster, Clock clock) {
         this.config = config;
@@ -120,11 +121,14 @@ public final class MailBridge {
         if (now.isBefore(blockedUntil)) return;
         lastPoll = now;
         try {
-            Instant cutoff = ledger.cutoff(now);
+            // Stored once and never moved, so one read per process is enough.
+            if (cutoff == null) cutoff = ledger.cutoff(now);
             Instant from = cutoff.isAfter(now.minus(LOOKBACK)) ? cutoff : now.minus(LOOKBACK);
             List<String> ids = new ArrayList<>(source.search(config.query() + " after:" + from.getEpochSecond(), MAX_NEW_PER_POLL));
             Collections.reverse(ids); // Gmail lists newest first; record oldest first.
-            for (String id : ids) if (ledger.find(id).isEmpty()) intake(id, from, now);
+            // Almost every listed message is already recorded: one lookup for all of them, not one each.
+            Set<String> known = ids.isEmpty() ? Set.of() : ledger.known(ids);
+            for (String id : ids) if (!known.contains(id)) intake(id, from, now);
             deliverDue(now);
             lastSuccess = now;
             transientFailures = 0;

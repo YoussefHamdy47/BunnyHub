@@ -65,7 +65,10 @@ class FreebieHealthTest {
                 Clock.fixed(now, ZoneOffset.UTC), new GamerPowerFeed());
         try { assertThrows(SecurityException.class, () -> system.status("999999999999999999")); }
         finally { system.close(); }
-        verifyNoInteractions(repository);
+        // Construction configures the in-memory drop window; nothing else may touch the repository.
+        verify(repository).dropWindow(any());
+        verify(repository).pings(); // In-memory: the ping cooldown is set on the ledger, no database access.
+        verifyNoMoreInteractions(repository);
     }
     @Test void combinedOwnerDiagnosticsRemainBoundedWithBlockedReasonsVisible() {
         var repository = mock(FreebieRepository.class); var health = mock(FreebieHealth.class);

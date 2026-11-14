@@ -24,8 +24,15 @@ class MailBridgeTest {
     static final class MemoryLedger implements MailLedger {
         final Map<String, Entry> entries = new LinkedHashMap<>();
         Instant cutoff;
-        @Override public Instant cutoff(Instant firstStart) { if (cutoff == null) cutoff = firstStart; return cutoff; }
-        @Override public Optional<Entry> find(String id) { return Optional.ofNullable(entries.get(id)); }
+        int cutoffReads, finds, knownQueries;
+        @Override public Instant cutoff(Instant firstStart) { cutoffReads++; if (cutoff == null) cutoff = firstStart; return cutoff; }
+        @Override public Optional<Entry> find(String id) { finds++; return Optional.ofNullable(entries.get(id)); }
+        @Override public Set<String> known(Collection<String> ids) {
+            knownQueries++;
+            Set<String> known = new HashSet<>();
+            for (String id : ids) if (entries.containsKey(id)) known.add(id);
+            return known;
+        }
         @Override public void save(Entry entry) { entries.put(entry.id(), entry); }
         @Override public List<Entry> due(Instant now, int limit) {
             return entries.values().stream().filter(e -> (e.status() == Status.PENDING || e.status() == Status.SENDING) && !e.nextAttempt().isAfter(now))
@@ -120,6 +127,21 @@ class MailBridgeTest {
         clock.advance(Duration.ofHours(2));
         bridge.poll();
         assertEquals(3, poster.posted.size(), "never posted twice");
+    }
+
+    /** Audit finding 6: one ledger query per poll for every listed email, and the cutoff read once per process. */
+    @Test void aPollChecksAllListedEmailsWithOneLedgerQueryAndReadsTheCutoffOnce() {
+        bridge.poll();
+        clock.advance(Duration.ofMinutes(1));
+        for (int i = 0; i < 20; i++) arrive("m" + i, "EEE Industrial Training Hunter");
+        bridge.poll();
+        assertEquals(20, poster.postsTo(CHANNEL));
+        int before = ledger.knownQueries;
+        for (int i = 0; i < 5; i++) { clock.advance(Duration.ofMinutes(5)); bridge.poll(); }
+        assertEquals(5, ledger.knownQueries - before, "one query per poll, however many emails Gmail lists");
+        assertEquals(0, ledger.finds, "no per-email lookups");
+        assertEquals(1, ledger.cutoffReads, "the cutoff is read once and kept");
+        assertEquals(20, poster.posted.size(), "nothing posted twice");
     }
 
     @Test void searchesOnlyFromTheCutoffAndIgnoresOlderMail() {

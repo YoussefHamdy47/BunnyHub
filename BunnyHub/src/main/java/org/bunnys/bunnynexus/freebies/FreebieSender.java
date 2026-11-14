@@ -10,8 +10,10 @@ import org.bunnys.utils.FailureDiagnostics;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -31,6 +33,9 @@ final class FreebieSender {
      */
     static final int BACKGROUND_SLOTS = MAX_IN_FLIGHT / 2;
     private static final Duration LEASE = Duration.ofMinutes(3), SEND_TIMEOUT = Duration.ofSeconds(45);
+    /** The wait after a tick that found work, and the waits after each further tick in a row that found none. */
+    static final Duration BUSY_DELAY = Duration.ofSeconds(1);
+    static final List<Duration> IDLE_DELAYS = List.of(Duration.ofSeconds(2), Duration.ofSeconds(5), Duration.ofSeconds(15), Duration.ofSeconds(30));
 
     private final FreebieRepository repository;
     private final Supplier<JDA> jda;
@@ -45,51 +50,95 @@ final class FreebieSender {
     private FreebieAnnouncementWorker pages;
     private FreebiePublisher publisher;
     private FreebieBroadcastWorker broadcasts;
+    private final FreebieIdleBackoff pacing;
+    /** Set by {@link #wake()}: the next tick also plans publications for pages sent since the last one. */
+    private final AtomicBoolean planPublications = new AtomicBoolean(true);
+    private boolean foundWork; // Sender thread only: the previous tick's result.
     private volatile boolean closed;
 
     FreebieSender(FreebieRepository repository, Supplier<JDA> jda, ScheduledExecutorService executor, Clock clock, FreebieNotifier notifier) {
         this.repository = repository; this.jda = jda; this.executor = executor; this.clock = clock; this.notifier = notifier;
+        pacing = new FreebieIdleBackoff(executor, "sender", BUSY_DELAY, IDLE_DELAYS, this::tick);
+    }
+
+    /** Starts the self-rescheduling tick on the sender thread. */
+    void start(Duration initialDelay) { pacing.start(initialDelay); }
+
+    /**
+     * Work became due now (an approval, a catch-up, a retry, a resume): one tick at once, then every second again
+     * until the queues are idle. Safe from any thread, including JDA callbacks; it only schedules. Several calls
+     * before that tick share it.
+     */
+    void wake() {
+        planPublications.set(true);
+        pacing.wake();
     }
 
     FreebieSender withSubscriptions(FreebieSubscriptions value) { subscriptions = value; return this; }
     FreebieSender withLifecycle(FreebieLifecycleWorker value) { lifecycle = value; return this; }
     FreebieSender withDms(FreebieDmWorker value) { dms = value; return this; }
     FreebieSender withBroadcasts(FreebieBroadcastWorker value) { broadcasts = value; return this; }
+
+    private FreebiePings pings;
+    /** The per-channel ping budget for per-game alerts (the rollback path); without one every alert that may ping does. */
+    FreebieSender withPings(FreebiePings value) { pings = value; return this; }
+
+    private boolean pingAllowed(FreebieRepository.Claimed job, Instant now) {
+        if (pings == null) return true;
+        var take = pings.take(job.guildId(), job.channelId(), job.id(), now);
+        if (!take.allowed())
+            BunnyLog.info("[Freebies] No ping for " + job.id() + ": " + FreebiePings.since(take, now) + ".");
+        return take.allowed();
+    }
     FreebieSender withAnnouncements(FreebieAnnouncementSender sender, FreebieAnnouncementWorker worker, FreebiePublisher publishing) {
         announcements = sender; pages = worker; publisher = publishing; return this;
     }
     int background() { return background.get(); }
 
     int inFlight() { return inFlight.get(); }
-    void close() { closed = true; }
+    void close() { closed = true; pacing.close(); }
 
-    /** Called every second on the sender thread. */
-    void tick() {
+    /**
+     * One pass over the queues, on the sender thread. Expired leases are recovered by housekeeping, not here.
+     *
+     * @return true when the next tick should come after {@link #BUSY_DELAY}: something was claimed or is still in
+     * flight, or this tick read nothing (disconnected or paused), so the short interval is free and sending resumes
+     * at once. False after an idle pass, which backs off through {@link #IDLE_DELAYS}.
+     */
+    boolean tick() {
+        if (closed) return false;
         JDA client = jda.get();
-        if (closed || client == null || client.getStatus() != JDA.Status.CONNECTED) return;
-        if (repository.sendingPaused()) return; // Global kill switch: queued work waits, nothing is lost.
+        if (client == null || client.getStatus() != JDA.Status.CONNECTED) return true;
+        // Global kill switch, from memory: queued work waits, nothing is lost. Housekeeping re-reads the database
+        // value, and the database is read again before every REST submission (eligible()).
+        if (repository.sendingPausedCached()) return true;
+        boolean plan = planPublications.getAndSet(false) || foundWork;
+        foundWork = pass(client, plan) || inFlight.get() > 0;
+        return foundWork;
+    }
 
-        repository.recoverExpiredLeases(clock.instant());
-        boolean drained = false;
+    /** @return whether anything was claimed */
+    private boolean pass(JDA client, boolean planPages) {
+        boolean drained = false, claimedAny = false;
         while (!closed && inFlight.get() < MAX_IN_FLIGHT) {
             var claimed = repository.claim(clock.instant(), LEASE);
             if (claimed.isEmpty()) { drained = true; break; }
+            claimedAny = true;
             launch(client, claimed.get());
         }
-        if (!drained) return;
+        if (!drained) return claimedAny;
         // Lower priority, only in slots no due first post is waiting for and together within BACKGROUND_SLOTS.
         // Time-sensitive work first: reminders by due time, then ended-card edits (one queue, see
         // FreebieLifecycleStore.claim). Then catch-up alerts and personal DMs take turns, so neither backlog
         // starves the other. Reminders are offered first on every tick, so a backlog only delays one until a
         // slot frees up (at most one request timeout), never indefinitely.
-        if (lifecycle != null) lifecycle.prepare();
-        if (dms != null) dms.prepare();
-        if (broadcasts != null) broadcasts.prepare();
-        while (lifecycle != null && lifecycle.claimOne(client, inFlight, background)) { /* Fill with due card work. */ }
+        while (lifecycle != null && lifecycle.claimOne(client, inFlight, background)) claimedAny = true; // Due card work.
         // Announcement edits (ended/withdrawn games, corrections, silent joins), then automatic publishing.
-        while (pages != null && pages.claimOne(client, inFlight, background)) { /* Fill with due page edits. */ }
-        if (publisher != null) publisher.prepare();
-        while (publisher != null && publisher.claimOne(client, inFlight, background)) { /* Fill with due publications. */ }
+        while (pages != null && pages.claimOne(client, inFlight, background)) claimedAny = true; // Due page edits.
+        // Pages are sent on this thread, so a tick after a wake or after a tick with work finds the new ones;
+        // housekeeping plans any other.
+        if (publisher != null && planPages) publisher.plan();
+        while (publisher != null && publisher.claimOne(client, inFlight, background)) claimedAny = true; // Due publications.
         boolean more = true;
         while (more && !closed) {
             boolean catchUp = claimCatchUpOne(client);
@@ -97,7 +146,9 @@ final class FreebieSender {
             // Owner announcements take turns with catch-up and DMs, after every first post and card update.
             boolean announcement = broadcasts != null && broadcasts.claimOne(client, inFlight, background);
             more = catchUp || dm || announcement;
+            claimedAny |= more;
         }
+        return claimedAny;
     }
 
     private boolean claimCatchUpOne(JDA client) {
@@ -189,8 +240,10 @@ final class FreebieSender {
                         repository.deliveries().block(job, FreebieDeliveryStore.Block.DESTINATION, clock.instant());
                     } else if (repository.deliveries().submitting(job, clock.instant())) {
                         // All database work and the final eligibility check run on the dedicated worker.
-                        if (eligible(job)) {
-                            var request = channel.sendMessage(FreebieMessages.alert(offer, role, reference))
+                        if (eligibleToSubmit(job)) {
+                            // Ping budget, keyed by this row: a retry of the same alert gets the same answer.
+                            var mention = role.filter(r -> pingAllowed(job, clock.instant()));
+                            var request = channel.sendMessage(FreebieMessages.alert(offer, mention, reference))
                                     .setNonce(FreebieMessages.nonce(job.id()))
                                     .timeout(SEND_TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit();
                             submitted = true;
@@ -235,6 +288,27 @@ final class FreebieSender {
         }
         // Subscription and pause reads may take time; re-read eligibility after them before REST submission.
         current = repository.offer(job.offerId()).orElse(null);
+        if (current == null || current.ended(clock.instant())
+                || (current.state() != FreebieOffer.State.APPROVED && current.state() != FreebieOffer.State.COMPLETED)) {
+            repository.markCancelled(job, "offer no longer eligible", clock.instant());
+            return false;
+        }
+        return repository.deliveries().owns(job, clock.instant());
+    }
+
+    /**
+     * The final check immediately before REST, right after {@link #eligible} passed and the row was marked SUBMITTING.
+     * The owner-retry destination was checked by that call and the SUBMITTING write changed nothing it depends on, so
+     * it is not read again; the pause flag, the offer and the lease are, in that order, so the offer read is the last
+     * read of the game before Discord is asked.
+     */
+    private boolean eligibleToSubmit(FreebieRepository.Claimed job) {
+        if (closed || !repository.deliveries().owns(job, clock.instant())) return false;
+        if (repository.sendingPaused()) {
+            repository.release(job, clock.instant().plusSeconds(120), clock.instant());
+            return false;
+        }
+        var current = repository.offer(job.offerId()).orElse(null);
         if (current == null || current.ended(clock.instant())
                 || (current.state() != FreebieOffer.State.APPROVED && current.state() != FreebieOffer.State.COMPLETED)) {
             repository.markCancelled(job, "offer no longer eligible", clock.instant());

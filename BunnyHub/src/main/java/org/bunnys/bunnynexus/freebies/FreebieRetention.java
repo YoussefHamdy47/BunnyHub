@@ -37,6 +37,7 @@ final class FreebieRetention {
     private final FreebieAnnouncementStore announcements;
     private final FreebiePublicationStore publications;
     private final FreebieBroadcastStore broadcasts;
+    private final FreebiePings pings;
     /** Final edit/reminder jobs removed per run. */
     static final int JOBS_PER_RUN = 500;
 
@@ -46,6 +47,7 @@ final class FreebieRetention {
         announcements = new FreebieAnnouncementStore(db);
         publications = new FreebiePublicationStore(db);
         broadcasts = new FreebieBroadcastStore(db);
+        pings = new FreebiePings(db); // Ping ledger documents older than the window hold nothing (cooldown is at most a day).
         offers = db.getCollection(FreebieRepository.OFFERS);
         deliveries = db.getCollection(FreebieRepository.DELIVERIES);
         notices = db.getCollection(FreebieRepository.NOTICES);
@@ -77,7 +79,7 @@ final class FreebieRetention {
         // Finished card edits and reminders follow the same window; open ones are never removed.
         long j = lifecycle.purge(cutoff, JOBS_PER_RUN) + dmJobs.purge(now, cutoff, JOBS_PER_RUN)
                 + publications.purge(cutoff, JOBS_PER_RUN) + announcements.purge(cutoff, JOBS_PER_RUN)
-                + broadcasts.purge(cutoff, JOBS_PER_RUN);
+                + broadcasts.purge(cutoff, JOBS_PER_RUN) + pings.purge(cutoff, JOBS_PER_RUN);
         var result = new Result(d, o, n, d >= limits.deliveries() || o >= limits.offers() || n >= limits.notices() || j >= JOBS_PER_RUN);
         control.updateOne(eq("_id", CONTROL_ID), combine(set("lastPurgeAt", Date.from(now)), set("lastPurgeDeliveries", d),
                 set("lastPurgeOffers", o), set("lastPurgeNotices", n), set("lastPurgeJobs", j), set("retentionDays", retentionDays),
@@ -101,7 +103,7 @@ final class FreebieRetention {
         while (deleted < limits.deliveries() && scanned < 4L * limits.deliveries()) {
             int size = (int) Math.min(limits.batch(), limits.deliveries() - deleted);
             var batch = deliveries.find(and(oldDelivery(now, cutoff), nin("offerId", held), nin("_id", busy)))
-                    .projection(Projections.include("_id", "offerId", "announcementKey")).sort(Sorts.ascending("finishedAt", "_id"))
+                    .projection(Projections.include("_id", "offerId", "announcementKey", "dropKey")).sort(Sorts.ascending("finishedAt", "_id"))
                     .limit(size).into(new ArrayList<>());
             if (batch.isEmpty()) break;
             scanned += batch.size();
@@ -111,7 +113,9 @@ final class FreebieRetention {
                 // A card edit or reminder still queued for this alert needs its message ID.
                 if (lifecycle.openFor(row.getString("_id"))) { busy.add(row.getString("_id")); continue; }
                 // A page still being submitted, refreshed or published needs its member rows.
-                if (row.getString("announcementKey") != null && announcements.openWorkFor(offerId)) { busy.add(row.getString("_id")); continue; }
+                if ((row.getString("announcementKey") != null || row.getString("dropKey") != null) && announcements.openWorkFor(offerId)) {
+                    busy.add(row.getString("_id")); continue;
+                }
                 deleted += deliveries.deleteOne(and(eq("_id", row.get("_id")), oldDelivery(now, cutoff))).getDeletedCount();
             }
         }

@@ -41,6 +41,25 @@ class FreebieReviewRecoveryTest {
                 repository, subscriptions, () -> client, Runnable::run, Clock.fixed(now, ZoneOffset.UTC));
     }
 
+    /** Audit finding 8: progress edits reuse the audience count for ten minutes and never read the pause flag from the database. */
+    @Test void progressEditsReuseTheAudienceAndThePauseCopy() {
+        var sending = new FreebieOffer(offer.id(), offer.sourceId(), offer.store(), offer.platforms(), offer.title(), offer.description(),
+                offer.instructions(), offer.worth(), offer.image(), offer.claimUrl(), offer.pageUrl(), offer.endsAt(), offer.discoveredAt(),
+                FreebieOffer.State.APPROVED, Optional.of("review1"), Optional.of(channelId), Optional.of("owner"), true, false, 3, false);
+        when(repository.facts(any())).thenReturn(FreebieFacts.NONE);
+        var edit = mock(net.dv8tion.jda.api.requests.restaction.MessageEditAction.class, RETURNS_SELF);
+        when(channel.editMessageEmbedsById(anyString(), any(net.dv8tion.jda.api.entities.MessageEmbed[].class))).thenReturn(edit);
+        var counts = new FreebieRepository.Counts(1, 0, 0, 3);
+        for (int minute = 0; minute <= 11; minute++) reviews.progress(sending, counts, now.plus(Duration.ofMinutes(minute)));
+        verify(channel, times(12)).editMessageEmbedsById(eq("review1"), any(net.dv8tion.jda.api.entities.MessageEmbed[].class));
+        verify(subscriptions, times(2)).audience(offer.store()); // minute 0 and minute 10
+        verify(repository, never()).sendingPaused();
+        verify(repository, times(12)).sendingPausedCached();
+        // A finished review reads the current audience again.
+        reviews.finishReview(sending, counts);
+        verify(subscriptions, times(3)).audience(offer.store());
+    }
+
     Message existing(String authorId) {
         var message = mock(Message.class); var author = mock(User.class);
         when(author.getId()).thenReturn(authorId); when(message.getAuthor()).thenReturn(author); when(message.getId()).thenReturn("existing");

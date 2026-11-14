@@ -27,7 +27,10 @@ public final class FreebieRepository {
 
     public enum DeliveryState { PENDING, SENDING, SENT, FAILED, BLOCKED, CANCELLED }
     /** {@code catchUp}: planned for a channel that subscribed later; claimed only after fresh first posts. */
-    /** {@code announcementKey}: the row belongs to an announcement page (see {@link FreebieAnnouncementStore}). */
+    /**
+     * {@code announcementKey}: the page key of the row, which then posts through an announcement page (see
+     * {@link FreebieAnnouncementStore}): its {@code dropKey} when it has one, else the older release/offer key.
+     */
     public record Claimed(String id, String offerId, String guildId, String channelId, Optional<String> roleId,
                           int attempts, boolean verifyFirst, String token, boolean catchUp, Optional<String> announcementKey) {
         public Claimed {
@@ -75,6 +78,16 @@ public final class FreebieRepository {
     private final FreebieRoutes routes;
     private final FreebieReleases releases;
     private final FreebieBroadcastStore broadcasts;
+    private final FreebieDrops drops;
+    /** Empty: new rows use the per-game path (rollback, and the default until the system configures drops). */
+    private volatile Optional<Duration> dropWindow = Optional.empty();
+    FreebieDrops drops() { return drops; }
+    private final FreebiePings pings;
+    /** The per-channel ping budget; its cooldown is set by the system from FREEBIE_PING_COOLDOWN_MINUTES. */
+    FreebiePings pings() { return pings; }
+    /** New first posts are collected into per-channel drops of this length; empty is the per-game rollback. */
+    void dropWindow(Optional<Duration> window) { dropWindow = Objects.requireNonNull(window); }
+    Optional<Duration> dropWindow() { return dropWindow; }
     /** Owner announcements to every subscribed server. */
     FreebieBroadcastStore broadcasts() { return broadcasts; }
     /** Release approval snapshots: the authority for release-keyed sends. */
@@ -100,6 +113,8 @@ public final class FreebieRepository {
         routes = new FreebieRoutes(offers, deliveries);
         releases = new FreebieReleases(db);
         broadcasts = new FreebieBroadcastStore(db);
+        drops = new FreebieDrops(db);
+        pings = new FreebiePings(db);
     }
 
     public void installIndexes() {
@@ -117,7 +132,12 @@ public final class FreebieRepository {
         releases.installIndexes();
         broadcasts.installIndexes();
         deliveries.createIndex(Indexes.ascending("announcementKey", "channelId", "state"), new IndexOptions().name("delivery_announcement").sparse(true));
+        deliveries.createIndex(Indexes.ascending("dropKey", "channelId", "state"), new IndexOptions().name("delivery_drop").sparse(true));
         offers.createIndex(Indexes.ascending("state", "reviewMessageId"), new IndexOptions().name("offer_state"));
+        // Only offers whose card was ever corrected: housekeeping's correction check (every 30 s) scans these instead
+        // of every stored offer.
+        offers.createIndex(Indexes.ascending("cardRevision"), new IndexOptions().name("offer_card_revision")
+                .partialFilterExpression(exists("cardRevision")));
         deliveries.createIndex(Indexes.ascending("state", "nextAttemptAt"), new IndexOptions().name("delivery_due"));
         deliveries.createIndex(Indexes.ascending("state", "leaseUntil"), new IndexOptions().name("delivery_lease"));
         deliveries.createIndex(Indexes.ascending("offerId", "state"), new IndexOptions().name("delivery_offer"));
@@ -176,13 +196,17 @@ public final class FreebieRepository {
     }
 
     /** Empty for unknown IDs and for purged offers, whose tombstone only blocks re-discovery. */
+    // Both read only FreebieOffer.FIELDS: the offer is all they return, and the rest of the document (regions,
+    // evidence, source joins, mobile variants) can be larger than the offer itself. offerDocument() keeps the whole one.
     public Optional<FreebieOffer> offer(String id) {
-        return Optional.ofNullable(offers.find(and(eq("_id", id), ne("state", FreebieRetention.PURGED))).first()).map(FreebieOffer::read);
+        return Optional.ofNullable(offers.find(and(eq("_id", id), ne("state", FreebieRetention.PURGED)))
+                .projection(Projections.include(FreebieOffer.FIELDS)).first()).map(FreebieOffer::read);
     }
 
+    /** Housekeeping reads up to 200 of these every 30 s per state. */
     public List<FreebieOffer> offersIn(FreebieOffer.State state, int limit) {
-        return offers.find(eq("state", state.name())).sort(Sorts.ascending("discoveredAt")).limit(limit)
-                .map(FreebieOffer::read).into(new ArrayList<>());
+        return offers.find(eq("state", state.name())).projection(Projections.include(FreebieOffer.FIELDS))
+                .sort(Sorts.ascending("discoveredAt")).limit(limit).map(FreebieOffer::read).into(new ArrayList<>());
     }
 
     /** Conditional state change; empty when someone else already moved it (double click, other owner, expiry). */
@@ -267,6 +291,31 @@ public final class FreebieRepository {
 
     FreebieFacts facts(String id) { return offerDocument(id).map(FreebieFacts::read).orElse(FreebieFacts.NONE); }
 
+    /** Fields of {@link #offerStatus}: enough to decide eligibility and the "Send without ping" choice. */
+    static final List<String> STATUS_FIELDS = List.of("_id", "state", "endsAt", "gone", "quiet");
+
+    /**
+     * An offer's eligibility fields only (no description, art, regions or evidence). One read instead of a full offer
+     * read plus a {@link #quiet} count, for the peers a drop page considers. Purged offers read as absent.
+     */
+    Optional<Document> offerStatus(String id) {
+        return Optional.ofNullable(offers.find(and(eq("_id", id), ne("state", FreebieRetention.PURGED)))
+                .projection(Projections.include(STATUS_FIELDS)).first());
+    }
+
+    /** {@link FreebieAnnouncementSender#eligible} for an {@link #offerStatus} document: approved or completed, not ended. */
+    static boolean eligible(Document status, Instant now) {
+        if (status == null) return false;
+        String state = status.getString("state");
+        if (!FreebieOffer.State.APPROVED.name().equals(state) && !FreebieOffer.State.COMPLETED.name().equals(state)) return false;
+        if (status.getBoolean("gone", false)) return false;
+        Date end = status.getDate("endsAt");
+        return end == null || now.isBefore(end.toInstant());
+    }
+
+    /** Whether the owner approved this game without a ping, from an offer or {@link #offerStatus} document. */
+    static boolean quiet(Document offer) { return offer.getBoolean("quiet", false); }
+
     /** Several fan-outs of one offer may race; the recorded plan size never shrinks. */
     public void setFanoutDone(String offerId, int planned) {
         offers.updateOne(eq("_id", offerId), combine(set("fanoutDone", true), max("plannedDeliveries", planned)));
@@ -274,15 +323,45 @@ public final class FreebieRepository {
 
     // ---------------------------------------------------------------- global control
 
-    /** Global kill switch for sending (discovery and reviews continue). Survives restarts. */
+    /**
+     * Global kill switch for sending (discovery and reviews continue). Survives restarts. Always read from the
+     * database: this is the final check before a REST submission, so a pause written by another process counts.
+     */
     public boolean sendingPaused() {
         var doc = control.find(eq("_id", "global")).first();
         return doc != null && doc.getBoolean("paused", false);
     }
 
+    /** This process's copy of the kill switch; null until first read. Written under {@code pauseLock}. */
+    private volatile Boolean pausedCopy;
+    private long pauseWrites; // Guarded by pauseLock.
+    private final Object pauseLock = new Object();
+
+    /**
+     * The kill switch without a database round trip, for the sender's tick. {@link #setSendingPaused} updates it at
+     * once; a value written by another process arrives with the next {@link #refreshSendingPaused} (housekeeping).
+     */
+    boolean sendingPausedCached() {
+        Boolean copy = pausedCopy;
+        return copy != null ? copy : refreshSendingPaused();
+    }
+
+    /** Re-reads the kill switch from the database into this process's copy. */
+    boolean refreshSendingPaused() {
+        long seen;
+        synchronized (pauseLock) { seen = pauseWrites; }
+        boolean stored = sendingPaused();
+        synchronized (pauseLock) {
+            // A local change during the read is newer than what was read.
+            if (seen == pauseWrites) pausedCopy = stored;
+            return pausedCopy;
+        }
+    }
+
     public void setSendingPaused(boolean paused, String actorId, Instant now) {
         control.updateOne(eq("_id", "global"), combine(set("paused", paused), set("updatedBy", actorId), set("updatedAt", Date.from(now))),
                 new UpdateOptions().upsert(true));
+        synchronized (pauseLock) { pauseWrites++; pausedCopy = paused; }
     }
 
     public Overview overview() {
@@ -293,13 +372,24 @@ public final class FreebieRepository {
 
     // ---------------------------------------------------------------- deliveries
 
-    /** Idempotent: one delivery per offer+channel, so a crashed/retried fan-out never creates duplicates. */
+    /**
+     * Idempotent: one delivery per offer+channel, so a crashed/retried fan-out never creates duplicates. With drops on,
+     * each row joins its channel's open drop window ({@link FreebieDrops}) and waits for the window's end.
+     */
     public int planDeliveries(FreebieOffer offer, Iterable<FreebieSubscriptions.Subscription> audience, Instant now) {
         int planned = 0;
         List<Document> batch = new ArrayList<>();
         var key = routes.announcementKey(offer.id());
+        var window = dropWindow;
+        Map<String, FreebieDrops.Window> opened = new HashMap<>();
         for (var subscription : audience) {
-            batch.add(withKey(delivery(offer, subscription, false, now), key, now));
+            var row = withKey(delivery(offer, subscription, false, now), key, now);
+            if (window.isPresent()) {
+                // A replayed fan-out may open a window without inserting anything; a later game then just joins it.
+                var drop = opened.computeIfAbsent(subscription.channelId(), channel -> drops.open(channel, window.get(), now));
+                inDrop(row, drop.key(), drop.until());
+            }
+            batch.add(row);
             if (batch.size() == INSERT_BATCH) { planned += insertIgnoringDuplicates(batch); batch.clear(); }
         }
         if (!batch.isEmpty()) planned += insertIgnoringDuplicates(batch);
@@ -308,7 +398,31 @@ public final class FreebieRepository {
 
     /** Catch-up for one channel; false when it already has (or had) a delivery for this offer. */
     public boolean planDelivery(FreebieOffer offer, FreebieSubscriptions.Subscription subscription, Instant now) {
-        return insertIgnoringDuplicates(List.of(withKey(delivery(offer, subscription, true, now), routes.announcementKey(offer.id()), now))) == 1;
+        Optional<String> drop = dropWindow.isPresent() ? Optional.of(FreebieDrops.catchUpKey(subscription.channelId(), now)) : Optional.empty();
+        boolean planned = planDelivery(offer, subscription, drop, now);
+        drop.ifPresent(k -> releaseDrop(k, now)); // A batch of one is complete at once.
+        return planned;
+    }
+
+    /**
+     * Catch-up for one channel as part of a batch: every row of one request shares {@code dropKey}, so the batch is one
+     * message without a ping. Empty key: the per-game rollback.
+     */
+    boolean planDelivery(FreebieOffer offer, FreebieSubscriptions.Subscription subscription, Optional<String> dropKey, Instant now) {
+        var row = withKey(delivery(offer, subscription, true, now), routes.announcementKey(offer.id()), now);
+        dropKey.ifPresent(k -> inDrop(row, k, FreebieDrops.isCatchUp(k) ? now.plus(FreebieDrops.CATCH_UP_HOLD) : now));
+        return insertIgnoringDuplicates(List.of(row)) == 1;
+    }
+
+    /** A catch-up request finished inserting: its held rows become due together. One multi-row write, idempotent. */
+    long releaseDrop(String dropKey, Instant now) {
+        return deliveries.updateMany(and(eq("dropKey", dropKey), eq("state", "PENDING"), gt("nextAttemptAt", Date.from(now))),
+                set("nextAttemptAt", Date.from(now))).getModifiedCount();
+    }
+
+    private static void inDrop(Document row, String dropKey, Instant due) {
+        row.append("dropKey", dropKey);
+        row.put("nextAttemptAt", Date.from(due));
     }
 
     /** Group members wait a few seconds so games approved together share one first post and one ping. */
@@ -364,7 +478,7 @@ public final class FreebieRepository {
         return Optional.of(new Claimed(doc.getString("_id"), doc.getString("offerId"), doc.getString("guildId"),
                 doc.getString("channelId"), Optional.ofNullable(doc.getString("roleId")), doc.getInteger("attempts"),
                 doc.getBoolean("verifyFirst", false), token, doc.getBoolean("catchUp", false),
-                Optional.ofNullable(doc.getString("announcementKey"))));
+                Optional.ofNullable(doc.getString("dropKey")).or(() -> Optional.ofNullable(doc.getString("announcementKey")))));
     }
 
     private boolean finish(Claimed c, Instant now, Bson... changes) {

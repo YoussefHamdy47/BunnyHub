@@ -18,10 +18,16 @@ public final class FreebieDeliveryAdmin {
     private final FreebieSubscriptions subscriptions;
     private final Supplier<JDA> jda;
     private final Clock clock;
+    private final Runnable wake;
     FreebieDeliveryAdmin(FreebieConfig config, FreebieRepository repository, FreebieSubscriptions subscriptions,
                         Supplier<JDA> jda, Clock clock) {
+        this(config, repository, subscriptions, jda, clock, () -> {});
+    }
+    /** {@code wake}: wakes the sender ({@link FreebieSender#wake}) when an owner retry is queued. */
+    FreebieDeliveryAdmin(FreebieConfig config, FreebieRepository repository, FreebieSubscriptions subscriptions,
+                        Supplier<JDA> jda, Clock clock, Runnable wake) {
         this.config = config; this.repository = repository; this.subscriptions = subscriptions;
-        this.jda = jda; this.clock = clock;
+        this.jda = jda; this.clock = clock; this.wake = wake;
     }
     private void authorize(String actor) {
         if (!config.isOwner(actor)) throw new SecurityException("Not a freebie owner.");
@@ -110,6 +116,7 @@ public final class FreebieDeliveryAdmin {
             repository.cancelPending(offerId, "offer ended or stopped during retry confirmation", clock.instant());
             return text("The offer ended or stopped; queued work was cancelled.");
         }
+        if (queued) wake.run(); // The retry is due now; the sender still verifies history first where required.
         return text(queued ? "Retry queued on the freebie sender. Follow its result in delivery history. Existing summaries stay unchanged."
                 : "Confirmation expired, already used, or delivery changed. Nothing queued.");
     }

@@ -40,8 +40,14 @@ final class FreebieNoticeStore {
         deliveries.createIndex(Indexes.ascending("noticePending", "noticeCheckAt", "finishedAt"), new IndexOptions().name("notice_source"));
     }
 
-    /** Each write stands alone: an interrupted enqueue/reconciliation is replayed on the next tick. */
-    void recover(Instant now) {
+    /**
+     * Each write stands alone: an interrupted enqueue/reconciliation is replayed on the next run (housekeeping, and
+     * the sender thread right after a failure that asks for a notice).
+     *
+     * @return how many failed alerts were looked at for a notice; above zero, a notice may now be due
+     */
+    int recover(Instant now) {
+        int sources = 0;
         for (var notice : notices.find(and(eq("noticeState", "SENT"), ne("noticeReconciled", true))).limit(20)) {
             deliveries.updateOne(and(eq("_id", notice.getString("noticeDeliveryId")), eq("state", "FAILED")),
                     combine(set("serverNotified", true), set("noticePending", false)));
@@ -53,7 +59,9 @@ final class FreebieNoticeStore {
             enqueue(source, now);
             deliveries.updateOne(and(eq("_id", source.getString("_id")), eq("noticePending", true)),
                     set("noticeCheckAt", Date.from(now.plusSeconds(120))));
+            sources++;
         }
+        return sources;
     }
 
     void enqueue(Document source, Instant now) {

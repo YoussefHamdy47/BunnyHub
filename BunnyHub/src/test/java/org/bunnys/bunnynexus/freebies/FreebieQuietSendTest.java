@@ -77,6 +77,25 @@ class FreebieQuietSendTest {
         assertFalse(message.getEmbeds().isEmpty(), "the alert itself is unchanged");
     }
 
+    /** Audit finding 5: the check right before REST re-reads pause, offer and lease, but not the offer twice. */
+    @Test void anAlertReadsItsOfferFourTimesAndThePauseFlagBeforeEachCheck() throws Exception {
+        sent(false);
+        verify(repository, times(4)).offer(offer.id()); // claim, first check (twice), final check
+        verify(repository, times(2)).sendingPaused();
+    }
+
+    @Test void anOfferThatEndsAfterTheFirstCheckIsStillCancelledBeforeDiscordIsAsked() throws Exception {
+        when(repository.offer(offer.id())).thenReturn(Optional.of(offer), Optional.of(offer), Optional.of(offer), Optional.empty());
+        when(repository.quiet(offer.id())).thenReturn(false);
+        var job = new FreebieRepository.Claimed(offer.id() + "|" + CHANNEL, offer.id(), GUILD, CHANNEL, Optional.of(ROLE), 1, false, "t");
+        when(repository.claim(any(), any(Duration.class))).thenReturn(Optional.of(job)).thenReturn(Optional.empty());
+        var clock = Clock.fixed(now, ZoneOffset.UTC);
+        var sender = new FreebieSender(repository, () -> client, executor, clock, new FreebieNotifier(repository, () -> client, clock, executor));
+        executor.submit(sender::tick).get(5, TimeUnit.SECONDS);
+        verify(repository, timeout(5000)).markCancelled(eq(job), eq("offer no longer eligible"), any());
+        verify(channel, never()).sendMessage(any(MessageCreateData.class));
+    }
+
     static List<String> buttons(MessageCreateData data) {
         return data.getComponents().stream().flatMap(c -> ((ActionRow) c).getComponents().stream())
                 .map(b -> ((Button) b).getCustomId()).toList();

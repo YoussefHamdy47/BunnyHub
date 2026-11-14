@@ -9,6 +9,7 @@ import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
 import org.bunnys.utils.BunnyLog;
 import org.bunnys.utils.FailureDiagnostics;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
@@ -25,23 +26,56 @@ final class FreebieNotifier {
     FreebieNotifier(FreebieRepository repository, Supplier<JDA> jda, Clock clock, Executor executor) {
         this.repository = repository; this.jda = jda; this.clock = clock; this.executor = executor;
     }
-    void close() { closed = true; }
+    /** The wait after a tick that found a notice, and the waits after each further tick in a row that found none. */
+    static final Duration BUSY_DELAY = Duration.ofSeconds(5);
+    static final List<Duration> IDLE_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(20), Duration.ofSeconds(30));
+    private volatile FreebieIdleBackoff pacing;
 
-    void deliveryFailed(FreebieRepository.Claimed job, FreebieOffer offer, FreebieFailure failure) {
-        // markFailed already persisted noticePending atomically with the failure. The tick also survives a crash here.
-        if (failure.notifyServer()) tick();
+    /** Starts the self-rescheduling tick; {@code scheduler} must be the sender thread this notifier works on. */
+    void start(ScheduledExecutorService scheduler, Duration initialDelay) {
+        var loop = new FreebieIdleBackoff(scheduler, "notices", BUSY_DELAY, IDLE_DELAYS, this::tick);
+        pacing = loop;
+        loop.start(initialDelay);
     }
 
-    void tick() {
+    /** A notice was queued (a failed alert, a deleted channel or role): one tick at once. Safe from any thread. */
+    void wake() {
+        var loop = pacing;
+        if (loop != null) loop.wake();
+    }
+
+    void close() {
+        closed = true;
+        var loop = pacing;
+        if (loop != null) loop.close();
+    }
+
+    void deliveryFailed(FreebieRepository.Claimed job, FreebieOffer offer, FreebieFailure failure) {
+        // markFailed already persisted noticePending atomically with the failure; housekeeping survives a crash here.
+        if (!failure.notifyServer() || closed) return;
+        repository.notices().recover(clock.instant()); // Turns the failure just saved into a queued notice.
+        tick();
+    }
+
+    /**
+     * Claims up to two due notices, on the sender thread. Interrupted enqueues and reconciliations are replayed by
+     * housekeeping ({@link FreebieNoticeStore#recover}), not here.
+     *
+     * @return false only after a connected tick that found nothing and has nothing in flight
+     */
+    boolean tick() {
+        if (closed) return false;
         var client = jda.get();
-        if (closed || client == null || client.getStatus() != JDA.Status.CONNECTED) return;
-        repository.notices().recover(clock.instant());
+        if (client == null || client.getStatus() != JDA.Status.CONNECTED) return true; // Nothing was read.
+        boolean claimedAny = false;
         for (int admitted = 0; admitted < 2 && inFlight < 2; admitted++) {
             var claimed = repository.notices().claim(clock.instant());
             if (claimed.isEmpty()) break;
+            claimedAny = true;
             inFlight++;
             start(client, claimed.get());
         }
+        return claimedAny || inFlight > 0;
     }
 
     private void start(JDA client, FreebieNoticeStore.Claim job) {

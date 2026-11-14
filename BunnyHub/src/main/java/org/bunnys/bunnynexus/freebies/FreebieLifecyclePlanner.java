@@ -4,7 +4,9 @@ import org.bunnys.bunnynexus.freebies.FreebieLifecycle.End;
 import org.bunnys.utils.BunnyLog;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Queues lifecycle jobs from housekeeping (and right after an offer ends or is stopped). Every step is an
@@ -56,23 +58,22 @@ final class FreebieLifecyclePlanner {
         return planned;
     }
 
-    /** One reminder per offer and channel, when the channel's section asks for one and it is due now. */
+    /** One reminder per channel and end time, when the channel's section asks for one and a game of it is due now. */
     int reminders(Instant now) {
         int queued = 0;
         for (var offer : jobs().endingWithin(now, REMINDER_WINDOW, OFFERS_PER_RUN)) {
             var wanted = subscriptions.withReminders(offer.store());
             if (wanted.isEmpty()) continue;
+            List<FreebieLifecycleStore.DueReminder> due = new ArrayList<>();
             for (var delivery : jobs().sentIn(offer.id(), wanted.keySet())) {
                 int hours = wanted.get(delivery.getString("channelId")).reminderHours();
                 Date posted = delivery.getDate("finishedAt");
                 var verdict = FreebieLifecycle.reminder(offer, hours, delivery.getString("state"), delivery.getString("messageId"),
                         posted == null ? null : posted.toInstant(), now);
-                if (verdict != FreebieLifecycle.Reminder.DUE) continue;
-                String group = delivery.getString("announcementKey");
-                boolean planned = group == null ? jobs().planReminder(offer.id(), delivery, hours, now)
-                        : jobs().planGroupReminder(offer.id(), group, delivery, hours, offer.realEnd().orElseThrow(), now);
-                if (planned) queued++;
+                if (verdict == FreebieLifecycle.Reminder.DUE) due.add(new FreebieLifecycleStore.DueReminder(delivery, hours));
             }
+            // One read and at most one write per offer; reminders planned on an earlier run are not inserted again.
+            queued += jobs().planChannelReminders(offer.id(), due, offer.realEnd().orElseThrow(), now);
         }
         return queued;
     }

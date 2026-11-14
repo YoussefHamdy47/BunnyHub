@@ -28,6 +28,9 @@ final class FreebieSourceStore {
     }
     /** Bounded and restartable. New-source writes wait until every historical row has its alias reservation. */
     boolean backfill() {
+        // "Missing" cannot use the sparse alias index, so each check scans the collection. Every offer is inserted with
+        // its alias and tombstones keep it, so once finished the migration stays finished for this process.
+        if (migrated) return true;
         for (Document d : offers.find(exists("sourceAliases", false)).limit(200)) {
             String id = d.getString("_id");
             String alias = d.getString("source") + ":" + d.getString("sourceId");
@@ -43,8 +46,10 @@ final class FreebieSourceStore {
             try { offers.updateOne(and(eq("_id", id), exists("sourceAliases", false)), combine(changes)); }
             catch (MongoWriteException race) { if (race.getError().getCategory() != ErrorCategory.DUPLICATE_KEY) throw race; }
         }
-        return offers.countDocuments(exists("sourceAliases", false)) == 0;
+        migrated = offers.countDocuments(exists("sourceAliases", false)) == 0;
+        return migrated;
     }
+    private volatile boolean migrated;
     static String canonicalId(FreebieFeed.Candidate c) {
         // GamerPower keeps its historical IDs; other providers get a short stable hash under their own prefix.
         return c.provider() == FreebieFeed.Provider.GAMERPOWER ? c.identity()
@@ -251,7 +256,24 @@ final class FreebieSourceStore {
                 set("sourceDecisions." + token, decision), set("sourceActors." + token, actor), set("sourceDecidedAt." + token, Date.from(now))));
         // Same/ignore decisions do not change evidence; only the next live observation can do that.
         if (decision.equals("separate")) changes.add(set("separateCandidates." + token, candidate));
-        return offers.updateOne(and(eq("_id", id), eq("sourceCandidates." + token, candidate)), combine(changes)).getModifiedCount() == 1;
+        boolean resolved = offers.updateOne(and(eq("_id", id), eq("sourceCandidates." + token, candidate)), combine(changes)).getModifiedCount() == 1;
+        if (resolved && decision.equals("same")) adoptEpicIdentity(id, token, candidate);
+        return resolved;
+    }
+
+    /**
+     * An owner confirmed that a held Epic report is this giveaway: Epic's exact catalog identity from that report is
+     * copied onto it at once (FREEBIE_REDESIGN.md step 5), so checkout does not wait for, or miss, Epic's next poll.
+     * Never by title or guessed IDs: only the identity Epic itself reported, only after the owner's "same", and never
+     * replacing one already known. One conditional write.
+     */
+    private void adoptEpicIdentity(String id, String token, Document candidate) {
+        Document epic = candidate.get("epicOffer", Document.class);
+        if (epic == null || !FreebieFeed.Provider.EPIC.id.equals(candidate.getString("source"))
+                || epic.getString("namespace") == null || epic.getString("offerId") == null) return;
+        offers.updateOne(and(eq("_id", id), exists("epicOffer", false), eq("store", candidate.getString("store")),
+                        eq("sourceDecisions." + token, "same")),
+                set("epicOffer", new Document("namespace", epic.getString("namespace")).append("offerId", epic.getString("offerId"))));
     }
     /** A held report not yet announced to the owners: the giveaway it is held on and its question token. */
     record Question(Document parent, String token) {}

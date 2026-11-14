@@ -158,17 +158,23 @@ public final class FreebieBroadcasts {
         return List.of(ActionRow.of(Button.danger(FreebieMessages.BUTTON_PREFIX + ":" + STOP + ":" + id, "Stop this announcement")));
     }
 
-    /** Housekeeping: plans broadcasts a crash interrupted and reports finished ones once. */
-    void housekeeping() {
+    /**
+     * Housekeeping: plans broadcasts a crash interrupted and reports finished ones once.
+     *
+     * @return how many servers were planned by this run; above zero, the sender has work due now
+     */
+    int housekeeping() {
         var store = repository.broadcasts();
-        if (store == null) return;
-        for (var b : store.unplanned(5)) plan(b.id());
+        if (store == null) return 0;
+        int planned = 0;
+        for (var b : store.unplanned(5)) planned += plan(b.id());
         for (var b : store.sending(20))
             if (store.finishIfDone(b.id(), clock.instant())) {
                 var c = store.counts(b.id());
                 notifyOwners.accept("📢 Announcement **" + FreebieMessages.text(b.title(), 100) + "** finished: " + c.sent() + " sent, "
                         + c.skipped() + " skipped (no access or channel gone), " + c.failed() + " failed.");
             }
+        return planned;
     }
 
     String status() {

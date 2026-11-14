@@ -21,28 +21,48 @@ class FreebiePresentationTest {
         }
     }
 
-    @Test void launcherVariantsKeepLinksReferencesAndMentionsSafe() {
+    @Test void everyStoreGetsTheSameCardAndButton() {
+        List<String> expected = List.of("Price", "Ends", "Launcher");
         for (var store : FreebieStore.values()) {
             var offer = FreebieUnitTest.offer("Example Giveaway", store);
             try (var message = FreebieMessages.alert(offer, Optional.empty(), "same-reference")) {
                 var card = message.getEmbeds().getFirst();
                 assertTrue(card.isSendable());
-                assertTrue(card.getDescription().contains("[Example](" + offer.claimUrl() + ")"));
+                assertEquals(expected, card.getFields().stream().map(MessageEmbed.Field::getName).toList(), store.name());
+                assertEquals(store.label(), card.getFields().get(2).getValue());
+                assertEquals("BunnyNexus • FREE GAME • " + store.label(), card.getAuthor().getName());
+                assertFalse(card.getDescription().contains("Claim Game"), "the button claims; no duplicate link in the text");
                 assertEquals("Powered by GamerPower • ref same-reference", card.getFooter().getText());
                 assertTrue(message.getAllowedMentions().isEmpty());
                 var row = message.getComponents().getFirst().asActionRow().getComponents();
-                assertEquals(3, row.size(), "claim centered between two spacers");
-                var button = row.get(1).asButton();
+                assertEquals(1, row.size(), "no spacer buttons");
+                var button = row.getFirst().asButton();
+                assertEquals("Claim Free Game", button.getLabel());
                 assertEquals(offer.claimUrl().toString(), button.getUrl());
-                assertTrue(row.get(0).asButton().isDisabled() && row.get(2).asButton().isDisabled());
                 if (store == FreebieStore.EPIC || store == FreebieStore.STEAM) {
                     assertTrue(button.getEmoji().getFormatted().contains(store == FreebieStore.EPIC
                             ? "824679104220626954" : "705062577817780315"));
                     assertNotNull(card.getAuthor().getIconUrl());
-                    assertTrue(card.getFields().stream().anyMatch(f -> f.getName().equals("PLATFORMS")));
                 } else assertTrue(card.getTitle().startsWith("🎁"));
             }
         }
+    }
+
+    @Test void endDateIsOnlyCalledEstimatedWhenItIs() {
+        var end = Instant.parse("2027-01-01T12:00:00Z");
+        var real = offer(true);
+        var guessed = new FreebieOffer(real.id(), real.sourceId(), real.store(), real.platforms(), real.title(), real.description(),
+                real.instructions(), real.worth(), real.image(), real.claimUrl(), real.pageUrl(), Optional.of(end), real.discoveredAt(),
+                real.state(), real.reviewMessageId(), real.reviewChannelId(), real.decidedBy(), real.fanoutDone(), real.gone(),
+                real.revision(), true);
+        assertEquals("<t:" + end.getEpochSecond() + ":R>\n<t:" + end.getEpochSecond() + ":f>", FreebieCards.deadline(real));
+        assertTrue(FreebieCards.deadline(guessed).endsWith("(estimated)"));
+    }
+
+    @Test void claimStepsAreOnlyOnTheDmAndReviewCards() {
+        var rich = offer(true);
+        assertTrue(FreebieMessages.alertEmbed(rich, "r").getFields().stream().noneMatch(f -> f.getName().equals("How to claim")));
+        assertTrue(FreebieMessages.alertEmbed(rich, "r", true).getFields().stream().anyMatch(f -> f.getName().equals("How to claim")));
     }
 
     private static FreebieOffer offer(boolean rich) {
@@ -61,7 +81,7 @@ class FreebiePresentationTest {
             var alert = review.getEmbeds().getFirst();
             assertEquals("https://example.com/game.jpg", alert.getImage().getUrl());
             assertNull(alert.getThumbnail(), "the game art is the full-width image, not a corner thumbnail");
-            var instructions = alert.getFields().stream().filter(f -> f.getName().equals("GET STARTED ON EPIC")).findFirst().orElseThrow();
+            var instructions = alert.getFields().stream().filter(f -> f.getName().equals("How to claim")).findFirst().orElseThrow();
             assertTrue(instructions.getValue().contains("\\*\\*Step\\*\\*"));
             assertTrue(review.getAllowedMentions().isEmpty());
             assertTrue(review.getMentionedUsers().isEmpty());

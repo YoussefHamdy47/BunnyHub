@@ -196,6 +196,42 @@ class FreebieAnnouncementsIT {
         assertTrue(store.settled(store.get(page.getString("_id")).orElseThrow()));
     }
 
+    @Test void anUpToDatePageIsNoLongerDueButAChangeDuringItsEditKeepsItDue() {
+        var store = repository.announcements();
+        var page = store.create("k", GUILD, CHANNEL, 1, Optional.empty(), List.of("a", "b"), List.of("a|c", "b|c"), "t", Duration.ofMinutes(3), now).orElseThrow();
+        String id = page.getString("_id");
+        store.submitting(id, "t", now);
+        store.sent(id, "t", "m1", false, now);
+        var pages = db.getCollection(FreebieAnnouncementStore.COLLECTION);
+        store.touch("a", now);
+        var first = store.claimRefresh(now, Duration.ofMinutes(3)).orElseThrow();
+        store.touch("b", now); // a change while the first edit is in flight
+        assertTrue(store.refreshed(first, "edited", now));
+        assertNotNull(pages.find(eq("_id", id)).first().getDate("refreshDueAt"), "the second change is still due");
+        var second = store.claimRefresh(now, Duration.ofMinutes(3)).orElseThrow();
+        assertTrue(store.refreshed(second, "edited", now));
+        assertNull(pages.find(eq("_id", id)).first().get("refreshDueAt"), "up to date: the refresh claim no longer reads it");
+        store.touch("a", now.plusSeconds(60));
+        assertTrue(store.claimRefresh(now.plusSeconds(60), Duration.ofMinutes(3)).isPresent(), "a later change is due again");
+    }
+
+    @Test void pagesRefreshedBeforeTheFixAreSettledOnceInBoundedBatches() {
+        var store = repository.announcements();
+        var pages = db.getCollection(FreebieAnnouncementStore.COLLECTION);
+        for (int i = 1; i <= 3; i++) {
+            var page = store.create("k" + i, GUILD, CHANNEL, 1, Optional.empty(), List.of("o" + i), List.of("o" + i + "|c"), "t", Duration.ofMinutes(3), now).orElseThrow();
+            store.submitting(page.getString("_id"), "t", now);
+            store.sent(page.getString("_id"), "t", "m" + i, false, now);
+        }
+        // Old state: refreshed long ago, due time left in the past. One page still has an unapplied change.
+        pages.updateMany(new Document(), set("refreshDueAt", Date.from(now)));
+        pages.updateOne(eq("members", "o3"), inc("revision", 1L));
+        assertEquals(2, store.settleRefreshDue(now, 1) + store.settleRefreshDue(now, 1));
+        assertEquals(0, store.settleRefreshDue(now, 10));
+        assertNotNull(pages.find(eq("members", "o3")).first().getDate("refreshDueAt"), "a pending change stays due");
+        assertTrue(store.claimRefresh(now, Duration.ofMinutes(3)).isPresent());
+    }
+
     @Test void anOwnerRetryReopensAFailedPageOnceWithAFreshBudgetAndHistoryCheck() {
         var store = repository.announcements();
         var page = store.create("k", GUILD, CHANNEL, 1, Optional.empty(), List.of("a"), List.of("a|c"), "t", Duration.ofMinutes(3), now).orElseThrow();
@@ -207,6 +243,70 @@ class FreebieAnnouncementsIT {
         assertTrue(store.reopen(failed, "r2", Duration.ofMinutes(3), now.plusSeconds(61)).isEmpty(), "concurrent retries reopen it once");
         assertTrue(first.get().getBoolean("verifyFirst"));
         assertEquals(0, first.get().getInteger("submissions"));
+    }
+
+    @Test void aReleasedPageWaitsForItsRetryTimeAndAnOwnerRetryResetsTheBudgetOnce() {
+        var store = repository.announcements();
+        Duration lease = Duration.ofMinutes(3);
+        var page = store.create("k", GUILD, CHANNEL, 1, Optional.empty(), List.of("a", "b"), List.of("a|c", "b|c"), "t", lease, now).orElseThrow();
+        String id = page.getString("_id");
+        assertTrue(store.submitting(id, "t", now));
+        store.release(id, "t", now); // an uncertain outcome
+        var open = store.get(id).orElseThrow();
+        assertTrue(store.takeOver(open, "peer", lease, now.plusSeconds(10)).isEmpty(), "a member row cannot retry before the page's retry time");
+        Instant second = now.plus(FreebieAnnouncementStore.RETRY);
+        assertTrue(store.takeOver(open, "peer", lease, second).isPresent());
+        for (int i = 1; i < FreebieAnnouncementStore.MAX_SUBMISSIONS; i++) assertTrue(store.submitting(id, "peer", second));
+        assertFalse(store.submitting(id, "peer", second), "the send budget is used up");
+        store.release(id, "peer", second);
+
+        var exhausted = store.get(id).orElseThrow();
+        Instant retry = second.plusSeconds(30);
+        var fresh = store.retake(exhausted, "owner", lease, retry);
+        assertTrue(fresh.isPresent(), "a confirmed owner retry does not wait for the retry time");
+        assertEquals(0, fresh.get().getInteger("submissions"));
+        assertTrue(fresh.get().getBoolean("verifyFirst"), "history is still checked first");
+        assertTrue(store.takeOver(exhausted, "peer", lease, retry).isEmpty(), "a live lease is never taken");
+        assertTrue(store.submitting(id, "owner", retry));
+        store.release(id, "owner", retry);
+        assertTrue(store.retake(exhausted, "owner2", lease, retry.plusSeconds(1)).isEmpty(), "one retry resets the budget once");
+    }
+
+    @Test void anUncertainPageWhoseRowsAreAllFinalIsReconciledOnItsOwn() {
+        var store = repository.announcements();
+        var rows = db.getCollection(FreebieRepository.DELIVERIES);
+        Duration lease = Duration.ofMinutes(3);
+        var page = store.create("k", GUILD, CHANNEL, 1, Optional.empty(), List.of("a"), List.of("a|c"), "t", lease, now).orElseThrow();
+        String id = page.getString("_id");
+        rows.insertOne(new Document("_id", "a|c").append("offerId", "a").append("state", "BLOCKED"));
+        assertTrue(store.claimOrphan(now, lease).isEmpty(), "a page never submitted is not uncertain");
+        store.submitting(id, "t", now);
+        store.release(id, "t", now); // Discord may have accepted it
+        assertTrue(store.claimOrphan(now, lease).isEmpty(), "an open row recovers its own page");
+
+        rows.updateOne(eq("_id", "a|c"), set("state", "CANCELLED")); // the owner stopped the game before recovery
+        store.touch("a", now);
+        assertTrue(store.claimOrphan(now.plusSeconds(60), lease).isEmpty(), "looked at again only after the wait");
+        Instant later = now.plus(FreebieAnnouncementStore.RETRY);
+        var orphan = store.claimOrphan(later, lease).orElseThrow();
+        assertTrue(store.claimOrphan(later, lease).isEmpty(), "one reconciliation at a time");
+        assertTrue(store.takeOver(store.get(id).orElseThrow(), "row", lease, later).isEmpty(), "no row submits meanwhile");
+        assertTrue(store.reconciled(id, orphan.token(), "m1", false, later));
+        var found = store.get(id).orElseThrow();
+        assertEquals("SENT", found.getString("state"));
+        assertEquals("m1", found.getString("messageId"));
+        assertFalse(store.settled(found));
+        assertTrue(store.claimRefresh(later, lease).isPresent(), "the found message is rebuilt from current state");
+
+        // History finds nothing: withdrawn without a message, and no longer open work for retention.
+        var second = store.create("k2", GUILD, CHANNEL, 1, Optional.empty(), List.of("b"), List.of("b|c"), "t", lease, now).orElseThrow();
+        store.submitting(second.getString("_id"), "t", now);
+        store.release(second.getString("_id"), "t", now);
+        var unfound = store.claimOrphan(later, lease).orElseThrow();
+        assertEquals(second.getString("_id"), unfound.page().getString("_id"));
+        assertTrue(store.cancel(second.getString("_id"), unfound.token(), later));
+        assertFalse(store.openWorkFor("b"));
+        assertTrue(store.claimOrphan(later.plus(FreebieAnnouncementStore.RETRY), lease).isEmpty());
     }
 
     // ------------------------------------------------------------------ publication jobs

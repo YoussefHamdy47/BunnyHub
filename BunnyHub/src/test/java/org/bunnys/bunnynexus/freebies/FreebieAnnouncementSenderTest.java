@@ -50,6 +50,7 @@ class FreebieAnnouncementSenderTest {
             var doc = FreebieSourceStore.fresh(FreebieIdentityTest.epic(Instant.parse("2026-10-22T15:00:00Z"), Instant.parse("2026-10-29T15:00:00Z")), now);
             doc.put("_id", offer.id()); doc.put("title", offer.title()); doc.put("state", "APPROVED"); doc.put("decidedBy", "owner");
             when(repository.offerDocument(offer.id())).thenReturn(Optional.of(doc));
+            when(repository.offerStatus(offer.id())).thenReturn(Optional.of(doc));
         }
         when(guild.getSelfMember()).thenReturn(self);
         when(self.hasPermission(eq(channel), any(Permission[].class))).thenReturn(true);
@@ -96,7 +97,7 @@ class FreebieAnnouncementSenderTest {
         drain();
         var captor = ArgumentCaptor.forClass(MessageCreateData.class);
         verify(channel, times(1)).sendMessage(captor.capture());
-        assertEquals(2, captor.getValue().getEmbeds().size());
+        assertEquals(List.of(2), FreebieAnnouncementCardsTest.gamesPerEmbed(captor.getValue().getEmbeds()), "two Epic games share one embed");
         assertEquals(Set.of(ROLE), captor.getValue().getMentionedRoles());
         verify(send).setNonce(FreebieAnnouncementStore.nonce(created.getString("_id")));
         verify(store).submitting(created.getString("_id"), job.token(), now);
@@ -206,6 +207,33 @@ class FreebieAnnouncementSenderTest {
         assertTrue(start(job));
         drain();
         verify(channel.getHistory()).retrievePast(50);
+        verify(channel).sendMessage(any(MessageCreateData.class));
+    }
+
+    /**
+     * A page that is still open after using up its send budget: member rows wait for the page's retry time (they never
+     * retry in quick succession), and a confirmed owner retry takes it at once with a fresh budget, history first.
+     */
+    @Test void anOwnerRetryOfAnOpenPageGetsAFreshBudgetWhileOtherRowsWaitForItsRetryTime() {
+        var job = job(a);
+        var exhausted = page(1, "SUBMITTING", List.of(a, b), true, null, null).append("submissions", FreebieAnnouncementStore.MAX_SUBMISSIONS)
+                .append("submittedAt", Date.from(now.minusSeconds(60)));
+        when(store.pages(KEY, CHANNEL)).thenReturn(List.of(exhausted));
+        when(store.takeOver(any(), anyString(), any(), any())).thenReturn(Optional.empty()); // its retry time has not come
+        assertFalse(start(job));
+        verify(store, never()).retake(any(), any(), any(), any());
+        verify(repository).release(job, now.plusSeconds(10), now);
+        verify(channel, never()).sendMessage(any(MessageCreateData.class));
+
+        retried(job);
+        var fresh = page(1, "SUBMITTING", List.of(a, b), true, job.token(), now.plusSeconds(180));
+        when(store.retake(eq(exhausted), eq(job.token()), any(), eq(now))).thenReturn(Optional.of(fresh));
+        history(List.of());
+        destination(true);
+        assertTrue(start(job));
+        drain();
+        verify(channel.getHistory()).retrievePast(50);
+        verify(store).submitting(fresh.getString("_id"), job.token(), now);
         verify(channel).sendMessage(any(MessageCreateData.class));
     }
 

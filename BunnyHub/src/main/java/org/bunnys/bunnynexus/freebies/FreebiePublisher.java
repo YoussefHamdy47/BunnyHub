@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -38,7 +39,6 @@ final class FreebiePublisher {
     private final Executor executor;
     private final Clock clock;
     private int own; // Sender thread only.
-    private Instant nextPrepare = Instant.MIN; // Sender thread only.
     private volatile boolean closed;
 
     FreebiePublisher(FreebieRepository repository, FreebieFeatures features, Executor executor, Clock clock) {
@@ -50,25 +50,46 @@ final class FreebiePublisher {
     private FreebiePublicationStore jobs() { return repository.publications(); }
 
     /**
-     * Once per tick: recovers crashed leases, plans jobs for newly sent pages (idempotent insert, then clear the
-     * marker), and stops pending publications when the feature or a channel is no longer enabled.
+     * Stops pending publications when the feature or a channel is no longer enabled. The settings only change with a
+     * restart, so this runs once at start and from housekeeping (another process may run other settings), not per tick.
+     * Database work only; any thread.
      */
-    void prepare() {
+    void cleanUp() {
+        if (closed) return;
         Instant now = clock.instant();
-        if (closed || now.isBefore(nextPrepare)) return;
-        nextPrepare = now.plusSeconds(5);
-        jobs().recover(now);
-        if (!features.publishEnabled()) {
-            jobs().cancelOpen(Optional.empty(), now);
-            repository.announcements().dropPublishPending(Optional.empty());
-            return;
-        }
-        jobs().cancelOpen(Optional.of(features.publishChannels()), now);
-        repository.announcements().dropPublishPending(Optional.of(features.publishChannels()));
-        for (var page : repository.announcements().publishPending(20)) {
+        Optional<Set<String>> keep = features.publishEnabled() ? Optional.of(features.publishChannels()) : Optional.empty();
+        jobs().cancelOpen(keep, now);
+        repository.announcements().dropPublishPending(keep);
+    }
+
+    /**
+     * Plans jobs for newly sent pages: an idempotent insert, then the marker is cleared, so the sender thread (after a
+     * wake or a tick with work) and housekeeping may both run it. Database work only.
+     *
+     * @return how many pages were marked
+     */
+    int plan() {
+        if (closed || !features.publishEnabled()) return 0;
+        Instant now = clock.instant();
+        var pending = repository.announcements().publishPending(20);
+        for (var page : pending) {
             jobs().plan(page, now);
             repository.announcements().publishPlanned(page.getString("_id"));
         }
+        return pending.size();
+    }
+
+    /**
+     * Every housekeeping run: crashed leases become uncertain (reconciled from the message's flag, never republished
+     * blindly), disabled publications stop, and pages the sender has not planned yet are planned.
+     *
+     * @return whether a publication became due
+     */
+    boolean housekeeping() {
+        if (closed || jobs() == null || repository.announcements() == null) return false;
+        long recovered = jobs().recover(clock.instant());
+        cleanUp();
+        return plan() + recovered > 0;
     }
 
     boolean claimOne(JDA client, AtomicInteger shared, AtomicInteger background) {

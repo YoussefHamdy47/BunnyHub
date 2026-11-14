@@ -27,6 +27,18 @@ class FreebieUnitTest {
                 Instant.parse("2026-09-25T00:00:00Z"), FreebieOffer.State.APPROVED, Optional.empty(), Optional.empty(), Optional.empty(), true, false, 1);
     }
 
+    /** offer() and offersIn() project to FreebieOffer.FIELDS: every field read() looks at must be in that list. */
+    @Test void theOfferProjectionCoversEveryFieldReadUses() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/org/bunnys/bunnynexus/freebies/FreebieOffer.java"));
+        String body = source.substring(source.indexOf("static FreebieOffer read(Document d)"));
+        body = body.substring(0, body.indexOf("\n    }\n"));
+        Set<String> used = new TreeSet<>();
+        var matcher = java.util.regex.Pattern.compile("d\\.get\\w*\\(\"(\\w+)\"").matcher(body);
+        while (matcher.find()) used.add(matcher.group(1));
+        assertTrue(used.size() >= 20, "parsed " + used);
+        assertEquals(used, new TreeSet<>(FreebieOffer.FIELDS));
+    }
+
     @Test void mapsGamerPowerPlatformsToLaunchers() {
         assertEquals(FreebieStore.EPIC, FreebieStore.fromPlatforms("PC, Android, iOS, Epic Games Store"));
         assertEquals(FreebieStore.STEAM, FreebieStore.fromPlatforms("PC, Steam"));

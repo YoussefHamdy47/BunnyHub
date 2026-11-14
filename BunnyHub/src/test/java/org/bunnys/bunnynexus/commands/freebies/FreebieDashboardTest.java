@@ -95,8 +95,18 @@ class FreebieDashboardTest {
         assertEquals("24", args[7]);
         var labels = FreebieDashboardForms.sectionForm(args).orElseThrow().getComponents().stream().map(c -> (Label) c).toList();
         assertEquals(Set.of("24"), ticked(labels.get(3).getChild().asStringSelectMenu().getOptions()));
-        assertEquals(List.of("0", "24", "6"), labels.get(3).getChild().asStringSelectMenu().getOptions().stream()
+        assertEquals(List.of("0", "24", "6", "24p", "6p"), labels.get(3).getChild().asStringSelectMenu().getOptions().stream()
                 .map(o -> o.getValue()).toList());
+
+        var pinging = FreebieDashboard.states(List.of(new Subscription(GUILD, CHANNEL, FreebieStore.STEAM, Optional.of(ROLE), 6, true),
+                new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.of(ROLE), 6, true))).get(FreebieSection.MAJOR_PC);
+        String[] pingArgs = FreebieDashboard.sectionButton(guild(), pinging).getCustomId().split(":", -1);
+        assertEquals("6p", pingArgs[7]);
+        var pingLabels = FreebieDashboardForms.sectionForm(pingArgs).orElseThrow().getComponents().stream().map(c -> (Label) c).toList();
+        assertEquals(Set.of("6p"), ticked(pingLabels.get(3).getChild().asStringSelectMenu().getOptions()));
+        var partly = FreebieDashboard.states(List.of(new Subscription(GUILD, CHANNEL, FreebieStore.STEAM, Optional.of(ROLE), 6, true),
+                new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.of(ROLE), 6, false))).get(FreebieSection.MAJOR_PC);
+        assertEquals("6", partly.reminderChoice(), "the reminder pings only when the whole section asks for it");
 
         var mixed = FreebieDashboard.states(List.of(new Subscription(GUILD, CHANNEL, FreebieStore.STEAM, Optional.empty(), 24),
                 new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.empty(), 6))).get(FreebieSection.MAJOR_PC);
@@ -109,6 +119,11 @@ class FreebieDashboardTest {
         assertEquals(Set.of("0"), ticked(labels.get(3).getChild().asStringSelectMenu().getOptions()));
         assertTrue(FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "12"}).isEmpty());
         assertTrue(FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "x"}).isEmpty());
+        assertTrue(FreebieDashboardForms.sectionForm(new String[]{"freebie_dash", "s", GUILD, "m", "-", "-", "1", "12p"}).isEmpty());
+        assertEquals(24, FreebieDashboardForms.reminderHours("24p"));
+        assertTrue(FreebieDashboardForms.reminderPing("24p"));
+        assertFalse(FreebieDashboardForms.reminderPing("0p"), "no ping without a reminder");
+        assertFalse(FreebieDashboardForms.reminderPing("24"));
     }
 
     @Test void launcherPingsKeepTheirOwnRolesThroughTheSectionForm() {
