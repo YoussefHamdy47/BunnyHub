@@ -4,6 +4,7 @@ import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import org.bunnys.bunnynexus.freebies.FreebieMessages;
 import org.bunnys.bunnynexus.freebies.FreebieReviewCleanup;
+import org.bunnys.bunnynexus.freebies.FreebieSourceDecisions;
 import org.bunnys.bunnynexus.freebies.FreebieSystem;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.buttons.BunnyButton;
@@ -51,8 +52,15 @@ public class FreebieReviewButtons extends BunnyButton {
             return;
         }
         if (action.startsWith("source-")) {
-            event.deferReply(true).complete();
-            followUp(event, system.resolveSource(actor, offerId, action));
+            // The question message itself shows the decision and loses its decision buttons, so it no longer looks
+            // open and Clear finished removes it. Answered elsewhere: the same, marked as already answered.
+            event.deferEdit().complete();
+            var outcome = system.resolveSource(actor, offerId, action);
+            if (outcome.status() == FreebieSourceDecisions.Status.INVALID) { followUp(event, "> " + AppDesign.Emojis.ERROR + " " + outcome.message()); return; }
+            var message = event.getMessage();
+            event.getHook().editOriginal(FreebieSourceDecisions.decided(message.getContentRaw(), outcome, actor, system.now()))
+                    .setComponents(message.isEphemeral() ? List.of() : FreebieMessages.withClear(List.of()))
+                    .setAllowedMentions(List.of()).queue();
             return;
         }
         // Runs on a command worker: acknowledge first so database work can never outlast Discord's 3 s window.
@@ -60,7 +68,7 @@ public class FreebieReviewButtons extends BunnyButton {
             case FreebieMessages.CLEAR_ACTION -> {
                 event.deferReply(true).complete();
                 if (!(event.getChannel() instanceof GuildMessageChannel channel)) { followUp(event, "This only works in the review channel."); return; }
-                FreebieReviewCleanup.clear(channel).whenComplete((result, failure) -> followUp(event, failure != null
+                FreebieReviewCleanup.clear(channel, system::sourceQuestionOpen).whenComplete((result, failure) -> followUp(event, failure != null
                         ? "> " + AppDesign.Emojis.ERROR + " Couldn't read the channel history. Check that I have Read Message History here."
                         : "Cleared **" + result.deleted() + "** finished message" + (result.deleted() == 1 ? "" : "s")
                         + (result.kept() > 0 ? ", kept **" + result.kept() + "** that still need you." : ".")));

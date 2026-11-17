@@ -32,8 +32,20 @@ public final class FreebieMessages {
     }
     /** Short reference printed in the footer; lets a retry find a message that was sent but not acknowledged. */
     public static String reference(String deliveryId) { return nonce(deliveryId).substring(0, 12); }
+    /**
+     * Whether the message carries this alert reference: as an embed footer, or, on a Components V2 card
+     * ({@link FreebieComponentCards}), as a whole subtext line of one of its text blocks.
+     */
     public static boolean carriesReference(Message message, String reference) {
-        return message.getEmbeds().stream().anyMatch(embed -> isAlertFooter(embed, reference));
+        if (message.getEmbeds().stream().anyMatch(embed -> isAlertFooter(embed, reference))) return true;
+        if (!message.isUsingComponentsV2()) return false;
+        var tree = message.getComponentTree();
+        if (tree == null) return false;
+        for (var block : tree.findAll(net.dv8tion.jda.api.components.textdisplay.TextDisplay.class))
+            for (String line : block.getContent().split("\n"))
+                if (line.startsWith(FreebieComponentCards.SUBTEXT)
+                        && isAlertFooter(line.substring(FreebieComponentCards.SUBTEXT.length()), reference)) return true;
+        return false;
     }
     /**
      * The exact footer of a card with this reference: {@code Powered by <provider> • ref …} for every provider a card can
@@ -41,7 +53,10 @@ public final class FreebieMessages {
      */
     static boolean isAlertFooter(MessageEmbed embed, String reference) {
         if (embed.getFooter() == null || embed.getFooter().getText() == null) return false;
-        String footer = embed.getFooter().getText();
+        return isAlertFooter(embed.getFooter().getText(), reference);
+    }
+
+    static boolean isAlertFooter(String footer, String reference) {
         if ((FOOTER_PREFIX + reference).equals(footer) || (LEGACY_FOOTER_PREFIX + reference).equals(footer)) return true;
         for (var provider : FreebieFeed.Provider.values())
             if (("Powered by " + provider.label + " • ref " + reference).equals(footer)) return true;
@@ -194,6 +209,15 @@ public final class FreebieMessages {
      * or the launcher picker. Clear finished alone doesn't count.
      */
     public static boolean needsOwner(List<? extends net.dv8tion.jda.api.components.MessageTopLevelComponent> rows) {
+        return needsOwner(rows, customId -> true);
+    }
+
+    /**
+     * As {@link #needsOwner(List)}, asking {@code stillOpen} about each enabled bot button: a held-report question
+     * answered elsewhere (its decision buttons still showing on an older message) no longer needs the owner.
+     */
+    public static boolean needsOwner(List<? extends net.dv8tion.jda.api.components.MessageTopLevelComponent> rows,
+                                     java.util.function.Predicate<String> stillOpen) {
         for (var top : rows) {
             if (!(top instanceof ActionRow row)) continue;
             for (var component : row.getComponents()) {
@@ -201,7 +225,7 @@ public final class FreebieMessages {
                 if (component instanceof Button button && button.getCustomId() != null
                         && button.getCustomId().startsWith(BUTTON_PREFIX + ":")
                         && !button.getCustomId().startsWith(BUTTON_PREFIX + ":" + CLEAR_ACTION + ":")
-                        && !button.isDisabled()) return true;
+                        && !button.isDisabled() && stillOpen.test(button.getCustomId())) return true;
             }
         }
         return false;

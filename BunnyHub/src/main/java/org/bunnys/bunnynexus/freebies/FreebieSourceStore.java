@@ -275,6 +275,11 @@ final class FreebieSourceStore {
                         eq("sourceDecisions." + token, "same")),
                 set("epicOffer", new Document("namespace", epic.getString("namespace")).append("offerId", epic.getString("offerId"))));
     }
+    /** Whether this held report still waits for an owner's decision. */
+    boolean questionOpen(String id, String token) {
+        return offers.countDocuments(and(eq("_id", id), exists("sourceCandidates." + token)), new com.mongodb.client.model.CountOptions().limit(1)) == 1;
+    }
+
     /** A held report not yet announced to the owners: the giveaway it is held on and its question token. */
     record Question(Document parent, String token) {}
 

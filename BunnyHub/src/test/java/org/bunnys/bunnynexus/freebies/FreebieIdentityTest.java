@@ -53,7 +53,7 @@ class FreebieIdentityTest {
         assertEquals(new EpicLinks.Offer("c7e46cce751b40b6937e878abd0fc531", "06190191cede42afb633fe89ef08c27e"), epic(START, END).epicOffer().orElseThrow());
     }
 
-    @Test void officialFieldsReplacePendingTextButOnlyShortenApprovedOffers() {
+    @Test void officialFieldsReplacePendingTextAndEpicsEndAlwaysWins() {
         var gp = SourceDoc.of(gamerpower("3823", "Home (Epic Games) Giveaway", "PC, Android, iOS, Epic Games Store", Optional.empty()));
         String pending = FreebieFields.changes(gp, epic(START, END), END).toString();
         assertTrue(pending.contains("Home - A Unique Horror Adventure") && pending.contains("reviewRefresh") && pending.contains("groupKey"));
@@ -64,8 +64,16 @@ class FreebieIdentityTest {
         assertFalse(approved.contains("fieldName='title'") || approved.contains("fieldName='description'"), "approved text is kept as reviewed");
         gp.put("endsAt", Date.from(END.minus(Duration.ofDays(1))));
         String later = FreebieFields.changes(gp, epic(START, END), END).toString();
-        assertTrue(later.contains("officialLaterEnd"));
-        assertFalse(later.contains("fieldName='endsAt'"), "a longer window is never applied silently");
+        assertTrue(later.contains("fieldName='endsAt'") && later.contains("cardRevision"),
+                "GamerPower's too-early end is replaced by Epic's later one and posted cards are edited");
+        assertFalse(later.contains("officialLaterEnd"));
+        gp.put("endsAt", Date.from(END));
+        gp.put("official", new org.bson.Document(SourceDoc.of(epic(START, END)).get("official", org.bson.Document.class)));
+        gp.put("epicOffer", new org.bson.Document("namespace", "n").append("offerId", "o"));
+        assertFalse(FreebieFields.changes(gp, epic(START, END), END).toString().contains("endsAt"), "the same end changes nothing");
+        gp.put("officialLaterEnd", true);
+        assertTrue(FreebieFields.changes(gp, epic(START, END), END).toString().contains("officialLaterEnd"),
+                "a later end held back by the earlier rule is cleared once");
         gp.put("state", "STOPPED");
         assertFalse(FreebieFields.changes(gp, epic(START, END), END).toString().contains("fieldName='title'"), "finished offers get provenance only");
     }

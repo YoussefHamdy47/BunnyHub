@@ -197,7 +197,9 @@ final class FreebieAnnouncementSender {
                         repository.deliveries().block(job, FreebieDeliveryStore.Block.EXHAUSTED, at);
                     } else {
                         var pings = pings(page, role, guild);
-                        var data = page.getBoolean("drop", false) ? FreebieAnnouncementCards.create(members, pings, features.checkout(), at)
+                        // pings() already gives an older page at most its one saved role, so both kinds share the V2 card.
+                        var data = features.componentsV2() ? FreebieComponentCards.create(members, pings, features.checkout(), at)
+                                : page.getBoolean("drop", false) ? FreebieAnnouncementCards.create(members, pings, features.checkout(), at)
                                 : FreebieAnnouncementCards.create(members, pings.stream().findFirst(), features.checkout(), at);
                         var request = channel.sendMessage(data)
                                 .setNonce(FreebieAnnouncementStore.nonce(id)).timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit();

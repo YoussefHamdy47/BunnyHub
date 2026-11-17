@@ -16,7 +16,7 @@ public final class HelpCommand {
         CommandRegistry registry = client.getCommandRegistry();
         HelpMenu.Rendered view = HelpMenu.lookup(bot(ctx.getJDA(), registry),
                 registry.getCommands().values(), viewer(registry, ctx.getUser()), ctx.getString("command"));
-        ctx.reply(view.embed(), view.rows());
+        ctx.replyCard(view.toCard());
     }
 
     public List<String> autocomplete(BunnyHub client, User user) {

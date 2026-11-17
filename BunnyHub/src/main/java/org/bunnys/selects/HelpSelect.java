@@ -2,11 +2,10 @@ package org.bunnys.selects;
 
 import net.dv8tion.jda.api.events.interaction.component.GenericComponentInteractionCreateEvent;
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
-import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
-import net.dv8tion.jda.api.utils.messages.MessageEditBuilder;
 import org.bunnys.bunnynexus.commands.help.HelpCommand;
 import org.bunnys.bunnynexus.help.HelpMenu;
 import org.bunnys.handler.BunnyHub;
+import org.bunnys.handler.cards.Cards;
 import org.bunnys.handler.router.selects.BunnySelect;
 
 /** Help menus: {@code help:cat:<owner>} and {@code help:cmd:<owner>}; the chosen value is the view. */
@@ -29,12 +28,8 @@ public class HelpSelect extends BunnySelect {
         var rendered = HelpMenu.render(HelpCommand.bot(event.getJDA(), registry), registry.getCommands().values(),
                 HelpCommand.viewer(registry, event.getUser()), view);
 
-        if (event.getUser().getId().equals(owner)) {
-            event.editMessage(new MessageEditBuilder().setEmbeds(rendered.embed())
-                    .setComponents(rendered.rows()).build()).queue(null, ignored -> {});
-        } else {
-            event.reply(new MessageCreateBuilder().setEmbeds(rendered.embed())
-                    .setComponents(rendered.rows()).build()).setEphemeral(true).queue(null, ignored -> {});
-        }
+        // Cards.edit falls back to a private copy when an older embed help menu can't become a card.
+        if (event.getUser().getId().equals(owner)) Cards.edit(event, rendered.toCard());
+        else Cards.reply(event, rendered.toCard(), true);
     }
 }

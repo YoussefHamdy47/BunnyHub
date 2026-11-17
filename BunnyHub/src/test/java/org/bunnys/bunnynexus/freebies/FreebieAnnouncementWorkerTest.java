@@ -85,6 +85,26 @@ class FreebieAnnouncementWorkerTest {
         assertEquals(0, background.get());
     }
 
+    /** A Components V2 page carries its reference as a subtext line, and history recovery finds it there. */
+    @Test void aComponentsV2PostFoundInHistoryIsRecordedAsSent() {
+        var member = new FreebieAnnouncementCards.Member(FreebieUnitTest.offer("Game", FreebieStore.EPIC), FreebieFacts.NONE, ROW,
+                FreebieAnnouncementCards.Status.LIVE);
+        var data = FreebieComponentCards.create(List.of(member), List.of(), false, now);
+        var message = mock(Message.class);
+        var author = mock(User.class);
+        when(author.getId()).thenReturn("bot");
+        when(message.getAuthor()).thenReturn(author);
+        when(message.getId()).thenReturn(MESSAGE);
+        when(message.getEmbeds()).thenReturn(List.of());
+        when(message.isUsingComponentsV2()).thenReturn(true);
+        when(message.getComponentTree()).thenReturn(net.dv8tion.jda.api.components.tree.MessageComponentTree.of(data.getComponents()));
+        history(List.of(message));
+        assertTrue(worker.claimOne(client, shared, background));
+        drain();
+        verify(store).reconciled(eq(ID), eq(TOKEN), eq(MESSAGE), anyBoolean(), eq(now));
+        verify(channel, never()).sendMessage(any(MessageCreateData.class));
+    }
+
     @Test void aPageNotFoundInHistoryIsWithdrawnWithoutAMessage() {
         history(List.of(posted("someone-else")));
         assertTrue(worker.claimOne(client, shared, background));

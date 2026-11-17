@@ -39,10 +39,10 @@ class InfoTest {
     }
 
     @Test void nonMemberCardOmitsMembershipAndKeepsAccountDetails() {
-        var embed = InfoEmbeds.userInfo(user(), null);
-        assertTrue(embed.getFields().stream().anyMatch(f -> f.getName().equals("Joined Discord")));
-        assertFalse(embed.getFields().stream().anyMatch(f -> f.getName().equals("Joined Server")));
-        assertTrue(embed.isSendable());
+        var card = InfoEmbeds.userInfo(user(), null);
+        assertTrue(card.plainText().contains("**Joined Discord**"));
+        assertFalse(card.plainText().contains("Joined Server"));
+        assertTrue(card.message().isUsingComponentsV2());
     }
 
     @Test void largeRoleListsAreTruncatedAndAdministratorIsShownAlone() {
@@ -56,11 +56,10 @@ class InfoTest {
             roles.add(role);
         }
         when(member.getRoles()).thenReturn(roles);
-        var embed = InfoEmbeds.userInfo(user(), member);
-        assertTrue(embed.isSendable());
-        assertTrue(embed.getFields().stream().allMatch(f -> f.getValue().length() <= MessageEmbed.VALUE_MAX_LENGTH));
-        assertTrue(embed.getFields().stream().anyMatch(f -> f.getName().equals("Roles [200]") && f.getValue().contains("more")));
-        assertTrue(embed.getFields().stream().anyMatch(f -> f.getName().equals("Key Permissions [1]")));
+        var card = InfoEmbeds.userInfo(user(), member); // build() checks Discord's limits
+        String text = card.plainText();
+        assertTrue(text.contains("### Roles [200]") && text.substring(text.indexOf("### Roles [200]")).contains("more"), text);
+        assertTrue(text.contains("### Key Permissions [1]"));
     }
 
     @Test void serverCardWorksWithoutOwnerMemberCacheAndClampsLongFeatures() {
@@ -76,10 +75,9 @@ class InfoTest {
         when(guild.getLocale()).thenReturn(DiscordLocale.ENGLISH_US);
         when(guild.getFeatures()).thenReturn(Set.of("FEATURE_".repeat(200)));
         when(guild.getDescription()).thenReturn("x".repeat(1024));
-        var embed = ServerInfoEmbeds.serverInfo(guild);
-        assertTrue(embed.isSendable());
-        assertTrue(embed.getFields().stream().allMatch(f -> f.getValue().length() <= MessageEmbed.VALUE_MAX_LENGTH));
-        assertTrue(embed.getFields().stream().anyMatch(f -> f.getName().equals("Owner") && f.getValue().contains(guild.getOwnerId())));
+        var card = ServerInfoEmbeds.serverInfo(guild); // build() checks Discord's limits
+        assertTrue(card.plainText().contains("👑 **Owner** <@" + guild.getOwnerId() + ">"));
+        assertTrue(card.message().getMentionedUsers().isEmpty(), "the owner is shown, never pinged");
         verify(guild, never()).getOwner();
     }
 
@@ -112,7 +110,7 @@ class InfoTest {
         var order = inOrder(ctx, request);
         order.verify(ctx).defer();
         order.verify(request).queue(any(), any());
-        verify(ctx).reply(argThat(e -> e.getTitle().endsWith("Resolved Member")));
+        verify(ctx).replyCard(argThat(c -> c.plainText().contains("Resolved Member")));
     }
 
     @Test void omittedUserDefaultsToCallerAndUnknownExplicitUserDoesNot() {
@@ -126,7 +124,7 @@ class InfoTest {
         when(ctx.getJDA()).thenReturn(jda);
         var branch = new Info(null).resolveSubcommand("user");
         branch.execute(null, ctx);
-        verify(ctx).reply(argThat(e -> e.getDescription().contains(user.getAsMention())));
+        verify(ctx).replyCard(argThat(c -> c.plainText().contains(user.getAsMention())));
         when(ctx.getString("user")).thenReturn("invalid");
         branch.execute(null, ctx);
         verify(ctx).replyTransient(argThat(e -> e.getTitle().endsWith("User Not Found")));

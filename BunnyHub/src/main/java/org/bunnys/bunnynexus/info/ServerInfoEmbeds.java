@@ -1,12 +1,9 @@
 package org.bunnys.bunnynexus.info;
 
-import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.MessageEmbed;
-import org.bunnys.utils.AppDesign;
+import org.bunnys.handler.cards.Card;
 import org.bunnys.utils.Embeds;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -18,54 +15,39 @@ import static org.bunnys.bunnynexus.info.InfoEmbeds.moment;
 public final class ServerInfoEmbeds {
     private ServerInfoEmbeds() {}
 
-    public static MessageEmbed serverInfo(Guild guild) {
-        EmbedBuilder embed = new EmbedBuilder()
-                .setTitle("🏠 " + guild.getName())
-                .setDescription("🏠" + " " + guild.getName() + " was created "
-                        + moment(guild.getTimeCreated().toEpochSecond()))
-                .setColor(AppDesign.ColorCodes.DEFAULT)
-                .setFooter("Server ID: " + guild.getId() + " • " + Embeds.FOOTER)
-                .setTimestamp(Instant.now());
-
-        if (guild.getIconUrl() != null)
-            embed.setThumbnail(guild.getIconUrl());
-
+    public static Card serverInfo(Guild guild) {
+        List<String> lines = new ArrayList<>();
         // Deliberately the total, not a humans-and-bots split. That split needs a full
         // member cache, which needs the GUILD_MEMBERS intent this bot does not take -
         // counting whatever happens to be cached would report a confidently wrong number.
-        embed.addField("Members", "👥" + " "
-                + String.format("%,d", guild.getMemberCount()), true);
-        embed.addField("Owner", "👑" + " <@" + guild.getOwnerId() + ">", true);
-        embed.addField("Roles", "🏷️" + " " + guild.getRoles().size(), true);
-
-        embed.addField("Channels", "💬" + " "
-                + guild.getTextChannels().size() + " text\n"
-                + guild.getVoiceChannels().size() + " voice\n"
-                + guild.getCategories().size() + " categories", true);
-
-        embed.addField("Boosts", "💎" + " " + guild.getBoostCount()
-                + "\n" + boostTier(guild), true);
-
-        embed.addField("Verification", "✅" + " " + verification(guild), true);
-        embed.addField("Age Restriction", "🔞" + " " + nsfwLevel(guild), true);
-        embed.addField("Language", "🌐" + " " + guild.getLocale().getLanguageName(), true);
-
+        lines.add("👥 **Members** " + String.format("%,d", guild.getMemberCount()));
+        lines.add("👑 **Owner** <@" + guild.getOwnerId() + ">");
+        lines.add("🏷️ **Roles** " + guild.getRoles().size());
+        lines.add("💬 **Channels** " + guild.getTextChannels().size() + " text · "
+                + guild.getVoiceChannels().size() + " voice · " + guild.getCategories().size() + " categories");
+        lines.add("💎 **Boosts** " + guild.getBoostCount() + " (" + boostTier(guild) + ")");
+        lines.add("✅ **Verification** " + verification(guild));
+        lines.add("🔞 **Age Restriction** " + nsfwLevel(guild));
+        lines.add("🌐 **Language** " + guild.getLocale().getLanguageName());
         if (guild.getAfkChannel() != null)
-            embed.addField("AFK", "⏱️" + " " + guild.getAfkChannel().getAsMention()
-                    + "\nafter " + duration(guild.getAfkTimeout().getSeconds() * 1000L), true);
+            lines.add("⏱️ **AFK** " + guild.getAfkChannel().getAsMention() + " after "
+                    + duration(guild.getAfkTimeout().getSeconds() * 1000L));
+
+        // The banner is the one image worth showing large; the icon sits beside the heading.
+        var card = Card.builder()
+                .image(guild.getBannerUrl())
+                .header("## 🏠 " + guild.getName() + "\nCreated " + moment(guild.getTimeCreated().toEpochSecond()), guild.getIconUrl())
+                .divider()
+                .text(String.join("\n", lines));
 
         if (guild.getDescription() != null)
-            embed.addField("Description", clamp("ℹ️ " + guild.getDescription()), false);
+            card.field("Description", clamp("ℹ️ " + guild.getDescription()));
 
         String features = features(guild);
         if (features != null)
-            embed.addField("Features", clamp("✅ " + features), false);
+            card.field("Features", clamp("✅ " + features));
 
-        // The banner is the one image worth showing large; the icon is already the thumbnail.
-        if (guild.getBannerUrl() != null)
-            embed.setImage(guild.getBannerUrl());
-
-        return embed.build();
+        return card.footer("Server ID: " + guild.getId() + " • " + Embeds.FOOTER).build();
     }
 
     private static String boostTier(Guild guild) {

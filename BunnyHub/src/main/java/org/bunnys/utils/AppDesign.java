@@ -15,6 +15,19 @@ public final class AppDesign {
         public static final String EPIC = "<:Epic:824679104220626954>";
         public static final String STEAM = "<:steam:705062577817780315>";
 
+        // Launcher badges: the bot's own application emojis (usable in every server), added 2026-11-17.
+        public static final String GOG = "<:GOG:1572185523924115587>";
+        public static final String UBISOFT = "<:Ubisoft:1572185526381977680>";
+        public static final String EA = "<:EA:1572185527870816359>";
+        public static final String BATTLENET = "<:BattleNet:1572185529687089235>";
+        public static final String ITCHIO = "<:Itchio:1572185532002336848>";
+        public static final String DRM_FREE = "<:DRMFree:1572185533533388821>";
+        public static final String PLAYSTATION = "<:PlayStation:1572185535043215361>";
+        public static final String XBOX = "<:Xbox:1572185536851091466>";
+        public static final String SWITCH = "<:Switch:1572185538616631337>";
+        public static final String ANDROID = "<:Android:1572185540030242857>";
+        public static final String IOS = "<:iOS:1572185541514891267>";
+
         // Progress Bar Components
         public static final String PROGRESS_BAR_LEFT_EMPTY = "<:leftEmpty:1068143435095220265>";
         public static final String PROGRESS_BAR_LEFT_FULL = "<:leftFull:1068143511179894804>";

@@ -48,6 +48,40 @@ class FreebieReviewRoutingTest {
             verify(system).changeStore(OWNER, "gamerpower:123", "epic");
         }
     }
+    /** A decision turns the question message into its record: decision on top, no decision buttons, Clear finished only. */
+    @Test void aSourceDecisionEditsTheQuestionMessageAndRemovesItsButtons() {
+        var system = system();
+        try (var current = mockStatic(FreebieSystem.class)) {
+            current.when(FreebieSystem::current).thenReturn(Optional.of(system));
+            for (var status : List.of(FreebieSourceDecisions.Status.SAVED, FreebieSourceDecisions.Status.ALREADY)) {
+                var event = mock(ButtonInteractionEvent.class, RETURNS_DEEP_STUBS);
+                String component = "freebie_review:source-same-0123456789ab:gamerpower:123";
+                when(event.getComponentId()).thenReturn(component); when(event.getChannelId()).thenReturn(CHANNEL);
+                when(event.getUser().getId()).thenReturn(OWNER);
+                when(event.getMessage().getContentRaw()).thenReturn("**Possible duplicate held for your decision**\n**Possible duplicate — owner decision required**\n**Knightica**");
+                when(event.getMessage().isEphemeral()).thenReturn(false);
+                net.dv8tion.jda.api.requests.restaction.WebhookMessageEditAction<net.dv8tion.jda.api.entities.Message> edit =
+                        mock(net.dv8tion.jda.api.requests.restaction.WebhookMessageEditAction.class, RETURNS_SELF);
+                var text = org.mockito.ArgumentCaptor.forClass(String.class);
+                when(event.getHook().editOriginal(text.capture())).thenReturn(edit);
+                when(system.resolveSource(OWNER, "gamerpower:123", "source-same-0123456789ab"))
+                        .thenReturn(new FreebieSourceDecisions.Outcome(status, "same", "x"));
+                when(system.now()).thenReturn(java.time.Instant.parse("2026-11-17T12:00:00Z"));
+                new FreebieReviewButtons().execute(null, event, component.split(":"));
+                org.junit.jupiter.api.Assertions.assertTrue(text.getValue().startsWith(status == FreebieSourceDecisions.Status.SAVED
+                        ? "✅ **Decided: Same giveaway** · by <@" + OWNER + ">" : "☑️ **Already answered**"), text.getValue());
+                org.junit.jupiter.api.Assertions.assertTrue(text.getValue().contains("**Knightica**"), "the details stay");
+                var rows = org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+                verify(edit).setComponents(rows.capture());
+                var after = (List<net.dv8tion.jda.api.components.MessageTopLevelComponent>) new ArrayList<>(rows.getValue());
+                org.junit.jupiter.api.Assertions.assertFalse(FreebieMessages.needsOwner(after), "no decision buttons left");
+                org.junit.jupiter.api.Assertions.assertFalse(after.isEmpty(), "Clear finished stays");
+                verify(edit).setAllowedMentions(List.of());
+                verify(event.getHook(), never()).sendMessage(anyString());
+            }
+        }
+    }
+
     @Test void sourceResolutionRequiresOwnerAndConfiguredReviewChannel() {
         var system = system();
         try (var current = mockStatic(FreebieSystem.class)) {

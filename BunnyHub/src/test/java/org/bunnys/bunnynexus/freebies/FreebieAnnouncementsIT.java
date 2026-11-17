@@ -127,6 +127,33 @@ class FreebieAnnouncementsIT {
         assertEquals(0, enrichment.apply(list, EgDataIntakeTest.NOW), "unchanged evidence is not a change");
     }
 
+    /** A GamerPower-only Epic giveaway takes Epic's end and identity from EGData, matched by exact title. */
+    @Test void aGamerPowerOnlyEpicGiveawayIsCheckedAgainstEgData() throws Exception {
+        var sker = gp("7001", "Sker Ritual (Epic Games) Giveaway", "PC, Epic Games Store", false);
+        var other = gp("7002", "Home (Epic Games) Giveaway", "PC, Epic Games Store", false);
+        repository.recordSeen(sker, now);
+        repository.recordSeen(other, now);
+        String id = FreebieSourceStore.canonicalId(sker), otherId = FreebieSourceStore.canonicalId(other);
+        repository.transition(id, FreebieOffer.State.PENDING, FreebieOffer.State.APPROVED, "owner", now);
+        assertEquals(Instant.parse("2026-10-30T01:59:59Z"), offers.find(eq("_id", id)).first().getDate("endsAt").toInstant(),
+                "GamerPower's own (wrong) end");
+        var enrichment = new FreebieEnrichment(offers, null, Clock.fixed(EgDataIntakeTest.NOW, ZoneOffset.UTC));
+        var list = new EgDataIntake().decode(EgDataIntakeTest.captured(), EgDataIntakeTest.NOW).offers();
+        enrichment.apply(list, EgDataIntakeTest.NOW);
+        var doc = offers.find(eq("_id", id)).first();
+        assertEquals(Instant.parse("2026-10-29T15:00:00Z"), doc.getDate("endsAt").toInstant(), "Epic's end, from EGData");
+        assertFalse(doc.getBoolean("endsAtEstimated", false));
+        assertNotNull(doc.get("epicOffer"), "the exact catalog identity is recorded");
+        assertTrue(((Number) doc.get("cardRevision")).longValue() >= 1, "posted cards are edited");
+        assertEquals("APPROVED", doc.getString("state"));
+        assertTrue(repository.facts(id).epicOffer().isPresent(), "so checkout and region evidence follow");
+        assertNull(offers.find(eq("_id", otherId)).first().get("epicOffer"), "a different title is never matched");
+        assertNull(offers.find(eq("_id", otherId)).first().get("egdataMatch"));
+        long revision = ((Number) offers.find(eq("_id", id)).first().get("cardRevision")).longValue();
+        enrichment.apply(list, EgDataIntakeTest.NOW);
+        assertEquals(revision, ((Number) offers.find(eq("_id", id)).first().get("cardRevision")).longValue(), "matched once");
+    }
+
     @Test void variantsFoundAfterApprovalAreNotPublishedAndFailuresLeaveRegionsUnknown() throws Exception {
         repository.recordSeen(epic(), now);
         String id = FreebieSourceStore.canonicalId(epic());

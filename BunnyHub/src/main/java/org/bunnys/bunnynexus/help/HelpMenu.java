@@ -1,17 +1,12 @@
 package org.bunnys.bunnynexus.help;
 
-import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
-import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import org.bunnys.handler.commands.BunnyCommand;
 import org.bunnys.handler.commands.BunnySubcommand;
 import org.bunnys.bunnynexus.help.HelpCatalog.Branch;
 import org.bunnys.bunnynexus.help.HelpCatalog.Target;
-import org.bunnys.utils.AppDesign;
-import org.bunnys.utils.Embeds;
-import java.time.Instant;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,7 +54,13 @@ public final class HelpMenu {
     /** Who is reading. Developer-only and test-only commands are shown to developers alone. */
     public record Viewer(String userId, boolean developer) {}
 
-    public record Rendered(MessageEmbed embed, List<ActionRow> rows) {}
+    /** One help page and its controls; sent and edited as a Components V2 message. */
+    public record Rendered(HelpCard card, List<ActionRow> rows) {
+        /** The page with its controls, ready for {@code ctx.replyCard(...)} or {@code Cards.edit(...)}. */
+        public org.bunnys.handler.cards.Card toCard() { return card.card(rows); }
+        public net.dv8tion.jda.api.utils.messages.MessageCreateData message() { return card.message(rows); }
+        public net.dv8tion.jda.api.utils.messages.MessageEditData edit() { return card.edit(rows); }
+    }
 
     public static String categoryKey(String category) { return "c=" + category; }
     public static String detailKey(String path) { return "d=" + path; }
@@ -128,13 +129,13 @@ public final class HelpMenu {
     // ------------------------------------------------------------------
 
     private static Rendered overview(Bot bot, HelpCatalog catalog, Viewer viewer, String notice) {
-        EmbedBuilder embed = base(bot).setTitle(bot.name() + " Help");
+        HelpCard embed = base(bot).title(bot.name() + " Help");
 
         StringBuilder intro = new StringBuilder();
         if (notice != null) intro.append(notice).append("\n\n");
         intro.append(TAGLINE).append("\n")
                 .append("Type `/` to run a command, or pick one from the menu below to see how it works.");
-        embed.setDescription(intro.toString());
+        embed.description(intro.toString());
 
         if (catalog.isEmpty()) {
             field(embed, "Nothing here yet", "No commands are available to you right now.");
@@ -151,8 +152,8 @@ public final class HelpMenu {
         }
 
         int count = catalog.all().size();
-        Embeds.footer(embed, count + (count == 1 ? " command" : " commands"));
-        return new Rendered(embed.build(), HelpControls.rows(catalog, viewer, OVERVIEW, null, null));
+        embed.footer(count + (count == 1 ? " command" : " commands"));
+        return new Rendered(embed, HelpControls.rows(catalog, viewer, OVERVIEW, null, null));
     }
 
     // ------------------------------------------------------------------
@@ -161,8 +162,8 @@ public final class HelpMenu {
 
     private static Rendered categoryPage(Bot bot, HelpCatalog catalog, Viewer viewer, String category) {
         List<BunnyCommand> inCategory = catalog.categories().get(category);
-        EmbedBuilder embed = base(bot).setTitle(category);
-        embed.setDescription("Pick a command from the menu below for its options and an example.");
+        HelpCard embed = base(bot).title(category);
+        embed.description("Pick a command from the menu below for its options and an example.");
 
         for (BunnyCommand command : inCategory) {
             StringBuilder body = new StringBuilder();
@@ -186,18 +187,16 @@ public final class HelpMenu {
         }
 
         int page = catalog.pageOf(category);
-        Embeds.footer(embed, category + " • Page " + page + " of " + catalog.categories().size());
-        return new Rendered(embed.build(), HelpControls.rows(catalog, viewer, categoryKey(category), category, null));
+        embed.footer(category + " • Page " + page + " of " + catalog.categories().size());
+        return new Rendered(embed, HelpControls.rows(catalog, viewer, categoryKey(category), category, null));
     }
 
     // ------------------------------------------------------------------
     // Text helpers
     // ------------------------------------------------------------------
 
-    static EmbedBuilder base(Bot bot) {
-        EmbedBuilder embed = new EmbedBuilder().setColor(AppDesign.ColorCodes.DEFAULT).setTimestamp(Instant.now());
-        if (bot.avatarUrl() != null) embed.setThumbnail(bot.avatarUrl());
-        return embed;
+    static HelpCard base(Bot bot) {
+        return new HelpCard().thumbnail(bot.avatarUrl());
     }
 
     /**

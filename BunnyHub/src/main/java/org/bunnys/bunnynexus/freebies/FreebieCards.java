@@ -22,20 +22,32 @@ final class FreebieCards {
             HOW_TO_CLAIM = "How to claim";
     static final String CLAIM_LABEL = "Claim Free Game";
 
+    /** The launcher's badge emoji; 🎁 only for "Other". */
     static String emoji(FreebieStore store) {
         return switch (store) {
             case EPIC -> AppDesign.Emojis.EPIC;
             case STEAM -> AppDesign.Emojis.STEAM;
-            default -> "🎁";
+            case GOG -> AppDesign.Emojis.GOG;
+            case UBISOFT -> AppDesign.Emojis.UBISOFT;
+            case EA -> AppDesign.Emojis.EA;
+            case BATTLENET -> AppDesign.Emojis.BATTLENET;
+            case ITCHIO -> AppDesign.Emojis.ITCHIO;
+            case DRM_FREE -> AppDesign.Emojis.DRM_FREE;
+            case PLAYSTATION -> AppDesign.Emojis.PLAYSTATION;
+            case XBOX -> AppDesign.Emojis.XBOX;
+            case SWITCH -> AppDesign.Emojis.SWITCH;
+            case ANDROID -> AppDesign.Emojis.ANDROID;
+            case IOS -> AppDesign.Emojis.IOS;
+            case OTHER -> "🎁";
         };
     }
 
+    private static final java.util.regex.Pattern CUSTOM = java.util.regex.Pattern.compile("<a?:\\w+:(\\d+)>");
+
+    /** The embed author icon: the launcher's badge as an image, none for "Other". */
     static String icon(FreebieStore store) {
-        return switch (store) {
-            case EPIC -> "https://cdn.discordapp.com/emojis/824679104220626954.png";
-            case STEAM -> "https://cdn.discordapp.com/emojis/705062577817780315.png";
-            default -> null;
-        };
+        var custom = CUSTOM.matcher(emoji(store));
+        return custom.matches() ? "https://cdn.discordapp.com/emojis/" + custom.group(1) + ".png" : null;
     }
 
     /**

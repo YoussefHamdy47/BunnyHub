@@ -29,7 +29,7 @@ class FreebieUnitTest {
 
     /** offer() and offersIn() project to FreebieOffer.FIELDS: every field read() looks at must be in that list. */
     @Test void theOfferProjectionCoversEveryFieldReadUses() throws IOException {
-        String source = Files.readString(Path.of("src/main/java/org/bunnys/bunnynexus/freebies/FreebieOffer.java"));
+        String source = Files.readString(Path.of("src/main/java/org/bunnys/bunnynexus/freebies/FreebieOffer.java")).replace("\r\n", "\n");
         String body = source.substring(source.indexOf("static FreebieOffer read(Document d)"));
         body = body.substring(0, body.indexOf("\n    }\n"));
         Set<String> used = new TreeSet<>();

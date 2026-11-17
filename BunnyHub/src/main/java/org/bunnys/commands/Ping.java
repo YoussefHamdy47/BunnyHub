@@ -36,6 +36,6 @@ public final class Ping extends BunnyCommand {
             BunnyLog.warning("[Ping] API latency not measured | " + FailureDiagnostics.describe(failed));
             api = -1;
         }
-        ctx.reply(StatusEmbeds.ping(jda.getGatewayPing(), api));
+        ctx.replyCard(StatusEmbeds.ping(jda.getGatewayPing(), api));
     }
 }

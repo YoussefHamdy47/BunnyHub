@@ -27,19 +27,32 @@ import java.util.function.Function;
  *       its first one before the one shared message is posted ({@link FreebieDrops}). Only used while grouped.</li>
  *   <li>{@code FREEBIE_PING_COOLDOWN_MINUTES} (default 60, 0-1440; 0 is off): a post that would mention a role in a
  *       channel pinged within this long posts without the mention ({@link FreebiePings}).</li>
+ *   <li>{@code FREEBIE_COMPONENTS_V2} (default true): new announcement pages are Discord Components V2 cards
+ *       ({@link FreebieComponentCards}); false is the rollback to embeds. Each posted page keeps the format it was
+ *       posted in for its later edits.</li>
  * </ul>
  */
 public record FreebieFeatures(boolean grouped, boolean publishEnabled, Set<String> publishChannels, boolean checkout,
                               boolean egdata, boolean resolveGamerPowerLinks, boolean steam, Duration dropWindow,
-                              Duration pingCooldown) {
+                              Duration pingCooldown, boolean componentsV2) {
     public static final Duration DEFAULT_DROP_WINDOW = Duration.ofSeconds(120);
     static final int MIN_DROP_SECONDS = 10, MAX_DROP_SECONDS = 600;
-    public static final FreebieFeatures DEFAULT = new FreebieFeatures(true, false, Set.of(), false, true, false, true);
+    public static final FreebieFeatures DEFAULT = new FreebieFeatures(true, false, Set.of(), false, true, false, true,
+            DEFAULT_DROP_WINDOW, FreebiePings.DEFAULT_COOLDOWN, true);
 
     public FreebieFeatures {
         publishChannels = Set.copyOf(publishChannels);
         Objects.requireNonNull(dropWindow);
         Objects.requireNonNull(pingCooldown);
+    }
+
+    /**
+     * Every feature but the card format chosen: embeds. The shorter constructors below lead here too (callers and tests
+     * that predate Components V2); the environment and {@link #DEFAULT} use V2.
+     */
+    public FreebieFeatures(boolean grouped, boolean publishEnabled, Set<String> publishChannels, boolean checkout,
+                           boolean egdata, boolean resolveGamerPowerLinks, boolean steam, Duration dropWindow, Duration pingCooldown) {
+        this(grouped, publishEnabled, publishChannels, checkout, egdata, resolveGamerPowerLinks, steam, dropWindow, pingCooldown, false);
     }
 
     /** Every feature but the ping cooldown chosen; the default cooldown. */
@@ -83,7 +96,8 @@ public record FreebieFeatures(boolean grouped, boolean publishEnabled, Set<Strin
         return new FreebieFeatures(flag(env, "FREEBIE_GROUPED_ANNOUNCEMENTS", true, warn), publish, channels,
                 flag(env, "FREEBIE_EPIC_CHECKOUT", false, warn), flag(env, "FREEBIE_EGDATA_ENABLED", true, warn),
                 flag(env, "FREEBIE_RESOLVE_GAMERPOWER_LINKS", false, warn), flag(env, "FREEBIE_STEAM_ENABLED", true, warn),
-                dropWindow(env.apply("FREEBIE_DROP_WINDOW_SECONDS"), warn), pingCooldown(env.apply("FREEBIE_PING_COOLDOWN_MINUTES"), warn));
+                dropWindow(env.apply("FREEBIE_DROP_WINDOW_SECONDS"), warn), pingCooldown(env.apply("FREEBIE_PING_COOLDOWN_MINUTES"), warn),
+                flag(env, "FREEBIE_COMPONENTS_V2", true, warn));
     }
 
     /** Seconds, clamped to 10-600; anything that is not a whole number is logged and the default used. */
