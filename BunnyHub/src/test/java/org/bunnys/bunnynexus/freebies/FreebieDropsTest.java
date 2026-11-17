@@ -96,9 +96,14 @@ class FreebieDropsTest {
                 .append("messageId", "SENT".equals(state) ? MESSAGE : null).append("revision", 1L).append("applied", 1L);
     }
 
+    /** Embed pages (the FREEBIE_COMPONENTS_V2=false rollback) unless a test switches this on. */
+    boolean componentsV2;
+
     boolean start(FreebieRepository.Claimed job) { return start(job, null); }
     boolean start(FreebieRepository.Claimed job, FreebiePings ledger) {
-        var sender = new FreebieAnnouncementSender(repository, new FreebieFeatures(true, false, Set.of(), false, true, false),
+        var features = new FreebieFeatures(true, false, Set.of(), false, true, false, true, FreebieFeatures.DEFAULT_DROP_WINDOW,
+                FreebiePings.DEFAULT_COOLDOWN, componentsV2);
+        var sender = new FreebieAnnouncementSender(repository, features,
                 work::add, Clock.fixed(now, ZoneOffset.UTC), notifier).withPings(ledger);
         return sender.start(client, job, guild, channel, Optional.of(ROLE), () -> released++);
     }
@@ -111,6 +116,30 @@ class FreebieDropsTest {
     }
 
     // ------------------------------------------------------------------ one message, one mention
+
+    @Test void withComponentsV2ABurstIsOneCardWithOnePingLine() {
+        componentsV2 = true;
+        var first = job(game(0), false);
+        when(store.pages(key, CHANNEL)).thenReturn(List.of());
+        when(routes.announcementPeers(eq(key), eq(CHANNEL), eq(game(0).id()), anyInt()))
+                .thenReturn(List.of(peer(game(1), ROLE, false), peer(game(2), ROLE_2, false)));
+        var three = List.of(game(0), game(1), game(2));
+        var created = page(1, "SUBMITTING", three, first.token(), List.of(ROLE, ROLE_2));
+        when(store.createWithRoles(eq(key), any(), any(), eq(1), eq(List.of(ROLE, ROLE_2)), any(), any(), eq(first.token()), any(), eq(now)))
+                .thenReturn(Optional.of(created));
+        assertTrue(start(first));
+        drain();
+        var message = onlyMessage();
+        assertTrue(message.isUsingComponentsV2());
+        assertTrue(message.getEmbeds().isEmpty());
+        var top = FreebieComponentCardsTest.top(message);
+        assertEquals("<@&" + ROLE + "> <@&" + ROLE_2 + "> 3 new free games",
+                ((net.dv8tion.jda.api.components.textdisplay.TextDisplay) top.getFirst()).getContent());
+        assertEquals(Set.of(ROLE, ROLE_2), message.getMentionedRoles());
+        assertEquals(3, FreebieComponentCardsTest.children(FreebieComponentCardsTest.card(top),
+                net.dv8tion.jda.api.components.section.Section.class).size());
+        assertTrue(FreebieMessages.carriesReference(FreebieComponentCardsTest.posted(message), FreebieMessages.reference(row(game(0)))));
+    }
 
     @Test void aBurstInOneChannelIsOneMessageWithOneMentionAndItsCount() {
         var first = job(game(0), false);

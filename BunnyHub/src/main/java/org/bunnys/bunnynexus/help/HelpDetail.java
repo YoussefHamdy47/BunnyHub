@@ -1,13 +1,11 @@
 package org.bunnys.bunnynexus.help;
 
-import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import org.bunnys.handler.commands.BunnyCommand;
 import org.bunnys.handler.commands.BunnySubcommand;
 import org.bunnys.bunnynexus.help.HelpCatalog.Branch;
 import org.bunnys.bunnynexus.help.HelpCatalog.Target;
-import org.bunnys.utils.Embeds;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,25 +27,25 @@ final class HelpDetail {
         BunnySubcommand sub = target.subcommand();
         String path = target.path();
 
-        EmbedBuilder embed = base(bot).setTitle("/" + path);
+        HelpCard embed = base(bot).title("/" + path);
         String description = sub != null ? sub.getDescription() : command.getDescription();
 
         StringBuilder intro = new StringBuilder(describe(description));
         String badges = badges(command, sub);
         if (!badges.isEmpty()) intro.append("\n\n").append(badges);
-        embed.setDescription(intro.toString());
+        embed.description(intro.toString());
 
         if (sub == null && command.hasBranches()) branchFields(embed, bot, command);
         else usageFields(embed, bot, command, sub, path);
 
         StringBuilder footer = new StringBuilder(command.getCategory());
         if (sub != null) footer.append(" • Part of /").append(command.getName());
-        Embeds.footer(embed, footer.toString());
-        return new Rendered(embed.build(), HelpControls.rows(catalog, viewer, detailKey(path), command.getCategory(), target));
+        embed.footer(footer.toString());
+        return new Rendered(embed, HelpControls.rows(catalog, viewer, detailKey(path), command.getCategory(), target));
     }
 
     /** A runnable command or subcommand: how to call it, an example, then each option. */
-    private static void usageFields(EmbedBuilder embed, Bot bot, BunnyCommand command, BunnySubcommand sub, String path) {
+    private static void usageFields(HelpCard embed, Bot bot, BunnyCommand command, BunnySubcommand sub, String path) {
         List<OptionData> options = sub != null ? sub.getOptions() : command.getOptions();
         boolean mentionable = command.isMentionEnabled() && (sub == null || sub.isMentionEnabled());
         String args = syntax(options);
@@ -87,7 +85,7 @@ final class HelpDetail {
     }
 
     /** A command with subcommands: one short line per branch, each with its own clickable usage. */
-    private static void branchFields(EmbedBuilder embed, Bot bot, BunnyCommand command) {
+    private static void branchFields(HelpCard embed, Bot bot, BunnyCommand command) {
         List<String> lines = new ArrayList<>();
         for (Branch branch : branches(command))
             lines.add(reference(bot, branch.path()) + " " + shorten(branch.subcommand().getDescription(), 80));

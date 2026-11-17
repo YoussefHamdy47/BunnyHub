@@ -22,13 +22,21 @@ public final class FreebieReviewCleanup {
     private FreebieReviewCleanup() {}
 
     public static CompletableFuture<Result> clear(GuildMessageChannel channel) {
+        return clear(channel, customId -> true);
+    }
+
+    /**
+     * {@code stillOpen}: whether an enabled bot button still needs the owner (a database lookup for held-report
+     * questions), so it runs off the JDA callback thread.
+     */
+    public static CompletableFuture<Result> clear(GuildMessageChannel channel, java.util.function.Predicate<String> stillOpen) {
         String self = channel.getJDA().getSelfUser().getId();
-        return channel.getIterableHistory().takeAsync(LOOK_BACK).thenCompose(history -> {
+        return channel.getIterableHistory().takeAsync(LOOK_BACK).thenComposeAsync(history -> {
             List<Message> finished = new ArrayList<>();
             int kept = 0;
             for (Message message : history) {
                 if (!message.getAuthor().getId().equals(self)) continue;
-                if (FreebieMessages.needsOwner(message.getComponents())) kept++;
+                if (FreebieMessages.needsOwner(message.getComponents(), stillOpen)) kept++;
                 else finished.add(message);
             }
             int keptCount = kept;

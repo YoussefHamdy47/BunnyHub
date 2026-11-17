@@ -45,7 +45,8 @@ final class FreebieFields {
             Document comparable = saved == null ? null : new Document(saved);
             if (comparable != null) comparable.remove("observedAt");
             boolean identityKnown = existing.get("epicOffer") != null;
-            if (official.equals(comparable) && identityKnown) return changes;
+            // A later end held back before Epic's end became authoritative (officialLaterEnd) is applied once.
+            if (official.equals(comparable) && identityKnown && !existing.getBoolean("officialLaterEnd", false)) return changes;
             changes.add(set("official", new Document(official).append("observedAt", Date.from(now))));
             c.epicOffer().filter(o -> !identityKnown).ifPresent(o -> changes.add(set("epicOffer",
                     new Document("namespace", o.namespace()).append("offerId", o.offerId()))));
@@ -69,14 +70,14 @@ final class FreebieFields {
                     boolean differs = !Objects.equals(existing.getString("title"), c.title())
                             || !Objects.equals(existing.getString("description"), c.description());
                     if (differs != existing.getBoolean("officialTextDiffers", false)) changes.add(set("officialTextDiffers", differs));
+                    // Epic is the store: its end replaces the saved one either way (GamerPower's dates are often off),
+                    // and posted cards are edited silently. A source still never reopens an ended giveaway (default).
                     Date savedEnd = existing.getDate("endsAt");
-                    boolean shorter = c.endsAt().isPresent() && (savedEnd == null || c.endsAt().get().isBefore(savedEnd.toInstant()));
-                    if (shorter) {
-                        // Restrictive and automatic: the official end may only shorten the window.
+                    if (c.endsAt().isPresent() && (savedEnd == null || !c.endsAt().get().equals(savedEnd.toInstant()))) {
                         changes.add(set("endsAt", Date.from(c.endsAt().get()))); changes.add(set("endsAtEstimated", false));
                         changes.add(inc("cardRevision", 1L));
-                    } else if (c.endsAt().isPresent() && savedEnd != null && c.endsAt().get().isAfter(savedEnd.toInstant()))
-                        changes.add(set("officialLaterEnd", true)); // A longer window needs a new review; never applied silently.
+                    }
+                    if (existing.getBoolean("officialLaterEnd", false)) changes.add(unset("officialLaterEnd"));
                 }
                 default -> { /* Provenance only: a source can never reopen a finished or rejected giveaway. */ }
             }

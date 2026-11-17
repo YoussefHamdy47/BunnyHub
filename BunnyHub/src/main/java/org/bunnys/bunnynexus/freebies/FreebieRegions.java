@@ -109,6 +109,29 @@ final class FreebieRegions {
         return String.join(" ", lines);
     }
 
+    /** Countries the fresh evidence limits the giveaway to; empty when nothing is known. */
+    static List<String> only(Optional<Evidence> evidence, Instant now) {
+        return evidence.filter(e -> e.fresh(now)).flatMap(Evidence::whitelist).orElse(List.of());
+    }
+
+    /** The flag emoji of an ISO 3166 alpha-2 code (two regional indicator letters); empty for anything else. */
+    static String flag(String code) {
+        if (code == null || code.length() != 2 || !ISO.contains(code.toUpperCase(Locale.ROOT))) return "";
+        String upper = code.toUpperCase(Locale.ROOT);
+        return new String(Character.toChars(0x1F1E6 + upper.charAt(0) - 'A')) + new String(Character.toChars(0x1F1E6 + upper.charAt(1) - 'A'));
+    }
+
+    /** Flags only, for a compact line: at most twelve, then "+N". Codes without a flag fall back to the code. */
+    static String flags(List<String> codes) {
+        var shown = new ArrayList<String>();
+        for (String code : codes.stream().sorted().toList()) {
+            if (shown.size() == 12) { shown.add("+" + (codes.size() - 12)); break; }
+            String flag = flag(code);
+            shown.add(flag.isEmpty() ? code : flag);
+        }
+        return String.join(" ", shown);
+    }
+
     static String names(List<String> codes) {
         var names = new ArrayList<String>();
         for (String code : codes) names.add(Locale.of("", code).getDisplayCountry(Locale.ENGLISH));

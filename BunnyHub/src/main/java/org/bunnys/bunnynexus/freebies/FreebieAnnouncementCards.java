@@ -262,7 +262,9 @@ final class FreebieAnnouncementCards {
             if (m.status() == Status.LIVE) {
                 buttons.add(FreebieCards.claimButton(m.offer()));
                 if (checkout) combined(members, now).ifPresent(buttons::add);
-                for (var v : m.facts().publicVariants(now)) buttons.add(Button.link(v.page().toString(), "Claim " + v.label() + " version"));
+                for (var v : m.facts().publicVariants(now)) buttons.add(Button.link(v.page().toString(), "Claim " + v.label() + " version")
+                        .withEmoji(net.dv8tion.jda.api.entities.emoji.Emoji.fromFormatted(FreebieCards.emoji(
+                                v.platform() == EgDataIntake.Platform.ANDROID ? FreebieStore.ANDROID : FreebieStore.IOS))));
             }
         } else for (Member m : live) buttons.add(Button.link(m.offer().claimUrl().toString(), label("Claim " + title(m.offer().title()))));
         List<ActionRow> rows = new ArrayList<>();

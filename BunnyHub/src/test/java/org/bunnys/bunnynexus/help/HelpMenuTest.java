@@ -40,7 +40,7 @@ class HelpMenuTest {
         for (String path : HelpMenu.paths(commands, true)) views.add(HelpMenu.detailKey(path));
         for (String view : views) {
             HelpMenu.Rendered rendered = HelpMenu.render(bot, commands, developer, view);
-            assertTrue(rendered.embed().isSendable(), view);
+            assertTrue(rendered.message().isUsingComponentsV2(), view); // JDA refuses to build a message over Discord's limits.
             assertTrue(rendered.rows().size() <= 5, view);
             for (ActionRow row : rendered.rows())
                 for (var component : row.getComponents()) {
@@ -57,7 +57,7 @@ class HelpMenuTest {
 
     @Test void detailUsesClickableMentionsAndOwnerScopedControls() {
         var rendered = HelpMenu.render(bot, commands, member, "d=timer start");
-        assertEquals("/timer start", rendered.embed().getTitle());
+        assertEquals("/timer start", rendered.card().getTitle());
         assertTrue(describe(rendered).contains("</timer start:111>"));
         var menu = rendered.rows().getFirst().getComponents().getFirst().asStringSelectMenu();
         assertEquals("help:cat:42", menu.getCustomId());
@@ -68,14 +68,14 @@ class HelpMenuTest {
     }
 
     @Test void lookupToleratesSlashesAliasesAndPastedOptions() {
-        assertEquals("/timer start", HelpMenu.lookup(bot, commands, member, " /Timer  start subject:math ").embed().getTitle());
-        assertEquals("/avatar", HelpMenu.lookup(bot, commands, member, "pfp").embed().getTitle());
-        assertEquals("/timer", HelpMenu.lookup(bot, commands, member, "timer nonsense").embed().getTitle());
-        assertTrue(HelpMenu.lookup(bot, commands, member, "study").embed().getTitle().contains("Study"));
+        assertEquals("/timer start", HelpMenu.lookup(bot, commands, member, " /Timer  start subject:math ").card().getTitle());
+        assertEquals("/avatar", HelpMenu.lookup(bot, commands, member, "pfp").card().getTitle());
+        assertEquals("/timer", HelpMenu.lookup(bot, commands, member, "timer nonsense").card().getTitle());
+        assertTrue(HelpMenu.lookup(bot, commands, member, "study").card().getTitle().contains("Study"));
         var missing = HelpMenu.lookup(bot, commands, member, "`nope`");
-        assertTrue(missing.embed().getDescription().contains("No command matches `'nope'`"));
+        assertTrue(missing.card().getDescription().contains("No command matches `'nope'`"));
         // Owner commands stay hidden from members even when typed exactly.
-        assertTrue(HelpMenu.lookup(bot, commands, member, "freebie-admin").embed().getDescription().contains("No command matches"));
+        assertTrue(HelpMenu.lookup(bot, commands, member, "freebie-admin").card().getDescription().contains("No command matches"));
     }
 
     @Test void freeGamesIsOneCommandWithEveryFreeGameFeature() {
@@ -89,7 +89,7 @@ class HelpMenuTest {
         String detail = describe(HelpMenu.render(bot, commands, member, HelpMenu.detailKey("free-games list")));
         assertTrue(detail.contains("/free-games list launcher:epic"), detail);
         assertFalse(detail.contains("/free-games launcher:"), "no example of the old form");
-        assertEquals("/free-games list", HelpMenu.lookup(bot, commands, member, "/free-games list launcher:epic").embed().getTitle());
+        assertEquals("/free-games list", HelpMenu.lookup(bot, commands, member, "/free-games list launcher:epic").card().getTitle());
     }
 
     @Test void subcommandsAreListedEverywhereWithoutEmojiClutter() {
@@ -114,13 +114,13 @@ class HelpMenuTest {
     }
 
     @Test void staleViewsFallBackToTheOverview() {
-        assertTrue(HelpMenu.render(bot, commands, member, "d=removed").embed().getTitle().equals("Bunny Help"));
-        assertTrue(HelpMenu.render(bot, commands, member, "c=Owner").embed().getTitle().equals("Bunny Help"));
+        assertTrue(HelpMenu.render(bot, commands, member, "d=removed").card().getTitle().equals("Bunny Help"));
+        assertTrue(HelpMenu.render(bot, commands, member, "c=Owner").card().getTitle().equals("Bunny Help"));
     }
 
     private static String describe(HelpMenu.Rendered rendered) {
-        StringBuilder text = new StringBuilder(String.valueOf(rendered.embed().getDescription()));
-        rendered.embed().getFields().forEach(f -> text.append('\n').append(f.getName()).append('\n').append(f.getValue()));
+        StringBuilder text = new StringBuilder(String.valueOf(rendered.card().getDescription()));
+        rendered.card().getFields().forEach(f -> text.append('\n').append(f.name()).append('\n').append(f.value()));
         return text.toString();
     }
 }

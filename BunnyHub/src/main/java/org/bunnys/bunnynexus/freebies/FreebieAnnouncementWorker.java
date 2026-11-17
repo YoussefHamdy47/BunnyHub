@@ -139,8 +139,12 @@ final class FreebieAnnouncementWorker {
                 .orElse(job.page()), now);
         if (members.isEmpty()) return CompletableFuture.completedFuture("no members left");
         if (closed || !repository.announcements().ownsRefresh(job, now)) return CompletableFuture.failedFuture(new CancellationException("lease lost"));
-        return message.editMessage(FreebieAnnouncementCards.edit(members, features.checkout(), now, Optional.ofNullable(message.getContentRaw())))
-                .timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit().thenApply(edited -> "edited");
+        // A page keeps the format it was posted in, whatever FREEBIE_COMPONENTS_V2 says now: Discord does not turn an
+        // embed message into a Components V2 one or back.
+        var data = message.isUsingComponentsV2()
+                ? FreebieComponentCards.edit(members, features.checkout(), now, FreebieComponentCards.header(message))
+                : FreebieAnnouncementCards.edit(members, features.checkout(), now, Optional.ofNullable(message.getContentRaw()));
+        return message.editMessage(data).timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit().thenApply(edited -> "edited");
     }
 
     private void outcome(FreebieAnnouncementStore.Refresh job, String outcome, Throwable error) {

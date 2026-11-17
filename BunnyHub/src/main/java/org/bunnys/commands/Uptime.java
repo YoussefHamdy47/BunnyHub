@@ -19,6 +19,6 @@ public final class Uptime extends BunnyCommand {
     }
 
     @Override public void execute(BunnyHub client, CommandContext ctx) {
-        ctx.reply(StatusEmbeds.uptime(client.getStartTime()));
+        ctx.replyCard(StatusEmbeds.uptime(client.getStartTime()));
     }
 }

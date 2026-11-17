@@ -102,11 +102,16 @@ class UserContextCommandTest {
         new Avatar(null).execute(null, context);
         var message = org.mockito.ArgumentCaptor.forClass(MessageCreateData.class);
         verify(context).replyMessage(message.capture());
-        var embed = message.getValue().getEmbeds().getFirst();
-        assertEquals(1, message.getValue().getEmbeds().size());
-        assertTrue(embed.getTitle().endsWith("Selected User's Avatar"));
-        assertTrue(embed.getImage().getUrl().contains("server.gif"), "the user menu leads with the server avatar");
-        assertTrue(embed.getDescription().contains("global.gif") && embed.getDescription().contains("server.gif"));
+        assertTrue(message.getValue().isUsingComponentsV2(), "a card, not an embed");
+        var card = (net.dv8tion.jda.api.components.container.Container) message.getValue().getComponents().getFirst();
+        var texts = card.getComponents().stream().filter(c -> c instanceof net.dv8tion.jda.api.components.textdisplay.TextDisplay)
+                .map(c -> ((net.dv8tion.jda.api.components.textdisplay.TextDisplay) c).getContent()).toList();
+        var image = card.getComponents().stream().filter(c -> c instanceof net.dv8tion.jda.api.components.mediagallery.MediaGallery)
+                .map(c -> ((net.dv8tion.jda.api.components.mediagallery.MediaGallery) c).getItems().getFirst().getUrl()).findFirst().orElseThrow();
+        assertTrue(texts.getFirst().endsWith("Selected User's Avatar"));
+        assertTrue(image.contains("server.gif"), "the user menu leads with the server avatar");
+        assertTrue(texts.get(1).contains("global.gif") && texts.get(1).contains("server.gif"));
+        assertNull(card.getAccentColorRaw());
     }
 
     @Test void allSubcommandsAreNamedDomainClassesAndKeepTheirExistingNames() {

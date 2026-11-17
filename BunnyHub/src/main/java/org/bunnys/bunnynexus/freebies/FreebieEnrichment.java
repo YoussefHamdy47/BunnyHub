@@ -1,6 +1,8 @@
 package org.bunnys.bunnynexus.freebies;
 
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.CountOptions;
+import com.mongodb.client.model.Projections;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import org.bunnys.utils.BunnyLog;
@@ -71,9 +73,58 @@ final class FreebieEnrichment {
     /** Applies live entries only; upcoming ones never become claims. Returns the number of offers updated. */
     int apply(List<EgDataIntake.Offer> list, Instant now) {
         int changed = 0;
+        // Titles EGData lists more than once among live PC giveaways are ambiguous: never matched by title.
+        Map<String, Long> titles = new HashMap<>();
+        for (var offer : list)
+            if (offer.liveAt(now) && offer.platform() == EgDataIntake.Platform.PC) titles.merge(FreebieIdentity.normalized(offer.title()), 1L, Long::sum);
         for (var offer : list) {
             if (!offer.liveAt(now)) continue;
+            if (offer.platform() == EgDataIntake.Platform.PC && titles.get(FreebieIdentity.normalized(offer.title())) == 1)
+                changed += unmatched(offer, now);
             changed += offer.platform() == EgDataIntake.Platform.PC ? regions(offer, now) : variant(offer, now);
+        }
+        return changed;
+    }
+
+    /**
+     * GamerPower reports of Epic giveaways that no Epic report joined (GamerPower's dates are often wrong): matched by
+     * exact normalized title to a live EGData PC giveaway that started before they did end, never across editions.
+     * Epic's end replaces the saved one (pending: the review is refreshed; posted: cards are edited), and the exact
+     * catalog identity is recorded unless another offer already has it, so region evidence and checkout follow. One
+     * conditional write per offer; nothing is created, approved or reopened.
+     */
+    private int unmatched(EgDataIntake.Offer offer, Instant now) {
+        String title = FreebieIdentity.normalized(offer.title());
+        boolean identityFree = offers.countDocuments(and(eq("epicOffer.namespace", offer.identity().namespace()),
+                eq("epicOffer.offerId", offer.identity().offerId())), new CountOptions().limit(1)) == 0;
+        int changed = 0;
+        for (Document d : offers.find(and(eq("source", "gamerpower"), eq("store", FreebieStore.EPIC.id()), exists("epicOffer", false),
+                in("state", "PENDING", "APPROVED", "COMPLETED"))).projection(Projections.include("_id", "state", "title", "endsAt",
+                "endsAtEstimated", "startsAt", "discoveredAt")).limit(100)) {
+            if (!FreebieIdentity.normalized(d.getString("title")).equals(title)) continue;
+            if (FreebieIdentity.editionConflict(d.getString("title"), offer.title())) continue;
+            // GamerPower reports may carry no start; when the bot found the game stands in for it.
+            var start = FreebieIdentity.start(d).or(() -> Optional.ofNullable(d.getDate("discoveredAt")).map(Date::toInstant));
+            if (start.isEmpty() || !start.get().isBefore(offer.endsAt())) continue;
+            boolean pending = d.getString("state").equals("PENDING");
+            List<Bson> changes = new ArrayList<>();
+            Date saved = d.getDate("endsAt");
+            if (saved == null || !saved.toInstant().equals(offer.endsAt()) || d.getBoolean("endsAtEstimated", false)) {
+                changes.add(set("endsAt", Date.from(offer.endsAt()))); changes.add(set("endsAtEstimated", false));
+            }
+            if (identityFree) changes.add(set("epicOffer", new Document("namespace", offer.identity().namespace())
+                    .append("offerId", offer.identity().offerId())));
+            if (changes.isEmpty()) continue;
+            changes.add(set("egdataMatch", new Document("title", offer.title()).append("observedAt", Date.from(now))));
+            changes.add(inc(pending ? "revision" : "cardRevision", 1L));
+            if (pending) changes.add(set("reviewRefresh", true));
+            if (offers.updateOne(and(eq("_id", d.getString("_id")), eq("state", d.getString("state")), exists("epicOffer", false)),
+                    combine(changes)).getModifiedCount() == 1) {
+                changed++;
+                BunnyLog.info("[Freebies] " + d.getString("_id") + " checked against Epic (EGData): end "
+                        + offer.endsAt() + (identityFree ? ", catalog identity recorded" : ""));
+                if (identityFree) break; // The identity now belongs to this offer.
+            }
         }
         return changed;
     }

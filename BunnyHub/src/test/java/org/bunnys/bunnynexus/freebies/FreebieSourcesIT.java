@@ -81,8 +81,11 @@ class FreebieSourcesIT {
     @Test void confirmingAliasPreservesApprovalRevisionReferencesAndNeverReapproves() throws Exception {
         String id = parent(); repository.transition(id, FreebieOffer.State.PENDING, FreebieOffer.State.APPROVED, "original-owner", now);
         var before = repository.offer(id).orElseThrow(); repository.recordSeen(epic(), now);
-        assertTrue(repository.sources().resolve(id, token(), "same", "owner", now));
-        assertFalse(repository.sources().resolve(id, token(), "separate", "other-owner", now));
+        String question = token();
+        assertTrue(repository.sources().questionOpen(id, question), "held: waits for the owner");
+        assertTrue(repository.sources().resolve(id, question, "same", "owner", now));
+        assertFalse(repository.sources().questionOpen(id, question), "answered: Clear finished may remove its message");
+        assertFalse(repository.sources().resolve(id, question, "separate", "other-owner", now));
         repository.recordSeen(epic(), now);
         assertEquals(before, repository.offer(id).orElseThrow());
         assertEquals(1, offers.countDocuments());

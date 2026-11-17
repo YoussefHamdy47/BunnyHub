@@ -8,16 +8,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class StatusCommandsTest {
     @Test void pingShowsBothLatenciesInCode() {
-        var embed = StatusEmbeds.ping(42, 118);
-        assertEquals("**Gateway:** `42ms`\n**API:** `118ms`", embed.getDescription());
-        assertSimple(embed);
-        assertEquals("**Gateway:** `n/a`\n**API:** `0ms`", StatusEmbeds.ping(-1, 0).getDescription(), "not measured yet");
+        var card = StatusEmbeds.ping(42, 118);
+        assertEquals("**Gateway:** `42ms`\n**API:** `118ms`", body(card));
+        assertSimple(card);
+        assertEquals("**Gateway:** `n/a`\n**API:** `0ms`", body(StatusEmbeds.ping(-1, 0)), "not measured yet");
     }
 
     @Test void uptimeUsesUnixTimestamps() {
-        var embed = StatusEmbeds.uptime(1_760_000_000_123L);
-        assertEquals("**Online since:** <t:1760000000:F>\n**Uptime:** started <t:1760000000:R>", embed.getDescription());
-        assertSimple(embed);
+        var card = StatusEmbeds.uptime(1_760_000_000_123L);
+        assertEquals("**Online since:** <t:1760000000:F>\n**Uptime:** started <t:1760000000:R>", body(card));
+        assertSimple(card);
     }
 
     @Test void bothAreSimpleCommandsAnyoneCanUse() {
@@ -31,15 +31,20 @@ class StatusCommandsTest {
         assertTrue(new Ping(null).matches("latency"));
     }
 
-    /** Only a description, a footer and a timestamp: no title, fields, author, image or thumbnail. */
-    private static void assertSimple(MessageEmbed embed) {
-        assertNull(embed.getTitle());
-        assertTrue(embed.getFields().isEmpty());
-        assertNull(embed.getAuthor());
-        assertNull(embed.getImage());
-        assertNull(embed.getThumbnail());
-        assertNotNull(embed.getFooter());
-        assertNotNull(embed.getTimestamp());
-        assertTrue(embed.isSendable());
+    /** The readings, without the footer line. */
+    private static String body(org.bunnys.handler.cards.Card card) {
+        String text = card.plainText();
+        return text.substring(0, text.lastIndexOf("\n-# "));
+    }
+
+    /** One plain card: the readings and a footer, no heading, image or buttons. */
+    private static void assertSimple(org.bunnys.handler.cards.Card card) {
+        assertEquals(1, card.components().size());
+        var container = (net.dv8tion.jda.api.components.container.Container) card.components().getFirst();
+        assertNull(container.getAccentColorRaw());
+        assertEquals(2, container.getComponents().size(), "the readings and the footer");
+        assertTrue(card.plainText().endsWith("\n-# " + org.bunnys.utils.Embeds.FOOTER));
+        assertFalse(card.plainText().contains("## "));
+        assertTrue(card.message().isUsingComponentsV2());
     }
 }

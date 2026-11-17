@@ -390,10 +390,20 @@ public final class FreebieSystem {
         requireOwner(actor);
         return FreebieSourceDecisions.view(repository.sources());
     }
-    public String resolveSource(String actor, String offerId, String action) {
+    public FreebieSourceDecisions.Outcome resolveSource(String actor, String offerId, String action) {
         requireOwner(actor);
         return FreebieSourceDecisions.resolve(repository.sources(), actor, offerId, action, clock.instant());
     }
+
+    /**
+     * For Clear finished: whether a source decision button still belongs to an open question. Any other button counts
+     * as open (its own rules apply). Database read: never call this on a JDA thread.
+     */
+    public boolean sourceQuestionOpen(String customId) {
+        return FreebieSourceDecisions.question(customId).map(q -> repository.sources().questionOpen(q[0], q[1])).orElse(true);
+    }
+
+    public java.time.Instant now() { return clock.instant(); }
 
     /**
      * First click: shows exactly what would be sent and asks for a second confirmation. A game of an Epic release is

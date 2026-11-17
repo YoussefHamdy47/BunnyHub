@@ -141,6 +141,14 @@ public abstract class CommandContext implements AccessContext {
                                     FileUpload file,
                                     boolean ephemeral);
 
+    /**
+     * A Components V2 card ({@link org.bunnys.handler.cards.Card}). Private or public as the command chose when it
+     * deferred; on the mention path always public, as a reply to the message.
+     */
+    public void replyCard(org.bunnys.handler.cards.Card card) {
+        replyMessage(card.message());
+    }
+
     public void reply(MessageEmbed embed) {
         doReply(embed, List.of(), null, false);
     }

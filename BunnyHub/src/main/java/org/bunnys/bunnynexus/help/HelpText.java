@@ -1,6 +1,5 @@
 package org.bunnys.bunnynexus.help;
 
-import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 
@@ -10,10 +9,10 @@ import java.util.List;
 final class HelpText {
     private HelpText() {}
 
-    static final int MAX_FIELD_VALUE = MessageEmbed.VALUE_MAX_LENGTH;
+    static final int MAX_FIELD_VALUE = MessageEmbed.VALUE_MAX_LENGTH; // Sections stay field-sized: easy to scan.
     static final int MAX_FIELD_NAME = MessageEmbed.TITLE_MAX_LENGTH;
     /** Held under the real ceiling: the footer and title are counted after the fields. */
-    static final int MAX_EMBED_TOTAL = MessageEmbed.EMBED_MAX_LENGTH_BOT - 300;
+    static final int MAX_EMBED_TOTAL = HelpCard.MAX_TEXT; // A Components V2 page's text budget.
     static final int MAX_FIELDS = 24;
 
     /** {@code <required>} and {@code [optional]}, in declared order. */
@@ -65,7 +64,7 @@ final class HelpText {
     }
 
     /** Splits lines across as many fields as needed instead of truncating the list. */
-    static void chunked(EmbedBuilder embed, String name, List<String> lines) {
+    static void chunked(HelpCard embed, String name, List<String> lines) {
         StringBuilder current = new StringBuilder();
         boolean first = true;
         for (String line : lines) {
@@ -86,13 +85,13 @@ final class HelpText {
      * oversized field, which would take the whole menu down, and a page can pass the 6,000
      * character embed total while every single field is legal on its own.
      */
-    static boolean field(EmbedBuilder embed, String name, String value) {
+    static boolean field(HelpCard embed, String name, String value) {
         String safeName = clamp(name, MAX_FIELD_NAME);
         String safeValue = clamp(value, MAX_FIELD_VALUE);
         if (embed.getFields().size() >= MAX_FIELDS
                 || embed.length() + safeName.length() + safeValue.length() > MAX_EMBED_TOTAL)
             return false;
-        embed.addField(safeName, safeValue, false);
+        embed.add(safeName, safeValue);
         return true;
     }
 

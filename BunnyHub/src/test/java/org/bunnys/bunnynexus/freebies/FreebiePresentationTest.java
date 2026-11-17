@@ -39,11 +39,18 @@ class FreebiePresentationTest {
                 var button = row.getFirst().asButton();
                 assertEquals("Claim Free Game", button.getLabel());
                 assertEquals(offer.claimUrl().toString(), button.getUrl());
-                if (store == FreebieStore.EPIC || store == FreebieStore.STEAM) {
-                    assertTrue(button.getEmoji().getFormatted().contains(store == FreebieStore.EPIC
-                            ? "824679104220626954" : "705062577817780315"));
-                    assertNotNull(card.getAuthor().getIconUrl());
-                } else assertTrue(card.getTitle().startsWith("🎁"));
+                if (store == FreebieStore.OTHER) {
+                    assertTrue(card.getTitle().startsWith("🎁"));
+                    assertNull(card.getAuthor().getIconUrl());
+                } else {
+                    // Every launcher has its own badge emoji: on the button, in the title and as the author icon.
+                    String id = FreebieCards.emoji(store).replaceAll("\\D", "");
+                    assertTrue(FreebieCards.emoji(store).matches("<:\\w+:\\d+>"), store.name());
+                    assertTrue(button.getEmoji().getFormatted().contains(id), store.name());
+                    assertEquals("https://cdn.discordapp.com/emojis/" + id + ".png", card.getAuthor().getIconUrl());
+                }
+                if (store == FreebieStore.EPIC) assertTrue(button.getEmoji().getFormatted().contains("824679104220626954"));
+                if (store == FreebieStore.STEAM) assertTrue(button.getEmoji().getFormatted().contains("705062577817780315"));
             }
         }
     }

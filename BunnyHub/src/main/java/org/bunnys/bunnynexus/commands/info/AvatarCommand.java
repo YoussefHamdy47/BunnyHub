@@ -1,15 +1,13 @@
 package org.bunnys.bunnynexus.commands.info;
 
-import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.User;
-import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 import org.bunnys.handler.BunnyHub;
+import org.bunnys.handler.cards.Card;
 import org.bunnys.handler.commands.context.CommandContext;
 import org.bunnys.handler.commands.context.UserContext;
-import org.bunnys.utils.Embeds;
 import org.bunnys.utils.ErrorReporter;
 import org.bunnys.utils.SystemEmbeds;
 import java.util.ArrayList;
@@ -50,13 +48,12 @@ public final class AvatarCommand {
         String name = member == null ? user.getEffectiveName() : member.getEffectiveName();
 
         String links = "[Global Avatar](" + global + ")" + (server == null ? "" : " | [Server Avatar](" + server + ")");
-        var embed = Embeds.of("🖼️", name + "'s Avatar", links)
-                .setImage(serverFirst && server != null ? server : global);
-        Embeds.footer(embed, size + "px");
 
         List<Button> buttons = new ArrayList<>();
         buttons.add(Button.link(global, "Global Avatar"));
         if (server != null) buttons.add(Button.link(server, "Server Avatar"));
-        return new MessageCreateBuilder().setEmbeds(embed.build()).setComponents(ActionRow.of(buttons)).build();
+        return Card.builder().title("🖼️ " + name + "'s Avatar").text(links)
+                .image(serverFirst && server != null ? server : global)
+                .buttons(buttons).footer(size + "px").build().message();
     }
 }

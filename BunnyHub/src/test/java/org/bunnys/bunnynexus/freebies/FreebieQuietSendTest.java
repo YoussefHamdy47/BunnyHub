@@ -84,6 +84,7 @@ class FreebieQuietSendTest {
         verify(repository, times(2)).sendingPaused();
     }
 
+    @SuppressWarnings("unchecked") // thenReturn's varargs of Optional<FreebieOffer>.
     @Test void anOfferThatEndsAfterTheFirstCheckIsStillCancelledBeforeDiscordIsAsked() throws Exception {
         when(repository.offer(offer.id())).thenReturn(Optional.of(offer), Optional.of(offer), Optional.of(offer), Optional.empty());
         when(repository.quiet(offer.id())).thenReturn(false);
