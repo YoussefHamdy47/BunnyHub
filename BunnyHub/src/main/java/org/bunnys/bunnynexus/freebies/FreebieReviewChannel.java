@@ -33,6 +33,8 @@ final class FreebieReviewChannel {
     static final Duration AUDIENCE_TTL = Duration.ofMinutes(10);
     private record CachedAudience(FreebieSubscriptions.Audience audience, Instant at) {}
     private final Map<String, CachedAudience> progressAudience = new ConcurrentHashMap<>();
+    /** The posted ping line of a sending card, so its once-a-minute progress edit needs no read of the message. */
+    private final Map<String, java.util.Optional<String>> progressHeader = new ConcurrentHashMap<>();
 
     FreebieReviewChannel(FreebieConfig config, FreebieRepository repository, FreebieSubscriptions subscriptions, Supplier<JDA> jda, Executor executor, Clock clock) {
         this.config = config; this.repository = repository; this.subscriptions = subscriptions; this.jda = jda;
@@ -84,14 +86,22 @@ final class FreebieReviewChannel {
     private void edit(FreebieOffer offer, String status, List<ActionRow> components, FreebieSubscriptions.Audience audience) {
         var channel = reviewChannelOf(jda.get(), offer);
         if (channel == null || offer.reviewMessageId().isEmpty()) return;
+        boolean progress = audience != null;
         if (audience == null) audience = subscriptions.audience(offer.store());
         var facts = facts(offer);
         var counted = audience;
         String id = offer.reviewMessageId().get();
         java.util.function.Consumer<Throwable> failed =
                 error -> BunnyLog.warning("[Freebies] Could not update review " + offer.id() + " | " + FailureDiagnostics.describe(error));
+        var known = progress ? progressHeader.get(offer.id()) : null;
+        if (known != null) {
+            channel.editMessageById(id, FreebieMessages.reviewEdit(offer, facts, counted.channels(), counted.guilds(), status,
+                    FreebieMessages.withClear(components), known, clock.instant())).queue(null, failed);
+            return;
+        }
         // A message keeps the format it was posted in: reviews from before Components V2 are still edited as embeds.
         channel.retrieveMessageById(id).queue(message -> {
+            if (progress && message.isUsingComponentsV2()) progressHeader.put(offer.id(), FreebieComponentCards.header(message));
             Instant now = clock.instant();
             var request = message.isUsingComponentsV2()
                     ? channel.editMessageById(id, FreebieMessages.reviewEdit(offer, facts, counted.channels(), counted.guilds(), status,
@@ -162,6 +172,7 @@ final class FreebieReviewChannel {
     void finishReview(FreebieOffer offer, FreebieRepository.Counts counts) {
         lastProgress.remove(offer.id());
         progressAudience.remove(offer.id());
+        progressHeader.remove(offer.id());
         edit(offer, (offer.state() == FreebieOffer.State.COMPLETED ? "Done" : "Stopped") + " — sent " + counts.sent()
                 + ", failed " + counts.failed() + ", cancelled " + counts.cancelled() + ".", List.of());
     }

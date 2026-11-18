@@ -65,6 +65,25 @@ class FreebieReviewRecoveryTest {
         verify(subscriptions, times(3)).audience(offer.store());
     }
 
+    @SuppressWarnings("unchecked")
+    @Test void progressOnACardReadsTheMessageOnce() {
+        var sending = new FreebieOffer(offer.id(), offer.sourceId(), offer.store(), offer.platforms(), offer.title(), offer.description(),
+                offer.instructions(), offer.worth(), offer.image(), offer.claimUrl(), offer.pageUrl(), offer.endsAt(), offer.discoveredAt(),
+                FreebieOffer.State.APPROVED, Optional.of("review1"), Optional.of(channelId), Optional.of("owner"), true, false, 3, false);
+        when(repository.facts(any())).thenReturn(FreebieFacts.NONE);
+        var top = FreebieMessages.review(sending, 2, 1, Set.of()).getComponents();
+        var posted = V2.posted(top);
+        net.dv8tion.jda.api.requests.RestAction<Message> read = mock(net.dv8tion.jda.api.requests.RestAction.class);
+        doAnswer(call -> { call.<java.util.function.Consumer<Message>>getArgument(0).accept(posted); return null; }).when(read).queue(any(), any());
+        when(channel.retrieveMessageById("review1")).thenReturn(read);
+        when(channel.editMessageById(anyString(), any(net.dv8tion.jda.api.utils.messages.MessageEditData.class)))
+                .thenReturn(mock(net.dv8tion.jda.api.requests.restaction.MessageEditAction.class, RETURNS_SELF));
+        var counts = new FreebieRepository.Counts(1, 0, 0, 3);
+        for (int minute = 0; minute < 5; minute++) reviews.progress(sending, counts, now.plus(Duration.ofMinutes(minute)));
+        verify(channel, times(1)).retrieveMessageById("review1");
+        verify(channel, times(5)).editMessageById(eq("review1"), any(net.dv8tion.jda.api.utils.messages.MessageEditData.class));
+    }
+
     Message existing(String authorId) {
         var message = mock(Message.class); var author = mock(User.class);
         when(author.getId()).thenReturn(authorId); when(message.getAuthor()).thenReturn(author); when(message.getId()).thenReturn("existing");

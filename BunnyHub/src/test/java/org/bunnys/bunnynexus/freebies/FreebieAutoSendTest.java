@@ -77,6 +77,13 @@ class FreebieAutoSendTest {
         assertEquals(Set.of(), new FreebieConfig(CHANNEL, Set.of(OWNER), 10).autoSend(), "built in code: everything reviewed");
     }
 
+    @Test void quietHousekeepingRunsEveryFourthTickUntilWorkAppears() {
+        assertFalse(FreebieSystem.housekeepingDue(false, false, 3), "nothing in progress: wait");
+        assertTrue(FreebieSystem.housekeepingDue(false, false, FreebieSystem.QUIET_TICKS), "every two minutes regardless");
+        assertTrue(FreebieSystem.housekeepingDue(true, false, 1), "work in progress keeps the 30-second pace");
+        assertTrue(FreebieSystem.housekeepingDue(false, true, 1), "a newly found game runs on the next tick");
+    }
+
     @Test void anAutoSendReviewStillPingsTheOwners() {
         var message = FreebieMessages.review(pending(FreebieStore.EPIC, false), 3, 2, Set.of(OWNER), true);
         assertEquals(Set.of(OWNER), message.getMentionedUsers());

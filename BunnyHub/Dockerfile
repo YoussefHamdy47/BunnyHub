@@ -20,5 +20,7 @@ COPY --from=build /app/target/BunnyHub-4.00.jar bunnyhub.jar
 # to the OS every minute (TrimNativeHeapInterval, checked on this image's Temurin 21.0.13).
 # -Xmx and MaxMetaspaceSize stay until the hourly [Memory] log lines show real use.
 ENV MALLOC_ARENA_MAX=2
-ENV JAVA_OPTS="-Xms64m -Xmx384m -XX:+UseSerialGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -Xss512k -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=32m -XX:TieredStopAtLevel=1 -XX:+UnlockExperimentalVMOptions -XX:TrimNativeHeapInterval=60000 -XX:+ExitOnOutOfMemoryError"
+# A small young generation keeps the idle heap near what is really used (20-35 MB) at the price of more, very short,
+# collections; one compiler thread and no perf-data file trim the rest.
+ENV JAVA_OPTS="-Xms32m -Xmx384m -XX:NewSize=8m -XX:MaxNewSize=16m -XX:CICompilerCount=1 -XX:-UsePerfData -XX:+UseSerialGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -Xss512k -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=32m -XX:TieredStopAtLevel=1 -XX:+UnlockExperimentalVMOptions -XX:TrimNativeHeapInterval=60000 -XX:+ExitOnOutOfMemoryError"
 CMD ["sh", "-c", "exec java $JAVA_OPTS -jar bunnyhub.jar"]

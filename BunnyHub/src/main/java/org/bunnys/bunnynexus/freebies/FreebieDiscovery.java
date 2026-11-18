@@ -33,7 +33,7 @@ final class FreebieDiscovery {
     /** New reports resolved per check; the rest wait for the next check. */
     static final int MAX_RESOLVED_PER_POLL = 5;
     /** Runs on the discovery thread after every poll that reached the feed; failures never affect polling. */
-    private volatile Runnable afterPoll = () -> {};
+    private volatile Runnable afterPoll = () -> {}, onNewGiveaways = () -> {};
 
     // Written on the discovery thread only; the volatile ones are also read by /freebie-admin status.
     private int failures;
@@ -52,6 +52,8 @@ final class FreebieDiscovery {
     /** Optional storefront resolution for new reports (see {@link GamerPowerLinks}). */
     FreebieDiscovery withLinkResolver(java.util.function.UnaryOperator<FreebieFeed.Candidate> resolver) { links = resolver; return this; }
     void afterPoll(Runnable task) { afterPoll = task; }
+    /** Runs after a poll that queued at least one new giveaway. */
+    void onNewGiveaways(Runnable task) { onNewGiveaways = task; }
 
     void start(ScheduledExecutorService discoveryThread, long initialDelaySeconds) {
         executor = discoveryThread;
@@ -117,7 +119,10 @@ final class FreebieDiscovery {
         }
         // Only a complete, valid feed may be used as evidence that an offer ended.
         if (fetch.complete()) for (var gone : repository.markMissing(feed.provider(), present)) ended.accept(gone, "no longer listed as active");
-        if (fresh > 0) BunnyLog.info("[Freebies] " + fresh + " new giveaway(s) queued for review.");
+        if (fresh > 0) {
+            BunnyLog.info("[Freebies] " + fresh + " new giveaway(s) queued for review.");
+            onNewGiveaways.run();
+        }
         try { afterPoll.run(); }
         catch (RuntimeException failure) {
             BunnyLog.warning("[Freebies] Post-poll task failed | " + FailureDiagnostics.describe(failure));

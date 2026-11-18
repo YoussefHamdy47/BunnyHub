@@ -28,7 +28,7 @@ final class FreebieNotifier {
     }
     /** The wait after a tick that found a notice, and the waits after each further tick in a row that found none. */
     static final Duration BUSY_DELAY = Duration.ofSeconds(5);
-    static final List<Duration> IDLE_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(20), Duration.ofSeconds(30));
+    static final List<Duration> IDLE_DELAYS = List.of(Duration.ofSeconds(10), Duration.ofSeconds(20), Duration.ofSeconds(30), Duration.ofSeconds(60));
     private volatile FreebieIdleBackoff pacing;
 
     /** Starts the self-rescheduling tick; {@code scheduler} must be the sender thread this notifier works on. */

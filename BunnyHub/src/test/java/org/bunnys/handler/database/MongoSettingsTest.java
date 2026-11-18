@@ -27,6 +27,15 @@ class MongoSettingsTest {
                 "an explicit compressors= setting is kept as written");
     }
 
+    @Test void topologyChecksPollOnceAMinuteUnlessTheConnectionStringSaysOtherwise() {
+        var server = MongoManager.settings("mongodb://localhost", 4, Duration.ofSeconds(10)).getServerSettings();
+        assertEquals(com.mongodb.connection.ServerMonitoringMode.POLL, server.getServerMonitoringMode());
+        assertEquals(60, server.getHeartbeatFrequency(TimeUnit.SECONDS));
+        var chosen = MongoManager.settings("mongodb://localhost/?heartbeatFrequencyMS=20000&serverMonitoringMode=stream", 4, Duration.ofSeconds(10)).getServerSettings();
+        assertEquals(com.mongodb.connection.ServerMonitoringMode.STREAM, chosen.getServerMonitoringMode());
+        assertEquals(20, chosen.getHeartbeatFrequency(TimeUnit.SECONDS));
+    }
+
     @Test void shortBudgetsApplyToAllWaitsAndInvalidConfigurationFails() {
         var settings = MongoManager.settings("mongodb://localhost", 4, Duration.ofMillis(500));
         assertEquals(500, settings.getConnectionPoolSettings().getMaxWaitTime(TimeUnit.MILLISECONDS));
