@@ -1,5 +1,6 @@
 package org.bunnys.modals;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import org.bunnys.bunnynexus.timers.Timers;
 import org.bunnys.handler.BunnyHub;
@@ -41,8 +42,7 @@ public class SemesterEndModal extends BunnyModal {
         }
         try {
             var recap = new Timers(ownerId, event).processEndSemesterModal(event, requestTime, confirmedRevision);
-            // The ping lives in the message content; mentions inside embeds never notify.
-            event.getHook().editOriginalEmbeds(recap).setContent("<@" + ownerId + ">").setComponents().queue();
+            TimerCards.showWithMention(event.getHook(), ownerId, recap);
         } catch (InteractionErrors.InputFailure | InteractionErrors.StateFailure e) {
             // Wrong phrase, 5-minute timeout, semester changed or missing.
             Replies.error(event, "Semester not archived", InteractionErrors.userMessage(e));

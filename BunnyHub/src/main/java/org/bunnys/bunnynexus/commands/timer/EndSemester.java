@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.commands.timer;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import org.bunnys.utils.Embeds;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
@@ -8,6 +9,7 @@ import net.dv8tion.jda.api.exceptions.ErrorHandler;
 import net.dv8tion.jda.api.requests.ErrorResponse;
 import org.bunnys.bunnynexus.timers.Timers;
 import org.bunnys.utils.AppDesign;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /** {@code /timer end_semester}: archives the current semester after a confirmation, keeping it in the history. */
@@ -39,12 +41,11 @@ public final class EndSemester extends TimerSubcommand {
         Button cancel = Button.secondary("semester_end_btn:cancel:" + userId, "Cancel");
 
         var hook = event.getHook();
-        hook.editOriginalEmbeds(warning).setComponents(ActionRow.of(confirm, cancel)).queue(sent ->
+        TimerCards.show(hook, warning, List.of(ActionRow.of(confirm, cancel)), sent ->
                 // Disable the prompt after a minute unless the user already answered it.
                 hook.retrieveOriginal().queueAfter(PROMPT_SECONDS, TimeUnit.SECONDS, message -> {
-                    if (!message.getEmbeds().isEmpty() && WARNING_TITLE.equals(message.getEmbeds().getFirst().getTitle()))
-                        message.editMessageComponents(ActionRow.of(confirm.asDisabled(), cancel.asDisabled()))
-                                .queue(null, new ErrorHandler().ignore(ErrorResponse.UNKNOWN_MESSAGE));
-                }, new ErrorHandler().ignore(ErrorResponse.UNKNOWN_MESSAGE)));
+                    if (TimerCards.showing(message, WARNING_TITLE))
+                        TimerCards.disable(message).queue(null, new ErrorHandler().ignore(ErrorResponse.UNKNOWN_MESSAGE));
+                }, new ErrorHandler().ignore(ErrorResponse.UNKNOWN_MESSAGE)), null);
     }
 }

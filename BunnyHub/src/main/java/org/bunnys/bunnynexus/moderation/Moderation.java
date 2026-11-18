@@ -161,7 +161,7 @@ public final class Moderation {
             refuse(ctx, action, "Discord couldn't " + action.verb() + " " + name(user) + " right now. Please try again.");
             return;
         }
-        ctx.reply(done(action, user, ctx.getUser(), reason, minutes, deleteHours));
+        ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(done(action, user, ctx.getUser(), reason, minutes, deleteHours)));
     }
 
     static String failure(Action action, User user, ErrorResponse error) {

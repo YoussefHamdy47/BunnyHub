@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.timers.buttons;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
@@ -114,7 +115,9 @@ public final class GPAPaginator {
         SessionState session = SESSIONS.get(sessionId);
 
         if (session == null) {
-            event.editComponents(Collections.emptyList()).queue();
+            // The menu expired: a card keeps its text, so its buttons are disabled rather than removed.
+            if (event.getMessage().isUsingComponentsV2()) event.editMessage(TimerCards.disabled(event.getMessage())).queue();
+            else event.editComponents(Collections.emptyList()).queue();
             return;
         }
 
@@ -137,17 +140,14 @@ public final class GPAPaginator {
             case CLOSE -> {
                 session.close();
                 SESSIONS.remove(sessionId);
-                event.editMessageEmbeds(session.getCurrentEmbed())
-                        .setComponents(Collections.emptyList())
-                        .queue();
+                TimerCards.replace(event, session.getCurrentEmbed(), List.of());
                 return;
             }
         }
 
         session.resetTimeout();
-        event.editMessageEmbeds(session.getCurrentEmbed())
-                .setComponents(ActionRow.of(buildButtons(sessionId, session.currentPage, session.pages.size())))
-                .queue();
+        TimerCards.replace(event, session.getCurrentEmbed(),
+                List.of(ActionRow.of(buildButtons(sessionId, session.currentPage, session.pages.size()))));
     }
 
     /**
@@ -183,7 +183,7 @@ public final class GPAPaginator {
                     if (generation != timeoutGeneration) return;
                     SessionState removed = SESSIONS.remove(sessionId);
                     if (removed != null && removed.hook != null) {
-                        removed.hook.editOriginalComponents(Collections.emptyList()).queue(null, ignored -> {});
+                        TimerCards.show(removed.hook, removed.getCurrentEmbed());
                     }
                 }
             }, TIMEOUT_SECONDS, TimeUnit.SECONDS);

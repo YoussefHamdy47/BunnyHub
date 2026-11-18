@@ -1,5 +1,6 @@
 package org.bunnys.buttons;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
@@ -32,9 +33,9 @@ public class SemesterEndButtons extends BunnyButton {
             List<Button> disabled = event.getMessage().getComponentTree().findAll(Button.class).stream()
                     .map(Button::asDisabled).toList();
             if (action.equals("cancel")) {
-                event.editMessageEmbeds(Embeds.of(AppDesign.Emojis.VERIFY, "Semester kept",
-                                "Nothing was archived. Your semester and its telemetry stay active.").build())
-                        .setComponents(ActionRow.of(disabled)).queue();
+                TimerCards.replace(event, Embeds.of(AppDesign.Emojis.VERIFY, "Semester kept",
+                                "Nothing was archived. Your semester and its telemetry stay active.").build(),
+                        List.of(ActionRow.of(disabled)));
             } else if (action.equals("confirm")) {
                 if (args.length < 4) {
                     Replies.error(event, "Expired prompt", "Run `/timer end_semester` again.");
@@ -42,7 +43,7 @@ public class SemesterEndButtons extends BunnyButton {
                 }
                 // A modal must be the first answer to the click; the buttons are locked right after.
                 event.replyModal(new Timers(ownerId, event).buildEndSemesterModal(args[3])).queue();
-                event.getMessage().editMessageComponents(ActionRow.of(disabled)).queue();
+                TimerCards.disable(event.getMessage()).queue();
             }
         } catch (RuntimeException e) {
             InteractionErrors.report(event, e);

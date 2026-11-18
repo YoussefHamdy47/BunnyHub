@@ -53,7 +53,7 @@ class SessionMenuTest {
 
     @Test void oldPendingMenuCannotConsumeReplacement() {
         InteractionHook hook = mock(InteractionHook.class);
-        when(hook.editOriginalComponents()).thenReturn(mock(WebhookMessageEditAction.class));
+        doReturn(mock(WebhookMessageEditAction.class)).when(hook).editOriginal(any(net.dv8tion.jda.api.utils.messages.MessageEditData.class));
         try {
             PendingSessionManager.createPendingSession("123", "CS-101", null, "channel", "DM", hook, "old");
             PendingSessionManager.createPendingSession("123", "CS-101", null, "channel", "DM", hook, "new");

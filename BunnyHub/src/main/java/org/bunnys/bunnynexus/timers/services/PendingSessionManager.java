@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.timers.services;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import org.bunnys.bunnynexus.timers.buttons.SessionMenuManager;
@@ -38,9 +39,8 @@ public final class PendingSessionManager {
 
         session.reminderTask = SCHEDULER.schedule(() -> {
             if (PENDING_SESSIONS.get(userId) != session) return;
-            // The ping lives in the message content; mentions inside embeds never notify.
-            hook.sendMessage("<@" + userId + ">").addEmbeds(Embeds.of("⏰", "Still waiting for you", "Your session for **"
-                            + SubjectTopics.code(topic) + "** is ready. Click **Start** when you are, or it closes in 5 minutes.").build())
+            hook.sendMessage(TimerCards.ping(userId, Embeds.of("⏰", "Still waiting for you", "Your session for **"
+                            + SubjectTopics.code(topic) + "** is ready. Click **Start** when you are, or it closes in 5 minutes.").build()))
                     .queue(msg -> {
                         synchronized (PendingSessionManager.class) {
                             if (PENDING_SESSIONS.get(userId) == session) session.reminderMessageId = msg.getId();
@@ -56,10 +56,7 @@ public final class PendingSessionManager {
                 session.hook.deleteMessageById(session.reminderMessageId).queue(null, ignored -> {});
             }
 
-            hook.editOriginalEmbeds(SessionEmbeds.timedOut(topic))
-                    .setComponents(ActionRow.of(
-                            SessionMenuManager.buildButtons(userId, SessionMenuManager.SessionState.ENDED)))
-                    .queue(null, ignored -> {});
+            TimerCards.show(hook, SessionEmbeds.timedOut(topic), List.of(closedRow(userId)), null, ignored -> {});
 
         }, 10, TimeUnit.MINUTES);
         return true;
@@ -81,8 +78,13 @@ public final class PendingSessionManager {
     /** @return whether a pending session existed and was cancelled */
     public static synchronized boolean cancelPendingSession(String userId) {
         var previous = getAndRemove(userId);
-        if (previous != null) previous.hook.editOriginalComponents().queue(null, ignored -> {});
+        // The replaced menu says what happened to it instead of keeping a Start button that no longer works.
+        if (previous != null) TimerCards.show(previous.hook, SessionEmbeds.cancelled(), List.of(closedRow(userId)), null, ignored -> {});
         return previous != null;
+    }
+
+    private static ActionRow closedRow(String userId) {
+        return ActionRow.of(SessionMenuManager.buildButtons(userId, SessionMenuManager.SessionState.ENDED));
     }
 
     public static synchronized boolean matches(String userId, String messageId) {

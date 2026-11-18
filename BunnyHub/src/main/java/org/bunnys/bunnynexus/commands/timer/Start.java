@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.commands.timer;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -32,15 +33,13 @@ public final class Start extends TimerSubcommand {
         var pendingCard = new Timers(userId, event).buildPendingSessionEmbed(module);
 
         var hook = event.getHook();
-        hook.editOriginalEmbeds(pendingCard)
-                .setComponents(ActionRow.of(SessionMenuManager.buildButtons(userId, SessionMenuManager.SessionState.PENDING)))
-                .queue(message -> {
+        TimerCards.show(hook, pendingCard, List.of(ActionRow.of(SessionMenuManager.buildButtons(userId, SessionMenuManager.SessionState.PENDING))),
+                message -> {
                     if (!PendingSessionManager.createPendingSession(userId, module, objective, channelId, guildId, hook, message.getId()))
-                        hook.editOriginalEmbeds(Embeds.error("Busy", "Study menus are busy. Please try again shortly."))
-                                .setComponents(List.of())
-                                .queue(edited -> hook.deleteOriginal().queueAfter(Embeds.ERROR_SECONDS, TimeUnit.SECONDS,
+                        TimerCards.show(hook, Embeds.error("Busy", "Study menus are busy. Please try again shortly."), List.of(),
+                                edited -> hook.deleteOriginal().queueAfter(Embeds.ERROR_SECONDS, TimeUnit.SECONDS,
                                         null, ignored -> {}), ignored -> {});
-                });
+                }, null);
     }
 
     @Override

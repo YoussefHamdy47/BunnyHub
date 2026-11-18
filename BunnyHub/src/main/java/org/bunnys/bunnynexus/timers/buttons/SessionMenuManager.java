@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.timers.buttons;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
@@ -116,27 +117,25 @@ public final class SessionMenuManager {
                     pending.topic, pending.objective);
         } catch (RuntimeException failure) {
             // The pending entry is already consumed; close this menu instead of leaving a dead Start button.
-            event.getHook().editOriginalComponents(ActionRow.of(buildButtons(userId, SessionState.ENDED))).queue(null, ignored -> {});
+            TimerCards.setRow(event.getHook(), event.getMessage(), row(userId, SessionState.ENDED));
             throw failure;
         }
-        event.getHook().editOriginalEmbeds(card).setComponents(ActionRow.of(buildButtons(userId, SessionState.RUNNING))).queue();
+        show(event, card, userId, SessionState.RUNNING, null);
     }
 
     private static void pause(ButtonInteractionEvent event, String userId) {
         TimerSessionService.pauseSession(userId);
         var timers = new Timers(userId, event);
-        MessageEmbed card = timers.refreshMainEmbed(event.getMessage().getEmbeds().getFirst());
+        MessageEmbed card = timers.refreshMainEmbed(TimerCards.current(event.getMessage()));
         long now = System.currentTimeMillis();
         var note = SessionEmbeds.paused(SessionClock.of(timers.session(), now).activeStudy(), now);
-        event.getHook().editOriginalEmbeds(card).setComponents(ActionRow.of(buildButtons(userId, SessionState.PAUSED)))
-                .queue(done -> sendBreakNote(event, note));
+        show(event, card, userId, SessionState.PAUSED, done -> sendBreakNote(event, note));
     }
 
     private static void resume(ButtonInteractionEvent event, String userId) {
         long breakMs = TimerSessionService.unpauseSession(userId);
-        MessageEmbed card = new Timers(userId, event).refreshMainEmbed(event.getMessage().getEmbeds().getFirst());
-        event.getHook().editOriginalEmbeds(card).setComponents(ActionRow.of(buildButtons(userId, SessionState.RUNNING)))
-                .queue(done -> sendBreakNote(event, SessionEmbeds.resumed(breakMs)));
+        MessageEmbed card = new Timers(userId, event).refreshMainEmbed(TimerCards.current(event.getMessage()));
+        show(event, card, userId, SessionState.RUNNING, done -> sendBreakNote(event, SessionEmbeds.resumed(breakMs)));
     }
 
     private static void stats(ButtonInteractionEvent event, String userId) {
@@ -145,32 +144,29 @@ public final class SessionMenuManager {
         var timers = new Timers(userId, event);
         MessageEmbed telemetry = SessionEmbeds.telemetry(timers.session(), now);
         if (lastRefresh.putIfAbsent(userId, now) != null) {
-            event.getHook().sendMessageEmbeds(telemetry).setEphemeral(true).queue();
+            sendBreakNote(event, telemetry);
             return;
         }
-        MessageEmbed card = timers.refreshMainEmbed(event.getMessage().getEmbeds().getFirst());
-        event.getHook().editOriginalEmbeds(card)
-                .queue(done -> event.getHook().sendMessageEmbeds(telemetry).setEphemeral(true).queue());
+        MessageEmbed card = timers.refreshMainEmbed(TimerCards.current(event.getMessage()));
+        show(event, card, userId, stateOf(timers.session()), done -> sendBreakNote(event, telemetry));
     }
 
     private static void end(ButtonInteractionEvent event, String userId) {
         if (PendingSessionManager.getAndRemove(userId, event.getMessageId()) != null) {
-            event.getHook().editOriginalEmbeds(SessionEmbeds.cancelled())
-                    .setComponents(ActionRow.of(buildButtons(userId, SessionState.ENDED))).queue();
+            show(event, SessionEmbeds.cancelled(), userId, SessionState.ENDED, null);
             return;
         }
         // 10+ hours: ask first. A forgotten timer and an all-nighter look the same, so the user decides.
         var longSession = TimerSessionService.longSession(userId);
         if (longSession.isPresent()) {
-            event.getHook().sendMessageEmbeds(LongSessionPrompt.embed(longSession.get()))
-                    .setComponents(LongSessionPrompt.controls(userId, longSession.get())).setEphemeral(true).queue();
+            event.getHook().sendMessage(TimerCards.message(LongSessionPrompt.embed(longSession.get()),
+                    LongSessionPrompt.controls(userId, longSession.get()))).setEphemeral(true).queue();
             return;
         }
         String recap = TimerSessionService.stopSession(userId, event);
         lastRefresh.remove(userId);
-        event.getHook().editOriginalComponents(ActionRow.of(buildButtons(userId, SessionState.ENDED))).queue();
-        // The ping lives in the message content; mentions inside embeds never notify.
-        event.getHook().sendMessage("<@" + userId + ">").addEmbeds(SessionEmbeds.concluded(recap, event.getUser())).queue();
+        TimerCards.setRow(event.getHook(), event.getMessage(), row(userId, SessionState.ENDED));
+        event.getHook().sendMessage(TimerCards.ping(userId, SessionEmbeds.concluded(recap, event.getUser()))).queue();
     }
 
     /** Best effort: disables the buttons of a session menu that may be deleted or in a channel the bot can no longer see. */
@@ -180,7 +176,8 @@ public final class SessionMenuManager {
         MessageChannel channel = jda.getChannelById(MessageChannel.class, channelId);
         if (channel == null) return;
         try {
-            channel.editMessageComponentsById(messageId, ActionRow.of(buildButtons(userId, SessionState.ENDED))).queue(null, ignored -> {});
+            // Read first: a card keeps its text only when the edit carries all of it.
+            channel.retrieveMessageById(messageId).queue(message -> TimerCards.setRow(message, row(userId, SessionState.ENDED)), ignored -> {});
         } catch (RuntimeException ignored) {
             // Missing permissions are reported synchronously by JDA; the session is already ended.
         }
@@ -188,7 +185,20 @@ public final class SessionMenuManager {
 
     /** Pause/resume notes are visible only to the person controlling the session. */
     private static void sendBreakNote(ButtonInteractionEvent event, MessageEmbed note) {
-        event.getHook().sendMessageEmbeds(note).setEphemeral(true).queue();
+        event.getHook().sendMessage(TimerCards.message(note)).setEphemeral(true).queue();
+    }
+
+    private static ActionRow row(String userId, SessionState state) { return ActionRow.of(buildButtons(userId, state)); }
+
+    /** Redraws the menu in the format it was posted in; a menu from before cards stays an embed until it ends. */
+    private static void show(ButtonInteractionEvent event, MessageEmbed card, String userId, SessionState state,
+                             java.util.function.Consumer<? super net.dv8tion.jda.api.entities.Message> done) {
+        TimerCards.update(event.getHook(), event.getMessage(), card, List.of(row(userId, state)), done);
+    }
+
+    private static SessionState stateOf(org.bunnys.database.models.timers.Session session) {
+        return session.getSessionStartTime() == null ? SessionState.ENDED
+                : session.getSessionBreaks().getSessionBreakStart() != null ? SessionState.PAUSED : SessionState.RUNNING;
     }
 
     /** Runs on the command executor; performs a database read, so never call it from a JDA callback. */
@@ -197,10 +207,7 @@ public final class SessionMenuManager {
             if (PendingSessionManager.matches(userId, event.getMessageId())) return;
             var session = TimerSessionService.getTimerDataOrThrow(userId).getSessionData();
             if (!event.getMessageId().equals(session.getMessageID())) return;
-            SessionState state = session.getSessionStartTime() == null ? SessionState.ENDED
-                    : session.getSessionBreaks().getSessionBreakStart() != null ? SessionState.PAUSED
-                    : SessionState.RUNNING;
-            event.getHook().editOriginalComponents(ActionRow.of(buildButtons(userId, state))).queue(null, ignored -> {});
+            TimerCards.setRow(event.getHook(), event.getMessage(), row(userId, stateOf(session)));
         } catch (RuntimeException ignored) {
             // Best effort only; the error reply was already sent.
         }

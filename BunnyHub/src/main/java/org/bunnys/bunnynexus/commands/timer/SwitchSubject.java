@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.commands.timer;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -19,7 +20,7 @@ public final class SwitchSubject extends TimerSubcommand {
 
     @Override
     void run(SlashCommandInteractionEvent event, String userId) {
-        event.getHook().editOriginalEmbeds(new Timers(userId, event).changeSubject(string(event, "module"))).queue();
+        TimerCards.show(event.getHook(), new Timers(userId, event).changeSubject(string(event, "module")));
     }
 
     @Override

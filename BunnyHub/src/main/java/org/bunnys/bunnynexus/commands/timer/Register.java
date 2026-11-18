@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.commands.timer;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
@@ -15,6 +16,6 @@ public final class Register extends TimerSubcommand {
 
     @Override
     void run(SlashCommandInteractionEvent event, String userId) {
-        event.getHook().editOriginalEmbeds(new Timers(userId, event).register(string(event, "semester"))).queue();
+        TimerCards.show(event.getHook(), new Timers(userId, event).register(string(event, "semester")));
     }
 }

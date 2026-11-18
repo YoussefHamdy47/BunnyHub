@@ -1,5 +1,6 @@
 package org.bunnys.events;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.events.GenericEvent;
@@ -57,8 +58,7 @@ public class RecordBroken extends BunnyEvent {
             return;
 
         event.getInteraction().getHook()
-                .sendMessage("<@" + user.getId() + ">")
-                .addEmbeds(recordEmbed.build())
+                .sendMessage(TimerCards.ping(user.getId(), recordEmbed.build()))
                 .queue();
     }
 }

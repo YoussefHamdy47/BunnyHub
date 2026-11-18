@@ -15,7 +15,7 @@ import static org.mockito.Mockito.*;
 class MenuCapacityTest {
     @Test void pendingOverloadPreservesExistingMenusAndAllowsOwnerReplacement() {
         var hook = mock(InteractionHook.class);
-        doReturn(mock(WebhookMessageEditAction.class)).when(hook).editOriginalComponents();
+        doReturn(mock(WebhookMessageEditAction.class)).when(hook).editOriginal(any(net.dv8tion.jda.api.utils.messages.MessageEditData.class));
         try {
             for (int i = 0; i < PendingSessionManager.MAX_SESSIONS; i++)
                 assertTrue(PendingSessionManager.createPendingSession("capacity-" + i, "CS", null, "channel", "DM", hook, "old"));

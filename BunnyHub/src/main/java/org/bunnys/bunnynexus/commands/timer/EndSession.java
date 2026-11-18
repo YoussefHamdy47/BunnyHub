@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.commands.timer;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import org.bunnys.bunnynexus.timers.SessionEmbeds;
 import org.bunnys.bunnynexus.timers.buttons.LongSessionPrompt;
@@ -21,20 +22,19 @@ public final class EndSession extends TimerSubcommand {
         if (session.getSessionStartTime() == null) {
             if (!PendingSessionManager.cancelPendingSession(userId))
                 throw new InteractionErrors.StateFailure("You don't have an active session.");
-            event.getHook().editOriginalEmbeds(SessionEmbeds.cancelled()).queue();
+            TimerCards.show(event.getHook(), SessionEmbeds.cancelled());
             return;
         }
         // Forgotten timers are the usual reason for this command: confirm long sessions before ending them.
         var longSession = TimerSessionService.longSession(userId);
         if (longSession.isPresent()) {
-            event.getHook().editOriginalEmbeds(LongSessionPrompt.embed(longSession.get()))
-                    .setComponents(LongSessionPrompt.controls(userId, longSession.get())).queue();
+            TimerCards.show(event.getHook(), LongSessionPrompt.embed(longSession.get()), LongSessionPrompt.controls(userId, longSession.get()));
             return;
         }
         String channelId = session.getChannelID();
         String messageId = session.getMessageID();
         String recap = TimerSessionService.stopSession(userId, event, true);
         SessionMenuManager.closeMenu(event.getJDA(), userId, channelId, messageId);
-        event.getHook().editOriginalEmbeds(SessionEmbeds.concluded(recap, event.getUser())).queue();
+        TimerCards.show(event.getHook(), SessionEmbeds.concluded(recap, event.getUser()));
     }
 }
