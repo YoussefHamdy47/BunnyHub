@@ -1,5 +1,6 @@
 package org.bunnys.buttons;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import org.bunnys.bunnynexus.timers.buttons.LongSessionPrompt;
 import org.bunnys.handler.BunnyHub;
@@ -38,8 +39,8 @@ public class LongSessionButtons extends BunnyButton {
             }
             case LongSessionPrompt.FIX -> LongSessionPrompt.form(args).ifPresentOrElse(form -> event.replyModal(form).queue(),
                     () -> Replies.error(event, "Expired control", "End the session again."));
-            case LongSessionPrompt.CANCEL -> event.editMessageEmbeds(Embeds.of("▶️", "Still running",
-                    "Your session keeps going. End it whenever you're done.").build()).setComponents().queue();
+            case LongSessionPrompt.CANCEL -> TimerCards.replace(event, Embeds.of("▶️", "Still running",
+                    "Your session keeps going. End it whenever you're done.").build(), java.util.List.of());
             default -> Replies.error(event, "Expired control", "End the session again.");
         }
     }

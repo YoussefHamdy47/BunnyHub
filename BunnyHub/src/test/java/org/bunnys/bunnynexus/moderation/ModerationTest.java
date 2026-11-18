@@ -122,4 +122,12 @@ class ModerationTest {
         when(self.canInteract(any(Member.class))).thenReturn(ranksAbove);
         return self;
     }
+
+    @Test void theConfirmationIsAPlainCardThatPingsNobody() {
+        var message = org.bunnys.handler.cards.Card.fromEmbed(Moderation.done(Action.KICK, user(TARGET), user(MOD), "rule 3", 0, 0)).message();
+        assertTrue(message.isUsingComponentsV2());
+        assertTrue(message.getAllowedMentions().isEmpty() && message.getMentionedUsers().isEmpty(), "naming people must not notify them");
+        assertTrue(message.toData().toString().contains("Member kicked") && message.toData().toString().contains("rule 3"));
+        assertFalse(message.toData().toString().contains("accent_color"));
+    }
 }

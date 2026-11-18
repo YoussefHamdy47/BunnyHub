@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.commands.timer;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -23,11 +24,10 @@ public final class Gpa extends TimerSubcommand {
         var pages = new Timers(userId, event).buildGPAMenu();
         String sessionId = GPAPaginator.createSession(userId, pages);
         var hook = event.getHook();
-        hook.editOriginalEmbeds(pages.getFirst())
-                .setComponents(ActionRow.of(GPAPaginator.buildButtons(sessionId, 0, pages.size())))
-                .queue(message -> GPAPaginator.attachHook(sessionId, hook), failure -> {
+        TimerCards.show(hook, pages.getFirst(), java.util.List.of(ActionRow.of(GPAPaginator.buildButtons(sessionId, 0, pages.size()))),
+                message -> GPAPaginator.attachHook(sessionId, hook), failure -> {
                     GPAPaginator.discardSession(sessionId);
-                    hook.sendMessageEmbeds(Embeds.error("GPA menu unavailable", "The menu could not be opened. Please try again."))
+                    hook.sendMessage(TimerCards.message(Embeds.error("GPA menu unavailable", "The menu could not be opened. Please try again.")))
                             .queue(sent -> hook.deleteMessageById(sent.getId())
                                     .queueAfter(Embeds.ERROR_SECONDS, TimeUnit.SECONDS, null, ignored -> {}), ignored -> {});
                 });

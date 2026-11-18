@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.commands.timer;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -23,7 +24,7 @@ public final class RemoveSubject extends TimerSubcommand {
     void run(SlashCommandInteractionEvent event, String userId) {
         // Accepts both a bare code and an autocomplete choice such as "ECES201 - Electronics".
         String code = SubjectTopics.code(string(event, "code"));
-        event.getHook().editOriginalEmbeds(new Timers(userId, event).removeSubject(Destinations.of(event), code)).queue();
+        TimerCards.show(event.getHook(), new Timers(userId, event).removeSubject(Destinations.of(event), code));
     }
 
     @Override

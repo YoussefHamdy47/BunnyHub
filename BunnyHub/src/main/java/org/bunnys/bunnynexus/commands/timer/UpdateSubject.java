@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.commands.timer;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import org.bunnys.utils.Embeds;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -50,6 +51,6 @@ public final class UpdateSubject extends TimerSubcommand {
                 .addField("Marks lost", subject.getMarksLost() == null ? "Not recorded" : subject.getMarksLost().toString(), true);
         Embeds.footer(embed, account ? "Academic record updated • GPA uses the current grade and credits"
                 : "Current semester updated • Academic record unchanged");
-        event.getHook().editOriginalEmbeds(embed.build()).queue();
+        TimerCards.show(event.getHook(), embed.build());
     }
 }

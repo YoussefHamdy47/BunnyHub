@@ -1,5 +1,6 @@
 package org.bunnys.bunnynexus.timers.buttons;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.components.label.Label;
@@ -15,7 +16,6 @@ import org.bunnys.bunnynexus.timers.services.TimerSessionService.LongSession;
 import org.bunnys.handler.utils.InteractionErrors.InputFailure;
 import org.bunnys.utils.Durations;
 import org.bunnys.utils.Embeds;
-import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
 
@@ -88,11 +88,9 @@ public final class LongSessionPrompt {
         String channelId = session.getChannelID(), messageId = session.getMessageID();
         String recap = TimerSessionService.stopSession(userId, event, true, new Confirmation(sessionStart, reported));
         SessionMenuManager.closeMenu(event.getJDA(), userId, channelId, messageId);
-        event.getHook().editOriginalEmbeds(Embeds.of("✅", "Session ended", reported.isPresent()
-                ? "Saved with your corrected study time." : "Saved with the full tracked time.").build()).setComponents().queue();
-        // The ping lives in the message content; mentions inside embeds never notify.
-        event.getHook().sendMessage("<@" + userId + ">").addEmbeds(SessionEmbeds.concluded(recap, event.getUser()))
-                .setAllowedMentions(List.of()).mentionUsers(userId).queue();
+        TimerCards.show(event.getHook(), Embeds.of("✅", "Session ended", reported.isPresent()
+                ? "Saved with your corrected study time." : "Saved with the full tracked time.").build());
+        event.getHook().sendMessage(TimerCards.ping(userId, SessionEmbeds.concluded(recap, event.getUser()))).queue();
     }
 
     /** "12h 5m" for button labels (80 characters at most). */

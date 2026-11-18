@@ -1,5 +1,6 @@
 package org.bunnys.events;
 
+import org.bunnys.bunnynexus.timers.TimerCards;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.events.GenericEvent;
 import org.bunnys.handler.BunnyHub;
@@ -55,8 +56,7 @@ public class SemesterLevelUp extends BunnyEvent {
         }
 
         event.getInteraction().getHook()
-                .sendMessage("<@" + event.getInteraction().getUser().getId() + ">")
-                .addEmbeds(levelUpEmbed.build())
+                .sendMessage(TimerCards.ping(event.getInteraction().getUser().getId(), levelUpEmbed.build()))
                 .queue();
     }
 }

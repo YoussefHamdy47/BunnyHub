@@ -71,23 +71,43 @@ public final class Card {
 
     /** As {@link #fromEmbed(net.dv8tion.jda.api.entities.MessageEmbed)}, with the embed's button rows inside the card, above its footer. */
     public static Card fromEmbed(net.dv8tion.jda.api.entities.MessageEmbed embed, Collection<? extends ActionRow> rows) {
-        var card = builder();
         // Cards are plain: the embed colour is not carried over.
         StringBuilder head = new StringBuilder();
         if (embed.getAuthor() != null && present(embed.getAuthor().getName())) head.append("-# ").append(embed.getAuthor().getName()).append('\n');
         if (present(embed.getTitle()))
             head.append("### ").append(embed.getUrl() == null ? embed.getTitle() : "[" + embed.getTitle() + "](" + embed.getUrl() + ")");
         if (present(embed.getDescription())) head.append(head.isEmpty() ? "" : "\n").append(embed.getDescription());
-        card.header(clamp(head.toString(), 3000), embed.getThumbnail() == null ? null : embed.getThumbnail().getUrl());
-        for (var field : embed.getFields()) card.field(field.getName(), field.getValue());
-        if (embed.getImage() != null) card.image(embed.getImage().getUrl());
         List<ActionRow> controls = List.copyOf(rows);
+        var card = fromEmbed(embed, clamp(head.toString(), 3000), embed.getFields().size(), true, controls);
+        if (fitsWithRoom(card)) return card.build();
+        // Too much text for one card: keep the heading and every control, then as many whole fields as still fit.
+        for (int fields = embed.getFields().size(); ; fields--) {
+            card = fromEmbed(embed, clamp(head.toString(), 2500), fields, false, controls);
+            if (fields == 0 || fitsWithRoom(card)) return card.build();
+        }
+    }
+
+    private static Builder fromEmbed(net.dv8tion.jda.api.entities.MessageEmbed embed, String head, int fields, boolean media, List<ActionRow> controls) {
+        var card = builder().header(head, media && embed.getThumbnail() != null ? embed.getThumbnail().getUrl() : null);
+        // Embeds pad fields with a zero-width space for spacing; card fields are already spaced.
+        for (var field : embed.getFields().subList(0, fields))
+            card.field(field.getName(), field.getValue() == null ? null : field.getValue().replaceAll("[\\s\u200B]+$", ""));
+        if (media && embed.getImage() != null) card.image(embed.getImage().getUrl());
         if (!controls.isEmpty()) card.divider().rows(controls);
         if (embed.getFooter() != null) card.footer(embed.getFooter().getText());
-        // Too much text for one card: keep the heading, description and every control; drop fields and images.
-        if (!card.fits()) return builder().header(clamp(head.toString(), 2500), null).rows(controls)
-                .footer(embed.getFooter() == null ? null : embed.getFooter().getText()).build();
-        return card.build();
+        return card;
+    }
+
+    /** Leaves room for a mention line above the card. */
+    private static boolean fitsWithRoom(Builder card) { return card.fits() && card.remainingText() >= 64; }
+
+    /** This card with {@code userId}'s mention above it; {@link #message()} notifies them, and only them. */
+    public Card pinging(String userId) {
+        List<MessageTopLevelComponent> top = new ArrayList<>(components);
+        top.addFirst(TextDisplay.of("<@" + userId + ">"));
+        Set<String> mentioned = new LinkedHashSet<>(users);
+        mentioned.add(userId);
+        return new Card(top, roles, mentioned);
     }
 
     private static boolean present(String value) { return value != null && !value.isBlank(); }
