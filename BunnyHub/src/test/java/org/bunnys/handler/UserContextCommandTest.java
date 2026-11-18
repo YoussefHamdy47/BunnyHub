@@ -111,7 +111,7 @@ class UserContextCommandTest {
         assertTrue(texts.getFirst().endsWith("Selected User's Avatar"));
         assertTrue(image.contains("server.gif"), "the user menu leads with the server avatar");
         assertTrue(texts.get(1).contains("global.gif") && texts.get(1).contains("server.gif"));
-        assertNull(card.getAccentColorRaw());
+        assertNull(card.getAccentColorRaw(), "plain card");
     }
 
     @Test void allSubcommandsAreNamedDomainClassesAndKeepTheirExistingNames() {

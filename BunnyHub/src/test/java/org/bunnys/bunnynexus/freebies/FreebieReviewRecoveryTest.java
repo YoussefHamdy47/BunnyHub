@@ -49,6 +49,11 @@ class FreebieReviewRecoveryTest {
         when(repository.facts(any())).thenReturn(FreebieFacts.NONE);
         var edit = mock(net.dv8tion.jda.api.requests.restaction.MessageEditAction.class, RETURNS_SELF);
         when(channel.editMessageEmbedsById(anyString(), any(net.dv8tion.jda.api.entities.MessageEmbed[].class))).thenReturn(edit);
+        // A review posted before Components V2: still edited as embeds.
+        var legacy = mock(Message.class);
+        @SuppressWarnings("unchecked") net.dv8tion.jda.api.requests.RestAction<Message> read = mock(net.dv8tion.jda.api.requests.RestAction.class);
+        doAnswer(call -> { call.<java.util.function.Consumer<Message>>getArgument(0).accept(legacy); return null; }).when(read).queue(any(), any());
+        when(channel.retrieveMessageById("review1")).thenReturn(read);
         var counts = new FreebieRepository.Counts(1, 0, 0, 3);
         for (int minute = 0; minute <= 11; minute++) reviews.progress(sending, counts, now.plus(Duration.ofMinutes(minute)));
         verify(channel, times(12)).editMessageEmbedsById(eq("review1"), any(net.dv8tion.jda.api.entities.MessageEmbed[].class));

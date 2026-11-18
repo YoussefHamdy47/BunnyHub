@@ -45,6 +45,19 @@ final class FreebieLifecycleMessages {
                 .setAllowedMentions(List.of()).build();
     }
 
+    /**
+     * The ended edit for a Components V2 alert (personal DMs): the card rebuilt from the offer in its ended state, with
+     * the same {@code deliveryId} and so the same reference, plus the posted rows that are not claims (Unsubscribe).
+     */
+    static MessageEditData endedCard(FreebieOffer offer, String deliveryId, List<? extends MessageTopLevelComponent> posted,
+                                     boolean withdrawn, Instant now) {
+        var member = new FreebieAnnouncementCards.Member(offer, FreebieFacts.NONE, deliveryId,
+                withdrawn ? FreebieAnnouncementCards.Status.WITHDRAWN : FreebieAnnouncementCards.Status.ENDED);
+        List<MessageTopLevelComponent> top = new ArrayList<>(FreebieComponentCards.components(List.of(member), Optional.empty(), false, now));
+        top.addAll(withoutClaim(posted));
+        return new MessageEditBuilder().useComponentsV2(true).setComponents(top).setAllowedMentions(List.of()).build();
+    }
+
     static MessageEmbed endedEmbed(MessageEmbed card, boolean withdrawn) {
         var builder = new EmbedBuilder(card).setColor(ENDED_COLOUR);
         String title = card.getTitle();
@@ -71,6 +84,10 @@ final class FreebieLifecycleMessages {
 
     /** Already in the ended state: idempotent edits succeed without touching Discord again. */
     static boolean isEnded(Message message, String reference) {
+        if (message.isUsingComponentsV2() && message.getComponentTree() != null)
+            return message.getComponentTree().findAll(net.dv8tion.jda.api.components.textdisplay.TextDisplay.class).stream()
+                    .anyMatch(t -> t.getContent().startsWith("## " + ENDED_PREFIX))
+                    && message.getComponentTree().findAll(Button.class).stream().noneMatch(FreebieLifecycleMessages::isClaim);
         return message.getEmbeds().stream().filter(e -> isCard(e, reference)).findFirst()
                 .map(e -> e.getTitle() != null && e.getTitle().startsWith(ENDED_PREFIX)
                         && rows(message.getComponents()).stream().flatMap(r -> r.getComponents().stream()).noneMatch(c -> isClaim(c)))
@@ -126,7 +143,7 @@ final class FreebieLifecycleMessages {
 
     static boolean carriesReminderReference(Message message, String key) {
         String reference = reminderReference(key);
-        return message.getEmbeds().stream().anyMatch(e -> e.getFooter() != null && reference.equals(e.getFooter().getText()));
+        return FreebieMessages.hasFooter(message, reference);
     }
 
     static String alertUrl(String guildId, String channelId, String messageId) {
@@ -156,20 +173,18 @@ final class FreebieLifecycleMessages {
             lines.append("\n");
         }
         String games = due.size() == 1 ? "" : due.size() + " games · ";
-        var embed = Embeds.of("⏰", "Ending soon")
-                .setDescription(lines + games + "Ends in about " + hours + (hours == 1 ? " hour" : " hours")
-                        + " (<t:" + end.getEpochSecond() + ":f>).")
-                .setTimestamp(null).setFooter(reminderReference(key)).build();
+        var card = org.bunnys.handler.cards.Card.builder().heading("Ending soon")
+                .text(lines + games + "Ends in about " + hours + (hours == 1 ? " hour" : " hours")
+                        + " (<t:" + end.getEpochSecond() + ":f>).");
         List<Button> buttons = new ArrayList<>();
         if (due.size() == 1) buttons.add(FreebieCards.claimButton(due.getFirst().offer()));
         else for (var d : due.subList(0, Math.min(5, due.size())))
             buttons.add(Button.link(d.offer().claimUrl().toString(), FreebieMessages.label("Claim " + title(d.offer().title()))));
-        var builder = new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(buttons))
-                .setAllowedMentions(List.of()).mentionRepliedUser(false);
+        card.buttons(buttons).footer(reminderReference(key));
         if (!roleIds.isEmpty()) {
             var sorted = new TreeSet<>(roleIds);
-            builder.setContent(String.join(" ", sorted.stream().map(r -> "<@&" + r + ">").toList())).mentionRoles(sorted);
+            card.above(String.join(" ", sorted.stream().map(r -> "<@&" + r + ">").toList())).mentionRoles(sorted);
         }
-        return builder.build();
+        return card.build().message();
     }
 }

@@ -49,7 +49,7 @@ public final class SelectRouter {
         BunnySelect handler = HANDLERS.get(parts[0]);
 
         if (handler == null) {
-            event.replyEmbeds(SystemEmbeds.error("Expired Control", "Reopen this menu from its command."))
+            event.reply(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.error("Expired Control", "Reopen this menu from its command.")).message())
                     .setEphemeral(true).queue(null, error -> {});
             return;
         }
@@ -57,7 +57,7 @@ public final class SelectRouter {
         var reservation = ComponentCooldowns.reserve("select:" + parts[0], event.getUser().getId(), handler.cooldownMillis());
         long remaining = reservation.remainingMillis();
         if (remaining > 0) {
-            event.replyEmbeds(SystemEmbeds.buttonCooldown(remaining)).setEphemeral(true).queue(null, e -> {});
+            event.reply(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.buttonCooldown(remaining)).message()).setEphemeral(true).queue(null, e -> {});
             return;
         }
 
@@ -75,7 +75,7 @@ public final class SelectRouter {
             // The choice never ran, so it must not hold a cooldown against the user.
             reservation.release();
             if (!event.isAcknowledged())
-                event.replyEmbeds(SystemEmbeds.busy()).setEphemeral(true).queue(null, e -> {});
+                event.reply(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.busy()).message()).setEphemeral(true).queue(null, e -> {});
         }
     }
 }

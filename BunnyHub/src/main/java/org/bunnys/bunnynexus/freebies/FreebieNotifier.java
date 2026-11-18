@@ -115,7 +115,7 @@ final class FreebieNotifier {
                             : FreebieMessages.serverNotice(guild.getName(), job.failedChannel(), job.failure(), offer);
                     var embed = new net.dv8tion.jda.api.EmbedBuilder(notice.getEmbeds().getFirst())
                             .setFooter(FreebieMessages.noticeReference(job.reference())).build();
-                    return destination.sendMessage(new MessageCreateBuilder().setEmbeds(embed).setAllowedMentions(List.of()).build())
+                    return destination.sendMessage(org.bunnys.handler.cards.Card.fromEmbed(embed).message())
                             .setNonce(FreebieMessages.nonce("notice|" + job.reference())).timeout(45, TimeUnit.SECONDS).submit();
                 }, executor);
             }, executor).whenCompleteAsync((message, failure) -> finish(job, message, failure), executor);

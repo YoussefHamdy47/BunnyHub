@@ -23,19 +23,19 @@ public final class FreebieSettingsCommands {
     /** Runs on the command worker after the handler deferred an ephemeral reply. */
     public static void openDashboard(CommandContext ctx) {
         if (!ctx.isFromGuild() || ctx.getMember() == null) {
-            ctx.reply(Embeds.error("Free-game alerts", "Use this inside a server."), true); return;
+            ctx.replyTransient(Embeds.error("Free-game alerts", "Use this inside a server.")); return;
         }
         // Run from someone's account install in a server the bot hasn't joined: nothing to set up there yet.
         if (ctx.getGuild().isDetached()) {
-            ctx.reply(Embeds.error("Free-game alerts", "Add me to this server first, then run this again."), true); return;
+            ctx.replyTransient(Embeds.error("Free-game alerts", "Add me to this server first, then run this again.")); return;
         }
         if (!ctx.getMember().hasPermission(Permission.MANAGE_SERVER)) {
-            ctx.reply(Embeds.error("Free-game alerts", "You need **Manage Server** to change free-game alerts."), true); return;
+            ctx.replyTransient(Embeds.error("Free-game alerts", "You need **Manage Server** to change free-game alerts.")); return;
         }
         var system = FreebieSystem.current().orElse(null);
-        if (system == null) { ctx.reply(Embeds.error("Free-game alerts", "Free-game alerts are not available right now."), true); return; }
+        if (system == null) { ctx.replyTransient(Embeds.error("Free-game alerts", "Free-game alerts are not available right now.")); return; }
         var reply = FreebieDashboard.dashboard(ctx.getGuild(), system.subscriptions().forGuild(ctx.getGuild().getId()), null);
-        ctx.reply(reply.embed(), reply.rows(), true);
+        ctx.replyCard(reply.card(), true);
     }
 
     /**
@@ -57,6 +57,8 @@ public final class FreebieSettingsCommands {
         return Optional.empty();
     }
 
-    /** Ephemeral answer, optionally with follow-up controls. */
-    public record Reply(MessageEmbed embed, List<ActionRow> rows) {}
+    /** Ephemeral answer, optionally with follow-up controls; sent and edited as a Components V2 card. */
+    public record Reply(MessageEmbed embed, List<ActionRow> rows) {
+        public org.bunnys.handler.cards.Card card() { return org.bunnys.handler.cards.Card.fromEmbed(embed, rows); }
+    }
 }

@@ -59,6 +59,41 @@ public final class Card {
 
     public static Builder builder() { return new Builder(); }
 
+    /**
+     * An embed as a card, for replies that are sent once and never edited (errors, notices): the colour becomes the
+     * stripe, the title a {@code ###} heading (linked when the embed links it) with the thumbnail beside it, then the
+     * author line, description, fields, image and footer. The timestamp is dropped. Text is clamped so a card always
+     * builds.
+     */
+    public static Card fromEmbed(net.dv8tion.jda.api.entities.MessageEmbed embed) {
+        return fromEmbed(embed, List.of());
+    }
+
+    /** As {@link #fromEmbed(net.dv8tion.jda.api.entities.MessageEmbed)}, with the embed's button rows inside the card, above its footer. */
+    public static Card fromEmbed(net.dv8tion.jda.api.entities.MessageEmbed embed, Collection<? extends ActionRow> rows) {
+        var card = builder();
+        // Cards are plain: the embed colour is not carried over.
+        StringBuilder head = new StringBuilder();
+        if (embed.getAuthor() != null && present(embed.getAuthor().getName())) head.append("-# ").append(embed.getAuthor().getName()).append('\n');
+        if (present(embed.getTitle()))
+            head.append("### ").append(embed.getUrl() == null ? embed.getTitle() : "[" + embed.getTitle() + "](" + embed.getUrl() + ")");
+        if (present(embed.getDescription())) head.append(head.isEmpty() ? "" : "\n").append(embed.getDescription());
+        card.header(clamp(head.toString(), 3000), embed.getThumbnail() == null ? null : embed.getThumbnail().getUrl());
+        for (var field : embed.getFields()) card.field(field.getName(), field.getValue());
+        if (embed.getImage() != null) card.image(embed.getImage().getUrl());
+        List<ActionRow> controls = List.copyOf(rows);
+        if (!controls.isEmpty()) card.divider().rows(controls);
+        if (embed.getFooter() != null) card.footer(embed.getFooter().getText());
+        // Too much text for one card: keep the heading, description and every control; drop fields and images.
+        if (!card.fits()) return builder().header(clamp(head.toString(), 2500), null).rows(controls)
+                .footer(embed.getFooter() == null ? null : embed.getFooter().getText()).build();
+        return card.build();
+    }
+
+    private static boolean present(String value) { return value != null && !value.isBlank(); }
+
+    private static String clamp(String text, int max) { return text.length() <= max ? text : text.substring(0, max - 1) + "…"; }
+
     /** The top-level components: the text above the card, if any, then the card. */
     public List<MessageTopLevelComponent> components() { return components; }
 
@@ -133,6 +168,7 @@ public final class Card {
     /** Builds one card in reading order. Not thread-safe; build once, then share the {@link Card}. */
     public static final class Builder {
         private final List<String> above = new ArrayList<>();
+        private final List<ActionRow> below = new ArrayList<>();
         private final List<ContainerChildComponent> parts = new ArrayList<>();
         private final StringBuilder fields = new StringBuilder();
         private final Set<String> roles = new LinkedHashSet<>(), users = new LinkedHashSet<>();
@@ -225,6 +261,25 @@ public final class Card {
 
         public Builder rows(Collection<ActionRow> rows) { rows.forEach(this::row); return this; }
 
+        /** One row of up to five buttons under the card, outside it (like the buttons under an embed). */
+        public Builder buttonsBelow(Button... buttons) { return buttonsBelow(Arrays.asList(buttons)); }
+
+        public Builder buttonsBelow(Collection<? extends ActionRowChildComponent> buttons) {
+            return buttons.isEmpty() ? this : rowBelow(ActionRow.of(buttons));
+        }
+
+        /** A row (buttons or one menu) under the card. */
+        public Builder rowBelow(ActionRow row) {
+            below.add(row);
+            rows++;
+            return this;
+        }
+
+        public Builder rowsBelow(Collection<ActionRow> rows) { rows.forEach(this::rowBelow); return this; }
+
+        /** A {@code ###} heading: the size of an embed's title. */
+        public Builder heading(String title) { return present(title) ? text("### " + title) : this; }
+
         /** A small grey line at the bottom of the card ({@code -#} subtext). */
         public Builder footer(String text) { this.footer = present(text) ? text : null; return this; }
 
@@ -262,6 +317,7 @@ public final class Card {
                 Container container = Container.of(all);
                 top.add(accent == null ? container : container.withAccentColor(accent));
             }
+            top.addAll(below);
             return top;
         }
 

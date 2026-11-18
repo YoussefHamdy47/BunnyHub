@@ -50,14 +50,13 @@ final class FreebieBroadcastWorker {
 
     /** {@code ping}: the one role that may be mentioned; never @everyone, @here or users, whatever the text says. */
     static MessageCreateData message(String title, String body, String reference, Optional<String> ping) {
-        MessageEmbed embed = Embeds.of("📢", title).setDescription(body).setFooter(reference).setTimestamp(null).build();
-        var builder = new MessageCreateBuilder().setEmbeds(embed).setAllowedMentions(List.of()).mentionRepliedUser(false);
-        ping.ifPresent(role -> builder.setContent("<@&" + role + ">").mentionRoles(role));
-        return builder.build();
+        var card = org.bunnys.handler.cards.Card.builder().heading(title).text(body).footer(reference);
+        ping.ifPresent(role -> card.above("<@&" + role + ">").mentionRoles(role));
+        return card.build().message();
     }
 
     static boolean carries(Message message, String reference) {
-        return message.getEmbeds().stream().anyMatch(e -> e.getFooter() != null && reference.equals(e.getFooter().getText()));
+        return FreebieMessages.hasFooter(message, reference);
     }
 
     boolean claimOne(JDA client, AtomicInteger shared, AtomicInteger background) {

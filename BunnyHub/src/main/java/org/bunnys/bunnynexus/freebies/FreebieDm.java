@@ -75,10 +75,13 @@ public final class FreebieDm {
 
     // ------------------------------------------------------------------ messages
 
-    /** The channel alert card with no ping and no mentions at all, plus a stateless Unsubscribe button. */
+    /** The channel alert card with no ping and no mentions at all, plus a stateless Unsubscribe button below it. */
     static MessageCreateData card(FreebieOffer offer, String jobId) {
-        return new MessageCreateBuilder().setEmbeds(FreebieMessages.alertEmbed(offer, reference(jobId), true))
-                .setComponents(ActionRow.of(FreebieCards.claimButton(offer), unsubscribeButton()))
+        var member = new FreebieAnnouncementCards.Member(offer, FreebieFacts.NONE, "dm|" + jobId, FreebieAnnouncementCards.Status.LIVE);
+        List<net.dv8tion.jda.api.components.MessageTopLevelComponent> top = new ArrayList<>(
+                FreebieComponentCards.components(List.of(member), Optional.empty(), false, Instant.now()));
+        top.add(ActionRow.of(unsubscribeButton()));
+        return new MessageCreateBuilder().useComponentsV2(true).setComponents(top)
                 .setAllowedMentions(List.of()).mentionRepliedUser(false).build();
     }
 
@@ -93,12 +96,10 @@ public final class FreebieDm {
 
     /** The consent DM; the subscription is only saved once Discord accepts it. */
     public static MessageCreateData consent(Set<FreebieSection> sections) {
-        var embed = Embeds.of("📬", "Free-game DMs are on")
-                .setDescription("You'll get a DM when a new free game is posted in: **" + labels(sections) + "**.\n"
-                        + "At most " + DAILY_CAP + " a day. Use the button below to stop.")
-                .setTimestamp(null).build();
-        return new MessageCreateBuilder().setEmbeds(embed).setComponents(ActionRow.of(unsubscribeButton()))
-                .setAllowedMentions(List.of()).build();
+        return org.bunnys.handler.cards.Card.builder().heading("Free-game DMs are on")
+                .text("You'll get a DM when a new free game is posted in **" + labels(sections) + "**.")
+                .text("-# At most " + DAILY_CAP + " a day. Use the button below to stop.")
+                .buttons(unsubscribeButton()).build().message();
     }
 
     /** Section picker for {@code /free-games dms}; bound to the user who asked. */
@@ -110,6 +111,52 @@ public final class FreebieDm {
         menu.setDefaultValues((current.isEmpty() ? EnumSet.of(FreebieSection.MAJOR_PC) : current).stream()
                 .map(s -> String.valueOf(s.code())).toList());
         return List.of(ActionRow.of(menu.build()));
+    }
+
+    // ------------------------------------------------------------------ the /free-games dms flow: pick, confirm, result
+
+    public static final String CONFIRM_PREFIX = "freebie_dmok", YES = "yes", NO = "no";
+
+    private static String rules() {
+        return "-# At most " + DAILY_CAP + " a day. `/free-games help` explains how games are checked.";
+    }
+
+    /** Step 1: the section picker. Picking only shows the confirm step; nothing is saved or sent yet. */
+    public static org.bunnys.handler.cards.Card pickerCard(String userId, Optional<Set<FreebieSection>> current) {
+        var card = org.bunnys.handler.cards.Card.builder()
+                .heading(current.isPresent() ? "Change your free-game DMs" : "Free-game DMs")
+                .text(current.isPresent()
+                        ? "You get DMs for **" + labels(current.get()) + "**. Pick different sections below, or **Unsubscribe** to stop."
+                        : "Pick the sections you want a DM for. You'll confirm before anything is turned on.")
+                .text(rules()).rows(picker(userId, current.orElse(Set.of())));
+        if (current.isPresent()) card.buttons(unsubscribeButton());
+        return card.build();
+    }
+
+    /** Step 2: are you sure? Confirm subscribes (and DMs a new subscriber once), Cancel leaves everything as it was. */
+    public static org.bunnys.handler.cards.Card confirmCard(String userId, Set<FreebieSection> chosen, boolean subscribed) {
+        String codes = FreebieSection.encode(chosen);
+        return org.bunnys.handler.cards.Card.builder()
+                .heading(subscribed ? "Update your free-game DMs?" : "Turn on free-game DMs?")
+                .text("You'll get a DM when a new free game is posted in **" + labels(chosen) + "**.")
+                .text(subscribed ? "-# The change applies right away. No DM is sent for it."
+                        : "-# When you confirm, I send you one DM to check I can reach you. If Discord blocks it, nothing is saved.")
+                .rows(picker(userId, chosen))
+                .buttons(Button.success(CONFIRM_PREFIX + ":" + YES + ":" + userId + ":" + codes, subscribed ? "Save" : "Confirm"),
+                        Button.secondary(CONFIRM_PREFIX + ":" + NO + ":" + userId, "Cancel"))
+                .build();
+    }
+
+    /** Shown the moment Confirm is clicked, while the check DM goes out. */
+    public static org.bunnys.handler.cards.Card sendingCard() {
+        return org.bunnys.handler.cards.Card.builder().text("Sending you a DM to check I can reach you…").build();
+    }
+
+    /** Step 3: the outcome. Subscribers keep an off switch. */
+    public static org.bunnys.handler.cards.Card resultCard(String text, boolean subscribed) {
+        var card = org.bunnys.handler.cards.Card.builder().text(text);
+        if (subscribed) card.buttons(unsubscribeButton());
+        return card.build();
     }
 
     public static String labels(Set<FreebieSection> sections) {

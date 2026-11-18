@@ -7,7 +7,6 @@ import org.bunnys.bunnynexus.freebies.FreebieDmService;
 import org.bunnys.bunnynexus.freebies.FreebieSystem;
 import org.bunnys.handler.BunnyHub;
 import org.bunnys.handler.router.buttons.BunnyButton;
-import java.util.List;
 
 /**
  * "Unsubscribe" on every game DM and the consent DM. The id carries no user: it removes the clicker's own
@@ -23,8 +22,8 @@ public class FreebieDmButtons extends BunnyButton {
         var system = FreebieSystem.current().orElse(null);
         if (system == null) { reply(event, "Free-game alerts are not available right now."); return; }
         event.deferReply(true).complete();
-        event.getHook().sendMessage(unsubscribe(system.dms(), event.getUser())).setEphemeral(true)
-                .setAllowedMentions(List.of()).queue();
+        event.getHook().sendMessage(org.bunnys.handler.cards.Card.builder().text(unsubscribe(system.dms(), event.getUser())).build().message())
+                .setEphemeral(true).queue();
     }
 
     /** Whatever the id says, only the clicker's own subscription is touched. */
@@ -34,6 +33,6 @@ public class FreebieDmButtons extends BunnyButton {
     }
 
     private static void reply(ButtonInteractionEvent event, String text) {
-        event.reply(text).setEphemeral(true).setAllowedMentions(List.of()).queue();
+        event.reply(org.bunnys.handler.cards.Card.builder().text(text).build().message()).setEphemeral(true).queue();
     }
 }

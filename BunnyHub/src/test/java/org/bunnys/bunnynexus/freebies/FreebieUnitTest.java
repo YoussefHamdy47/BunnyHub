@@ -140,20 +140,21 @@ class FreebieUnitTest {
 
     @Test void publicLiveListIsBoundedAndNeverPings() {
         var empty = FreebieMessages.liveList(List.of(), Optional.of(FreebieStore.GOG));
-        assertTrue(empty.getEmbeds().getFirst().getDescription().contains("Nothing is free on GOG"));
-        assertTrue(empty.getComponents().isEmpty());
+        assertTrue(empty.isUsingComponentsV2());
+        assertTrue(empty.toData().toString().contains("Nothing is free on GOG"));
+        assertEquals(1, empty.getComponents().size(), "one card, no buttons");
 
         List<FreebieOffer> many = new ArrayList<>();
         for (int i = 0; i < FreebieMessages.MAX_LIVE_LISTED; i++)
             many.add(offer("Game " + i + " " + "x".repeat(300) + " (Epic Games) Giveaway", FreebieStore.EPIC));
         var list = FreebieMessages.liveList(many, Optional.empty());
-        var embed = list.getEmbeds().getFirst();
-        assertTrue(embed.isSendable());
-        assertTrue(embed.getDescription().contains("~~$19.99~~"));
-        assertTrue(embed.getDescription().contains("<t:1790812800:R>"));
-        var buttons = list.getComponents().getFirst().asActionRow().getComponents();
-        assertEquals(5, buttons.size());
-        buttons.forEach(b -> assertTrue(b.asButton().getLabel().length() <= 80));
+        assertTrue(list.isUsingComponentsV2(), "JDA checks Discord's card limits when building");
+        String data = list.toData().toString();
+        assertTrue(data.contains("~~$19.99~~") && data.contains("<t:1790812800:R>"));
+        var card = (net.dv8tion.jda.api.components.container.Container) list.getComponents().getFirst();
+        var sections = card.getComponents().stream().filter(x -> x instanceof net.dv8tion.jda.api.components.section.Section).toList();
+        assertEquals(10, sections.size(), "ten games, each with its own Claim button");
+        assertTrue(data.contains("10 games shown, 5 more"));
         assertTrue(list.getMentionedUsers().isEmpty() && list.getMentionedRoles().isEmpty());
     }
 
@@ -183,6 +184,12 @@ class FreebieUnitTest {
         assertTrue(FreebieMessages.needsOwner(FreebieMessages.reviewControls(offer)), "approve, reject and the launcher picker");
         assertTrue(FreebieMessages.needsOwner(FreebieMessages.stopControls(offer)), "stop sending");
         assertFalse(FreebieMessages.needsOwner(List.of()), "a decided review or a notice");
+        // Card-style reviews keep their controls inside the card: an open one must never be cleared.
+        try (var review = FreebieMessages.review(offer, 1, 1, java.util.Set.of())) {
+            assertTrue(FreebieMessages.needsOwner(review.getComponents()), "controls inside a card count");
+        }
+        var decidedCard = org.bunnys.handler.cards.Card.builder().text("Approved").rows(FreebieMessages.withClear(List.of())).build();
+        assertFalse(FreebieMessages.needsOwner(decidedCard.components()), "a decided card with Clear finished only");
         assertFalse(FreebieMessages.needsOwner(FreebieMessages.withClear(List.of())), "the clear button alone");
         assertFalse(FreebieMessages.needsOwner(FreebieMessages.catchUpAllControls("12345678901234567890", "12345678901234567890", 1)),
                 "other features' buttons don't hold a message");

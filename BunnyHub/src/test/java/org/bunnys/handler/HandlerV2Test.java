@@ -40,7 +40,7 @@ class HandlerV2Test {
         org.mockito.Mockito.when(event.getSubcommandName()).thenReturn("obsolete");
         var reply = org.mockito.Mockito.mock(ReplyCallbackAction.class,
                 org.mockito.Mockito.RETURNS_SELF);
-        org.mockito.Mockito.when(event.replyEmbeds(org.mockito.ArgumentMatchers.any(MessageEmbed.class))).thenReturn(reply);
+        org.mockito.Mockito.when(event.reply(org.mockito.ArgumentMatchers.any(net.dv8tion.jda.api.utils.messages.MessageCreateData.class))).thenReturn(reply);
         new InteractionListener(hub).onSlashCommandInteraction(event);
         org.mockito.Mockito.verify(reply).setEphemeral(true);
         org.mockito.Mockito.verify(hub, org.mockito.Mockito.never()).executeForUser(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());

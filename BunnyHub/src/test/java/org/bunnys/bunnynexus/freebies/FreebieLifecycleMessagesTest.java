@@ -18,9 +18,7 @@ class FreebieLifecycleMessagesTest {
     final net.dv8tion.jda.api.utils.messages.MessageCreateData alert = FreebieMessages.alert(offer, Optional.of(ROLE), reference);
 
     static List<Button> buttons(List<? extends net.dv8tion.jda.api.components.MessageTopLevelComponent> rows) {
-        List<Button> buttons = new ArrayList<>();
-        for (var row : rows) if (row instanceof ActionRow r) r.getComponents().forEach(c -> buttons.add((Button) c));
-        return buttons;
+        return V2.buttons(rows);
     }
 
     @Test void endedCardKeepsTheFooterByteForByteAndRemovesTheClaimButton() {
@@ -130,18 +128,18 @@ class FreebieLifecycleMessagesTest {
     @Test void reminderPingsOnlyTheSavedRoleAndRepliesQuietly() {
         var now = FreebieLifecycleTest.END.minus(Duration.ofHours(24));
         var reminder = FreebieLifecycleMessages.reminder(offer, "200000000000000000", Optional.of(ROLE), now);
-        assertEquals("<@&" + ROLE + ">", reminder.getContent());
+        assertTrue(V2.text(reminder.getComponents()).startsWith("<@&" + ROLE + ">"));
         assertEquals(Set.of(ROLE), reminder.getMentionedRoles());
         assertTrue(reminder.getMentionedUsers().isEmpty());
         assertTrue(reminder.getAllowedMentions().isEmpty(), "never everyone/here, users or roles beyond the whitelist");
         assertFalse(reminder.isMentionRepliedUser());
-        var embed = reminder.getEmbeds().getFirst();
-        assertTrue(embed.getDescription().contains("Ends in about 24 hours"), embed.getDescription());
-        assertEquals(FreebieLifecycleMessages.reminderReference(offer.id(), "200000000000000000"), embed.getFooter().getText());
+        String text = V2.text(reminder.getComponents());
+        assertTrue(text.contains("Ends in about 24 hours"), text);
+        assertTrue(text.endsWith("-# " + FreebieLifecycleMessages.reminderReference(offer.id(), "200000000000000000")), text);
         assertTrue(buttons(reminder.getComponents()).getFirst().getLabel().startsWith("Claim"));
 
         var quiet = FreebieLifecycleMessages.reminder(offer, "200000000000000000", Optional.empty(), now);
-        assertTrue(quiet.getContent().isEmpty());
+        assertFalse(V2.text(quiet.getComponents()).contains("<@&"));
         assertTrue(quiet.getMentionedRoles().isEmpty());
     }
 

@@ -10,6 +10,7 @@ import net.dv8tion.jda.api.components.container.Container;
 import net.dv8tion.jda.api.components.mediagallery.MediaGallery;
 import net.dv8tion.jda.api.components.textdisplay.TextDisplay;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
+import org.bunnys.utils.AppDesign;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,17 +44,18 @@ class AvatarTest {
         return card(view).getComponents().stream().filter(c -> c instanceof MediaGallery).map(c -> ((MediaGallery) c).getItems().getFirst().getUrl()).findFirst().orElseThrow();
     }
     static List<Button> buttons(MessageCreateData view) {
-        return card(view).getComponents().stream().filter(c -> c instanceof ActionRow).flatMap(c -> ((ActionRow) c).getComponents().stream()).map(c -> (Button) c).toList();
+        // Buttons sit under the card, as under the old embed.
+        return view.getComponents().stream().filter(c -> c instanceof ActionRow).flatMap(c -> ((ActionRow) c).getComponents().stream()).map(c -> (Button) c).toList();
     }
 
     @Test void bothAvatarsAreLinkedAndPriorityPicksTheLargeImage() {
         try (var view = AvatarCommand.buildView(user(), withServerAvatar(), true, 4096)) {
             var texts = texts(view);
-            assertEquals("## 🖼️ Server Bunny's Avatar", texts.get(0));
+            assertEquals("### Server Bunny's Avatar", texts.get(0));
             assertTrue(texts.get(1).matches("\\[Global Avatar]\\(.+\\) \\| \\[Server Avatar]\\(.+\\)"), texts.get(1));
             assertTrue(image(view).contains("server.gif?size=4096"));
             assertNull(card(view).getAccentColorRaw(), "plain card");
-            assertEquals("-# 4096px", texts.getLast());
+            assertEquals(2, texts.size(), "title and links only");
             var buttons = buttons(view);
             assertEquals(2, buttons.size());
             assertEquals("Server Avatar", buttons.get(1).getLabel());
@@ -66,7 +68,7 @@ class AvatarTest {
     @Test void globalOnlyShowsOneLinkAndOneButton() {
         try (var view = AvatarCommand.buildView(user(), null, true, 2048)) {
             var texts = texts(view);
-            assertEquals("## 🖼️ Bunny's Avatar", texts.get(0));
+            assertEquals("### Bunny's Avatar", texts.get(0));
             assertTrue(texts.get(1).startsWith("[Global Avatar]("));
             assertFalse(texts.get(1).contains("|"));
             assertTrue(image(view).contains("a_avatar.gif?size=2048"), "server priority falls back to global");

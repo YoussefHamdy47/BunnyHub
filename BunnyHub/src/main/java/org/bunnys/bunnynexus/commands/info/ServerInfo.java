@@ -27,6 +27,6 @@ public final class ServerInfo extends BunnySubcommand {
         // The owner renders as a raw mention rather than through getOwner(),
         // which needs a member cache this bot deliberately does not keep.
         ctx.defer();
-        ctx.replyCard(ServerInfoEmbeds.serverInfo(ctx.getGuild()));
+        ctx.reply(ServerInfoEmbeds.serverInfo(ctx.getGuild()));
     }
 }

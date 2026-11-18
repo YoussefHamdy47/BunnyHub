@@ -43,7 +43,7 @@ class FreebieDeliveryAdminTest {
         var order = inOrder(context, service);
         order.verify(context).defer(true);
         order.verify(service).history(owner, "gamerpower:1", "");
-        order.verify(context).reply(any(net.dv8tion.jda.api.entities.MessageEmbed.class), anyList(), eq(true));
+        order.verify(context).replyCard(any(org.bunnys.handler.cards.Card.class), eq(true));
     }
     @Test void unauthorizedSlashCannotReachDeliveryService() {
         var system = mock(FreebieSystem.class); var context = mock(SlashContext.class); var user = mock(User.class);
@@ -91,6 +91,7 @@ class FreebieDeliveryAdminTest {
         net.dv8tion.jda.api.requests.restaction.WebhookMessageEditAction<net.dv8tion.jda.api.entities.Message> edit =
                 mock(net.dv8tion.jda.api.requests.restaction.WebhookMessageEditAction.class, RETURNS_SELF);
         when(hook.editOriginalEmbeds(any(net.dv8tion.jda.api.entities.MessageEmbed.class))).thenReturn(edit);
+        when(hook.editOriginal(any(net.dv8tion.jda.api.utils.messages.MessageEditData.class))).thenReturn(edit);
         when(event.getUser()).thenReturn(user); when(user.getId()).thenReturn(owner);
         when(system.config()).thenReturn(config); when(system.deliveryAdmin()).thenReturn(service);
         when(event.deferReply(true)).thenReturn(defer); when(event.getHook()).thenReturn(hook);

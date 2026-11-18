@@ -86,10 +86,21 @@ final class FreebieReviewChannel {
         if (channel == null || offer.reviewMessageId().isEmpty()) return;
         if (audience == null) audience = subscriptions.audience(offer.store());
         var facts = facts(offer);
-        channel.editMessageEmbedsById(offer.reviewMessageId().get(), FreebieAnnouncementCards.preview(offer, facts, clock.instant()),
-                        FreebieMessages.reviewEmbed(offer, facts, audience.channels(), audience.guilds(), status, clock.instant()))
-                .setComponents(FreebieMessages.withClear(components)).queue(null,
-                        error -> BunnyLog.warning("[Freebies] Could not update review " + offer.id() + " | " + FailureDiagnostics.describe(error)));
+        var counted = audience;
+        String id = offer.reviewMessageId().get();
+        java.util.function.Consumer<Throwable> failed =
+                error -> BunnyLog.warning("[Freebies] Could not update review " + offer.id() + " | " + FailureDiagnostics.describe(error));
+        // A message keeps the format it was posted in: reviews from before Components V2 are still edited as embeds.
+        channel.retrieveMessageById(id).queue(message -> {
+            Instant now = clock.instant();
+            var request = message.isUsingComponentsV2()
+                    ? channel.editMessageById(id, FreebieMessages.reviewEdit(offer, facts, counted.channels(), counted.guilds(), status,
+                            FreebieMessages.withClear(components), FreebieComponentCards.header(message), now))
+                    : channel.editMessageEmbedsById(id, FreebieAnnouncementCards.preview(offer, facts, now),
+                            FreebieMessages.reviewEmbed(offer, facts, counted.channels(), counted.guilds(), status, now))
+                            .setComponents(FreebieMessages.withClear(components));
+            request.queue(null, failed);
+        }, failed);
     }
 
     /** Live progress on the review message, at most once a minute per offer. */

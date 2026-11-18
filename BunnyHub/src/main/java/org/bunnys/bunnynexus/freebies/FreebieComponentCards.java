@@ -245,7 +245,7 @@ final class FreebieComponentCards {
     }
 
     /** Characters Discord counts toward {@link #MAX_TEXT}: every text block's content. */
-    static int textLength(List<MessageTopLevelComponent> top) {
+    static int textLength(List<? extends MessageTopLevelComponent> top) {
         int total = 0;
         for (var component : top) {
             if (component instanceof TextDisplay text) total += text.getContent().length();
@@ -260,7 +260,7 @@ final class FreebieComponentCards {
     }
 
     /** Every component Discord counts toward {@link #MAX_COMPONENTS}, nested ones and accessories included. */
-    static int componentCount(List<MessageTopLevelComponent> top) {
+    static int componentCount(List<? extends MessageTopLevelComponent> top) {
         int total = 0;
         for (var component : top) {
             total++;

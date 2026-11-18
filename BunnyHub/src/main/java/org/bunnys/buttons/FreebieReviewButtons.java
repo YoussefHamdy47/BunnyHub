@@ -6,7 +6,9 @@ import org.bunnys.bunnynexus.freebies.FreebieMessages;
 import org.bunnys.bunnynexus.freebies.FreebieReviewCleanup;
 import org.bunnys.bunnynexus.freebies.FreebieSourceDecisions;
 import org.bunnys.bunnynexus.freebies.FreebieSystem;
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import org.bunnys.handler.BunnyHub;
+import org.bunnys.handler.cards.Card;
 import org.bunnys.handler.router.buttons.BunnyButton;
 import org.bunnys.utils.AppDesign;
 import java.util.List;
@@ -35,20 +37,17 @@ public class FreebieReviewButtons extends BunnyButton {
         if (action.startsWith("broadcast-") || action.startsWith("broadcastq-")) {
             event.deferEdit().complete();
             String result = system.confirmAnnouncement(actor, offerId, action);
-            var edit = event.getHook().editOriginal(result).setEmbeds().setAllowedMentions(List.of());
-            (result.startsWith("Sending") ? edit.setComponents(FreebieSystem.announcementStopControls(offerId)) : edit.setComponents()).queue();
+            replace(event, result, result.startsWith("Sending") ? FreebieSystem.announcementStopControls(offerId) : List.of());
             return;
         }
         if (action.equals("broadcaststop")) {
             event.deferEdit().complete();
-            String result = system.stopAnnouncement(actor, offerId);
-            event.getHook().editOriginal(result).setEmbeds().setComponents().setAllowedMentions(List.of()).queue();
+            replace(event, system.stopAnnouncement(actor, offerId), List.of());
             return;
         }
         if (action.startsWith("confirmrelease-")) {
             event.deferEdit().complete();
-            String result = system.confirmRelease(actor, offerId, action);
-            event.getHook().editOriginal(result).setEmbeds().setComponents().setAllowedMentions(List.of()).queue();
+            replace(event, system.confirmRelease(actor, offerId, action), List.of());
             return;
         }
         if (action.startsWith("source-")) {
@@ -75,8 +74,7 @@ public class FreebieReviewButtons extends BunnyButton {
             }
             case "confirm", FreebieMessages.CONFIRM_QUIET -> {
                 event.deferEdit().complete();
-                String result = system.confirmApproval(actor, offerId, action.equals(FreebieMessages.CONFIRM_QUIET));
-                event.getHook().editOriginal(result).setEmbeds().setComponents().setAllowedMentions(List.of()).queue();
+                replace(event, system.confirmApproval(actor, offerId, action.equals(FreebieMessages.CONFIRM_QUIET)), List.of());
             }
             case "approve" -> {
                 event.deferReply(true).complete();
@@ -104,12 +102,22 @@ public class FreebieReviewButtons extends BunnyButton {
         }
     }
 
+    /**
+     * Replaces the clicked prompt with {@code text} (and {@code rows}) in the format it was sent in: prompts are cards
+     * now, and one sent before the switch is still edited as plain text.
+     */
+    private static void replace(ButtonInteractionEvent event, String text, List<ActionRow> rows) {
+        if (event.getMessage().isUsingComponentsV2())
+            event.getHook().editOriginal(Card.builder().text(text).rows(rows).build().edit()).queue();
+        else event.getHook().editOriginal(text).setEmbeds().setComponents(rows).setAllowedMentions(List.of()).queue();
+    }
+
     private static void followUp(ButtonInteractionEvent event, String message) {
-        event.getHook().sendMessage(message).setEphemeral(true).setAllowedMentions(List.of()).queue();
+        event.getHook().sendMessage(Card.builder().text(message).build().message()).setEphemeral(true).queue();
     }
 
     private static void deny(ButtonInteractionEvent event, String message) {
-        event.reply("> " + AppDesign.Emojis.ERROR + " " + message).setEphemeral(true).setAllowedMentions(List.of()).queue();
+        event.reply(Card.builder().text("> " + AppDesign.Emojis.ERROR + " " + message).build().message()).setEphemeral(true).queue();
     }
 }
 

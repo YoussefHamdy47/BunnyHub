@@ -45,7 +45,7 @@ public class FreebieDashboardButtons extends BunnyButton {
                 var saved = system.subscriptions().forGuild(args[2]);
                 event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieLauncherPings.view(event.getGuild(), saved, null))).queue();
             }
-            case FreebieDashboard.HELP -> event.replyEmbeds(FreebieGuide.embed(system.config().autoSend())).setEphemeral(true).queue();
+            case FreebieDashboard.HELP -> event.reply(org.bunnys.handler.cards.Card.fromEmbed(FreebieGuide.embed(system.config().autoSend())).message()).setEphemeral(true).queue();
             case FreebieDashboard.HOME -> {
                 event.deferEdit().complete();
                 var saved = system.subscriptions().forGuild(args[2]);

@@ -168,7 +168,7 @@ public final class MentionContext extends CommandContext {
     public void replyTransient(MessageEmbed embed) {
         // There is no ephemeral message on this path, so the reply removes itself
         // instead. Deleting our own message needs no permission beyond sending it.
-        event.getMessage().replyEmbeds(embed).mentionRepliedUser(false).queue(
+        event.getMessage().reply(org.bunnys.handler.cards.Card.fromEmbed(embed).message()).mentionRepliedUser(false).queue(
                 sent -> sent.delete().queueAfter(TRANSIENT_SECONDS, TimeUnit.SECONDS, null, e -> {}),
                 e -> BunnyLog.error("[MentionContext] transient reply failed", e));
     }

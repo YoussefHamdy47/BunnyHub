@@ -52,7 +52,7 @@ public final class UserInfo extends BunnySubcommand {
     private static void replyUser(BunnyHub client, CommandContext ctx, User target, Member member) {
         try {
             boolean self = target.getId().equals(ctx.getJDA().getSelfUser().getId());
-            ctx.replyCard(self ? InfoEmbeds.userInfo(target, member, client.getVersion(), client.getDeveloperName(),
+            ctx.reply(self ? InfoEmbeds.userInfo(target, member, client.getVersion(), client.getDeveloperName(),
                     client.getCommandRegistry().getDeveloperIds().stream().findFirst().orElse(null))
                     : InfoEmbeds.userInfo(target, member));
         } catch (RuntimeException error) {

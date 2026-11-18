@@ -23,20 +23,20 @@ public final class FreebieHistoryCommands extends BunnySubcommand {
     @Override public void execute(BunnyHub client, CommandContext ctx) {
         var system = FreebieSystem.current().orElse(null);
         if (system == null || !system.config().isOwner(ctx.getUser().getId())) {
-            ctx.reply(Embeds.of("🎁", "Delivery history", "Only active freebie owners can use this.").build(), true); return;
+            ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Delivery history", "Only active freebie owners can use this.").build()), true); return;
         }
         if (!(ctx instanceof SlashContext slash)) return;
         ctx.defer(true);
         String offer = slash.event().getOption("offer").getAsString();
         String channel = slash.event().getOption("channel") == null ? "" : slash.event().getOption("channel").getAsString();
         if (!offer.matches("(?:gamerpower:[0-9]{1,20}|epic:[0-9a-f]{16})") || (!channel.isEmpty() && !channel.matches("[0-9]{17,20}"))) {
-            ctx.reply(Embeds.of("🎁", "Delivery history", "Use the offer ID from its review card and a numeric channel ID.").build(), true); return;
+            ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Delivery history", "Use the offer ID from its review card and a numeric channel ID.").build()), true); return;
         }
         var view = retry ? system.deliveryAdmin().preview(ctx.getUser().getId(), offer, channel)
                 : !channel.isEmpty() ? system.deliveryAdmin().audit(ctx.getUser().getId(), offer, channel,
                     slash.event().getOption("audit-page") == null ? 1 : slash.event().getOption("audit-page").getAsInt())
                 : system.deliveryAdmin().history(ctx.getUser().getId(), offer, "");
-        ctx.reply(Embeds.of("🎁", "Delivery history", view.text()).build(), view.rows(), true);
+        ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Delivery history", view.text()).build(), view.rows()), true);
     }
 }
 

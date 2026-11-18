@@ -33,9 +33,14 @@ public abstract class InteractionContext extends CommandContext {
     }
 
     @Override public void replyMessage(MessageCreateData message) {
+        replyMessage(message, false);
+    }
+
+    @Override public void replyMessage(MessageCreateData message, boolean ephemeral) {
+        // A deferral fixes ephemerality for the whole interaction, so a follow-up cannot contradict it.
         if (event.isAcknowledged()) event.getHook().sendMessage(message).setEphemeral(isDeferredEphemeral())
                 .queue(null, e -> replyFailed("message", e));
-        else event.reply(message).queue(null, e -> replyFailed("message", e));
+        else event.reply(message).setEphemeral(ephemeral).queue(null, e -> replyFailed("message", e));
     }
 
     public GenericCommandInteractionEvent event() {
@@ -124,14 +129,14 @@ public abstract class InteractionContext extends CommandContext {
     public void replyTransient(MessageEmbed embed) {
         // Not yet answered: an ephemeral reply is always available and leaves nothing.
         if (!event.isAcknowledged()) {
-            event.replyEmbeds(embed).setEphemeral(true)
+            event.reply(org.bunnys.handler.cards.Card.fromEmbed(embed).message()).setEphemeral(true)
                     .queue(null, e -> replyFailed("transient reply", e));
             return;
         }
 
         // Deferred ephemerally: the follow-up inherits that, so it is already private.
         if (isDeferredEphemeral()) {
-            event.getHook().sendMessageEmbeds(embed).setEphemeral(true)
+            event.getHook().sendMessage(org.bunnys.handler.cards.Card.fromEmbed(embed).message()).setEphemeral(true)
                     .queue(null, e -> replyFailed("transient follow-up", e));
             return;
         }
@@ -141,7 +146,7 @@ public abstract class InteractionContext extends CommandContext {
         // to send it and take it back down.
         // Delete through the interaction webhook: a channel delete needs the bot to see the
         // channel, which DMs and user-installed contexts do not guarantee.
-        event.getHook().sendMessageEmbeds(embed).queue(
+        event.getHook().sendMessage(org.bunnys.handler.cards.Card.fromEmbed(embed).message()).queue(
                 sent -> event.getHook().deleteMessageById(sent.getId())
                         .queueAfter(TRANSIENT_SECONDS, TimeUnit.SECONDS, null, e -> {}),
                 e -> replyFailed("transient follow-up", e));

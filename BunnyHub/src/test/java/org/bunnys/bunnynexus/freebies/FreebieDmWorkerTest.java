@@ -72,7 +72,7 @@ class FreebieDmWorkerTest {
         var captor = ArgumentCaptor.forClass(MessageCreateData.class);
         verify(dm).sendMessage(captor.capture());
         assertTrue(captor.getValue().getAllowedMentions().isEmpty());
-        assertTrue(captor.getValue().getContent().isEmpty());
+        assertFalse(V2.text(captor.getValue().getComponents()).contains("<@"));
         verify(action).setNonce(FreebieDm.nonce(job.id()));
         verify(subscribers).countToday(USER, now);
         verify(jobs).submitting(job, "dmchannel", now);
@@ -150,7 +150,9 @@ class FreebieDmWorkerTest {
         @SuppressWarnings("unchecked") RestAction<List<Message>> past = mock(RestAction.class, RETURNS_SELF);
         var earlier = mock(Message.class); var author = mock(User.class);
         when(author.getId()).thenReturn("bot"); when(earlier.getAuthor()).thenReturn(author); when(earlier.getId()).thenReturn("earlier");
-        when(earlier.getEmbeds()).thenReturn(FreebieDm.card(offer, job.id()).getEmbeds());
+        var top = FreebieDm.card(offer, job.id()).getComponents();
+        when(earlier.isUsingComponentsV2()).thenReturn(true);
+        when(earlier.getComponentTree()).thenReturn(net.dv8tion.jda.api.components.tree.MessageComponentTree.of(top));
         when(dm.getHistory()).thenReturn(history); when(history.retrievePast(50)).thenReturn(past);
         when(past.submit()).thenReturn(CompletableFuture.completedFuture(List.of(earlier)));
         sendable(new CompletableFuture<>());

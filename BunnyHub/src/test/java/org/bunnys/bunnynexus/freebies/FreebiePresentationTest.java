@@ -83,13 +83,14 @@ class FreebiePresentationTest {
 
     @Test void richReviewFitsCombinedDiscordEmbedBudget() {
         try (var review = FreebieMessages.review(offer(true), 9999, 9999, Set.of())) {
-            assertTrue(review.getEmbeds().stream().allMatch(MessageEmbed::isSendable));
-            assertTrue(review.getEmbeds().stream().mapToInt(MessageEmbed::getLength).sum() <= 6000);
-            var alert = review.getEmbeds().getFirst();
-            assertEquals("https://example.com/game.jpg", alert.getImage().getUrl());
-            assertNull(alert.getThumbnail(), "the game art is the full-width image, not a corner thumbnail");
-            var instructions = alert.getFields().stream().filter(f -> f.getName().equals("How to claim")).findFirst().orElseThrow();
-            assertTrue(instructions.getValue().contains("\\*\\*Step\\*\\*"));
+            // Components V2: the public card and the owner panel together stay inside Discord's 4000 / 40 limits.
+            assertTrue(review.isUsingComponentsV2());
+            assertTrue(FreebieComponentCards.textLength(List.copyOf(review.getComponents())) <= FreebieComponentCards.MAX_TEXT);
+            assertTrue(FreebieComponentCards.componentCount(List.copyOf(review.getComponents())) <= FreebieComponentCards.MAX_COMPONENTS);
+            String json = review.toData().toString();
+            assertTrue(json.contains("https://example.com/game.jpg"), "the game art is shown");
+            assertTrue(V2.text(review.getComponents()).contains("Owner review"));
+            assertTrue(V2.buttons(review.getComponents()).stream().anyMatch(b -> "Approve".equals(b.getLabel())));
             assertTrue(review.getAllowedMentions().isEmpty());
             assertTrue(review.getMentionedUsers().isEmpty());
         }
@@ -111,12 +112,10 @@ class FreebiePresentationTest {
 
     @Test void approvalConfirmationStillCarriesAudienceAndOriginalAction() {
         try (var confirmation = FreebieMessages.confirm(offer(true), 42, 18)) {
-            var embed = confirmation.getEmbeds().getFirst();
-            assertTrue(embed.isSendable());
-            assertEquals(List.of("42", "18"), embed.getFields().stream().map(MessageEmbed.Field::getValue).toList());
-            assertTrue(embed.getDescription().contains("cannot be recalled"));
-            assertEquals("freebie_review:confirm:gamerpower:9", confirmation.getComponents().getFirst()
-                    .asActionRow().getComponents().getFirst().asButton().getCustomId());
+            String text = V2.text(confirmation.getComponents());
+            assertTrue(text.contains("### CHANNELS\n42") && text.contains("### SERVERS\n18"), text);
+            assertTrue(text.contains("cannot be recalled"));
+            assertEquals("freebie_review:confirm:gamerpower:9", V2.buttons(confirmation.getComponents()).getFirst().getCustomId());
             assertTrue(confirmation.getAllowedMentions().isEmpty());
         }
     }

@@ -83,11 +83,11 @@ class FreebieSectionTest {
         try (var major = FreebieMessages.review(FreebieUnitTest.offer("X", FreebieStore.STEAM), 1, 1, Set.of(OWNER));
              var minor = FreebieMessages.review(FreebieUnitTest.offer("Y", FreebieStore.ITCHIO), 1, 1, Set.of(OWNER))) {
             assertEquals(Set.of(OWNER), major.getMentionedUsers());
-            assertTrue(major.getContent().startsWith("<@" + OWNER + ">"));
+            assertTrue(V2.text(major.getComponents()).startsWith("<@" + OWNER + ">"));
             assertEquals(Set.of(OWNER), minor.getMentionedUsers());
-            assertTrue(minor.getContent().startsWith("<@" + OWNER + ">"));
+            assertTrue(V2.text(minor.getComponents()).startsWith("<@" + OWNER + ">"));
             assertTrue(major.getAllowedMentions().isEmpty() && minor.getMentionedRoles().isEmpty(), "only the owners, never roles or everyone");
-            assertTrue(minor.getContent().contains("indie & other pc"), minor.getContent());
+            assertTrue(V2.text(minor.getComponents()).contains("indie & other pc"));
         }
     }
 }

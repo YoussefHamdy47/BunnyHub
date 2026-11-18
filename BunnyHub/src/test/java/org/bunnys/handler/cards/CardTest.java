@@ -115,6 +115,22 @@ class CardTest {
         verify(replyAction).setEphemeral(true);
     }
 
+    @Test void anEmbedBecomesAPlainCardWithItsHeadingAndFooter() {
+        var embed = new net.dv8tion.jda.api.EmbedBuilder().setColor(0xE74C3C).setTitle("❌ Action failed")
+                .setDescription("Please try again.").addField("Reference", "`abc123`", false)
+                .setThumbnail("https://cdn.example/t.png").setFooter("BunnyNexus").build();
+        var card = Card.fromEmbed(embed);
+        var container = card(card);
+        assertNull(container.getAccentColorRaw(), "cards are plain: the embed colour is dropped");
+        assertTrue(container.getComponents().getFirst() instanceof Section header && header.getAccessory() instanceof Thumbnail);
+        assertEquals("### ❌ Action failed\nPlease try again.\n### Reference\n`abc123`\n-# BunnyNexus", card.plainText());
+        assertNull(card(Card.fromEmbed(new net.dv8tion.jda.api.EmbedBuilder().setDescription("plain").build())).getAccentColorRaw(),
+                "an embed without a colour stays plain");
+        var huge = new net.dv8tion.jda.api.EmbedBuilder().setTitle("Big").setDescription("x".repeat(4096));
+        huge.addField("f", "y".repeat(1000), false); // 5100 characters: a legal embed, too long for one card
+        assertTrue(Card.fromEmbed(huge.build()).textLength() <= Card.MAX_TEXT, "an oversized embed still makes a sendable card");
+    }
+
     @Test void componentsAreReadOnly() {
         List<MessageTopLevelComponent> components = Card.builder().text("x").build().components();
         assertThrows(UnsupportedOperationException.class, () -> components.add(TextDisplay.of("y")));

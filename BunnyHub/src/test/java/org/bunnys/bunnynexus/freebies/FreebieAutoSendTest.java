@@ -80,8 +80,9 @@ class FreebieAutoSendTest {
     @Test void anAutoSendReviewStillPingsTheOwners() {
         var message = FreebieMessages.review(pending(FreebieStore.EPIC, false), 3, 2, Set.of(OWNER), true);
         assertEquals(Set.of(OWNER), message.getMentionedUsers());
-        assertTrue(message.getContent().startsWith("<@" + OWNER + ">"), message.getContent());
-        assertTrue(message.getContent().contains("sent automatically"), message.getContent());
+        String text = V2.text(message.getComponents());
+        assertTrue(text.startsWith("<@" + OWNER + ">"), text);
+        assertTrue(text.contains("sent automatically"), text);
         var reviewed = FreebieMessages.review(pending(FreebieStore.EPIC, false), 3, 2, Set.of(OWNER), false);
         assertEquals(Set.of(OWNER), reviewed.getMentionedUsers());
     }

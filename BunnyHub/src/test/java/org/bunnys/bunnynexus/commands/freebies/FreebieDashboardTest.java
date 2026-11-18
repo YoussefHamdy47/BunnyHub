@@ -256,7 +256,10 @@ class FreebieDashboardTest {
         try (var panel = FreebieServerSetup.sectionRolePanel(roles)) {
             assertTrue(panel.getMentionedRoles().isEmpty());
             assertFalse(panel.getAllowedMentions().contains(Message.MentionType.ROLE));
-            var buttons = panel.getComponents().getFirst().asActionRow().getComponents();
+            // The panel is a card: its button rows sit inside it.
+            var buttons = ((net.dv8tion.jda.api.components.container.Container) panel.getComponents().getFirst()).getComponents().stream()
+                    .filter(c -> c instanceof net.dv8tion.jda.api.components.actionrow.ActionRow)
+                    .map(c -> (net.dv8tion.jda.api.components.actionrow.ActionRow) c).findFirst().orElseThrow().getComponents();
             assertEquals(1, buttons.size());
             assertEquals(FreebieServerSetup.ROLE_PREFIX + ":" + ROLE, buttons.getFirst().asButton().getCustomId());
             assertEquals("All free games", buttons.getFirst().asButton().getLabel());

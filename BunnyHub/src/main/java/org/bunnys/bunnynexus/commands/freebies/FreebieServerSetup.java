@@ -159,11 +159,10 @@ public final class FreebieServerSetup {
                         .withEmoji(Emoji.fromUnicode(emoji)));
         }
         String body = lines.toString().strip();
-        var embed = Embeds.of("🔔", "Never miss your next free game", body.length() <= 4000 ? body : body.substring(0, 3999) + "…")
+        var embed = Embeds.of(null, "Never miss your next free game", body.length() <= 4000 ? body : body.substring(0, 3999) + "…")
                 .setTimestamp(null);
         Embeds.footer(embed, "Tap to opt in • Tap again to opt out");
-        return new MessageCreateBuilder().setEmbeds(embed.build()).setComponents(ActionRow.partitionOf(buttons))
-                .setAllowedMentions(List.of()).build();
+        return org.bunnys.handler.cards.Card.fromEmbed(embed.build(), ActionRow.partitionOf(buttons)).message();
     }
 
     static String labels(Set<FreebieStore> stores) {

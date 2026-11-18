@@ -25,8 +25,7 @@ public final class FreebieDeliveryButtons extends BunnyButton {
         var view = args.length == 5 && args[1].equals("retry")
                 ? system.deliveryAdmin().confirm(actor, offer, args[3], args[4])
                 : system.deliveryAdmin().history(actor, offer, offer + "|" + args[3]);
-        event.getHook().editOriginalEmbeds(Embeds.of("🎁", "Delivery history", view.text()).build())
-                .setComponents(view.rows()).setAllowedMentions(List.of()).queue();
+        event.getHook().editOriginal(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Delivery history", view.text()).build(), view.rows()).edit()).queue();
     }
 }
 

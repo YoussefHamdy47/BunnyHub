@@ -52,8 +52,9 @@ public final class AvatarCommand {
         List<Button> buttons = new ArrayList<>();
         buttons.add(Button.link(global, "Global Avatar"));
         if (server != null) buttons.add(Button.link(server, "Server Avatar"));
-        return Card.builder().title("🖼️ " + name + "'s Avatar").text(links)
+        // The classic avatar look: a small title, the links, the large image, buttons below.
+        return Card.builder().heading(name + "'s Avatar").text(links)
                 .image(serverFirst && server != null ? server : global)
-                .buttons(buttons).footer(size + "px").build().message();
+                .buttonsBelow(buttons).build().message();
     }
 }

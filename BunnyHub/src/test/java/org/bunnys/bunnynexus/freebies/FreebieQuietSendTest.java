@@ -98,8 +98,7 @@ class FreebieQuietSendTest {
     }
 
     static List<String> buttons(MessageCreateData data) {
-        return data.getComponents().stream().flatMap(c -> ((ActionRow) c).getComponents().stream())
-                .map(b -> ((Button) b).getCustomId()).toList();
+        return V2.buttons(data.getComponents()).stream().map(Button::getCustomId).toList();
     }
 
     @Test void everyConfirmationOffersSendingWithoutAPing() {

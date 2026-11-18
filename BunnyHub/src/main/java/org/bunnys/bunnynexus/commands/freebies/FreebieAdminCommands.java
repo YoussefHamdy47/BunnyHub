@@ -26,7 +26,7 @@ public final class FreebieAdminCommands {
                 ctx.defer(true);
                 text = action.apply(system, user);
             }
-            ctx.reply(Embeds.of("🎁", "Free-game alerts — admin", text).build(), true);
+            ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Free-game alerts — admin", text).build()), true);
         }
     }
 

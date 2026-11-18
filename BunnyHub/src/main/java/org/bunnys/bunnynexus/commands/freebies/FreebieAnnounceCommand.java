@@ -35,18 +35,18 @@ public final class FreebieAnnounceCommand extends BunnySubcommand {
         var system = FreebieSystem.current().orElse(null);
         String user = ctx.getUser().getId();
         if (system == null || !system.config().isOwner(user)) {
-            ctx.reply(Embeds.of("📢", "Announcement", "Only active freebie owners can use this.").build(), true);
+            ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Announcement", "Only active freebie owners can use this.").build()), true);
             return;
         }
         if (ctx.getChannel() == null || !system.config().isReviewChannel(ctx.getChannel().getId())) {
-            ctx.reply(Embeds.of("📢", "Announcement", "Use this in a free-game review channel, where the confirmation button works.").build(), true);
+            ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Announcement", "Use this in a free-game review channel, where the confirmation button works.").build()), true);
             return;
         }
         ctx.defer(true);
         String section = ctx.getString("section");
         boolean fallback = MAIN.equals(ctx.getString("if-missing"));
         switch (system.announce(user, ctx.getString("title"), ctx.getString("message"), ALL.equals(section) ? null : section, fallback)) {
-            case FreebieBroadcasts.Problem problem -> ctx.reply(Embeds.of("📢", "Announcement", problem.text()).build(), true);
+            case FreebieBroadcasts.Problem problem -> ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Announcement", problem.text()).build()), true);
             case FreebieBroadcasts.Preview preview -> ctx.replyMessage(preview.message());
         }
     }

@@ -17,8 +17,8 @@ public final class Replies {
 
     public static void privately(IReplyCallback event, MessageEmbed embed) {
         if (event.isAcknowledged())
-            event.getHook().sendMessageEmbeds(embed).setEphemeral(true).setAllowedMentions(List.of()).queue(null, ignored -> {});
+            event.getHook().sendMessage(org.bunnys.handler.cards.Card.fromEmbed(embed).message()).setEphemeral(true).setAllowedMentions(List.of()).queue(null, ignored -> {});
         else
-            event.replyEmbeds(embed).setEphemeral(true).setAllowedMentions(List.of()).queue(null, ignored -> {});
+            event.reply(org.bunnys.handler.cards.Card.fromEmbed(embed).message()).setEphemeral(true).setAllowedMentions(List.of()).queue(null, ignored -> {});
     }
 }

@@ -6,9 +6,9 @@ import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
 import org.bunnys.utils.Embeds;
 
-import java.util.ArrayList;
 import java.util.List;
-import org.bunnys.handler.cards.Card;
+import net.dv8tion.jda.api.EmbedBuilder;
+import org.bunnys.utils.AppDesign;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -58,13 +58,13 @@ public final class InfoEmbeds {
 
     private InfoEmbeds() {}
 
-    private static void appendBotCredit(List<String> lines, String botVersion,
+    private static void appendBotCredit(EmbedBuilder embed, String botVersion,
                                         String developerName, String developerId) {
         if (botVersion != null && !botVersion.isBlank())
-            lines.add("ℹ️ **Version** `" + botVersion + "`");
+            embed.addField("Version", "`" + botVersion + "`", true);
 
         if (developerName != null && !developerName.isBlank())
-            lines.add("🛠️ **Built By** " + credit(developerName, developerId));
+            embed.addField("Built By", credit(developerName, developerId), true);
     }
 
     /**
@@ -92,7 +92,7 @@ public final class InfoEmbeds {
     }
 
     private static String avatarLinks(String global, String server) {
-        String links = "[Global Avatar](" + global + ")";
+        String links = "[Public Avatar](" + global + ")";
         return server == null ? links : links + "  |  [Server Avatar](" + server + ")";
     }
 
@@ -106,7 +106,7 @@ public final class InfoEmbeds {
      * @param member null outside a guild, or when the target is not a member of it -
      *               in which case the guild half is dropped rather than faked
      */
-    public static Card userInfo(User target, Member member) {
+    public static MessageEmbed userInfo(User target, Member member) {
         return userInfo(target, member, null, null, null);
     }
 
@@ -120,46 +120,47 @@ public final class InfoEmbeds {
      *
      * @param developerName null on any card that is not the bot's own
      */
-    public static Card userInfo(User target, Member member, String botVersion,
-                                String developerName, String developerId) {
+    public static MessageEmbed userInfo(User target, Member member, String botVersion,
+                                        String developerName, String developerId) {
         if (member == null)
             return strangerInfo(target, botVersion, developerName, developerId);
 
         long created = target.getTimeCreated().toEpochSecond();
 
-        // One line per detail instead of three columns of inline fields: easier to scan on a phone too.
-        List<String> lines = new ArrayList<>();
-        String badges = MemberDetails.badges(target);
-        if (badges != null) lines.add("🏅 **Badges** " + badges);
-        lines.add("📅 **Joined Discord** " + moment(created));
-        if (member.hasTimeJoined()) lines.add("📥 **Joined Server** " + moment(member.getTimeJoined().toEpochSecond()));
-        lines.add("👤 **Account Type** " + (target.isBot() ? "Bot" : "Human"));
-        lines.add("🔖 **Username** `" + target.getName() + "`");
-        // Only worth a line when it differs from the name already in the heading.
-        if (member.getNickname() != null) lines.add("🎨 **Nickname** " + member.getNickname());
-        lines.add("🆔 **User ID** [" + target.getId() + "](" + profileUrl(target) + ")");
-        String colour = MemberDetails.colourField(member);
-        if (colour != null) lines.add("🖌️ **Colour** " + colour);
-        lines.add("🏷️ **Highest Role** " + MemberDetails.highestRole(member));
-        if (member.isBoosting() && member.getTimeBoosted() != null)
-            lines.add("💎 **Boosting Since** " + moment(member.getTimeBoosted().toEpochSecond()));
-        appendBotCredit(lines, botVersion, developerName, developerId);
+        // The classic profile: author line with the avatar, plain labels in a three-column grid. Only real badge
+        // icons are emoji; no decorative ones.
+        EmbedBuilder embed = new EmbedBuilder()
+                .setAuthor(displayName(target, member), profileUrl(target), member.getEffectiveAvatarUrl())
+                .setDescription(avatarLinks(globalAvatar(target), serverAvatar(member)))
+                .setColor(AppDesign.ColorCodes.DEFAULT)
+                .setFooter("TIP: " + tip());
 
-        var card = Card.builder()
-                .header("## 👤 [" + displayName(target, member) + "](" + profileUrl(target) + ")\n" + target.getAsMention() + "\n"
-                        + avatarLinks(globalAvatar(target), serverAvatar(member)), member.getEffectiveAvatarUrl())
-                .divider()
-                .text(String.join("\n", lines));
+        String badges = MemberDetails.badges(target);
+        if (badges != null) embed.addField("User Badges", badges, false);
+
+        embed.addField("Joined Discord", moment(created), true);
+        if (member.hasTimeJoined()) embed.addField("Joined Server", moment(member.getTimeJoined().toEpochSecond()), true);
+        embed.addField("Nickname", member.getNickname() != null ? member.getNickname() : target.getName(), true);
+
+        embed.addField("Account Type", target.isBot() ? "Bot" : "Human", true);
+        String colour = MemberDetails.colourField(member);
+        embed.addField("Color", colour != null ? colour : "Default", true);
+        embed.addField("ID", "[" + target.getId() + "](" + profileUrl(target) + ")", true);
+
+        embed.addField("Highest Role", MemberDetails.highestRole(member), true);
+        if (member.isBoosting() && member.getTimeBoosted() != null)
+            embed.addField("Boosting Since", moment(member.getTimeBoosted().toEpochSecond()), true);
 
         List<Role> roles = member.getRoles();
         if (!roles.isEmpty())
-            card.field("Roles [" + roles.size() + "]", MemberDetails.roleList(roles));
+            embed.addField("Roles [" + roles.size() + "]", MemberDetails.roleList(roles), false);
 
         List<String> keyPermissions = MemberDetails.keyPermissions(member);
         if (!keyPermissions.isEmpty())
-            card.field("Key Permissions [" + keyPermissions.size() + "]", clamp("🔑 " + String.join(", ", keyPermissions)));
+            embed.addField("Key Permissions [" + keyPermissions.size() + "]", clamp(String.join(", ", keyPermissions)), false);
 
-        return card.footer("Tip: " + tip() + " • " + Embeds.FOOTER).build();
+        appendBotCredit(embed, botVersion, developerName, developerId);
+        return embed.build();
     }
 
     /**
@@ -168,26 +169,25 @@ public final class InfoEmbeds {
      * <p>Everything guild-shaped is genuinely unknowable here, so the card says less
      * rather than printing a column of dashes.
      */
-    private static Card strangerInfo(User target, String botVersion,
-                                     String developerName, String developerId) {
+    private static MessageEmbed strangerInfo(User target, String botVersion,
+                                             String developerName, String developerId) {
         long created = target.getTimeCreated().toEpochSecond();
 
-        List<String> lines = new ArrayList<>();
-        String badges = MemberDetails.badges(target);
-        if (badges != null) lines.add("🏅 **Badges** " + badges);
-        lines.add("📅 **Joined Discord** " + moment(created));
-        lines.add("👤 **Account Type** " + (target.isBot() ? "Bot" : "Human"));
-        lines.add("🔖 **Username** `" + target.getName() + "`");
-        lines.add("🆔 **User ID** [" + target.getId() + "](" + profileUrl(target) + ")");
-        appendBotCredit(lines, botVersion, developerName, developerId);
+        EmbedBuilder embed = new EmbedBuilder()
+                .setAuthor(target.getEffectiveName(), profileUrl(target), globalAvatar(target))
+                .setDescription(avatarLinks(globalAvatar(target), null))
+                .setColor(AppDesign.ColorCodes.DEFAULT)
+                .setFooter("TIP: This shows much more for members of this server");
 
-        return Card.builder()
-                .header("## 👤 [" + target.getEffectiveName() + "](" + profileUrl(target) + ")\n" + target.getAsMention() + "\n"
-                        + avatarLinks(globalAvatar(target), null), globalAvatar(target))
-                .divider()
-                .text(String.join("\n", lines))
-                .footer("Tip: This shows much more for members of this server • " + Embeds.FOOTER)
-                .build();
+        String badges = MemberDetails.badges(target);
+        if (badges != null) embed.addField("User Badges", badges, false);
+
+        embed.addField("Joined Discord", moment(created), true)
+                .addField("Account Type", target.isBot() ? "Bot" : "Human", true)
+                .addField("ID", "[" + target.getId() + "](" + profileUrl(target) + ")", true);
+
+        appendBotCredit(embed, botVersion, developerName, developerId);
+        return embed.build();
     }
 
     // ------------------------------------------------------------------

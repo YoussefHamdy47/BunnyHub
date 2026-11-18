@@ -100,7 +100,7 @@ public final class FreebieDashboard {
     }
 
     public static MessageEditData asEdit(Reply reply) {
-        return new MessageEditBuilder().setEmbeds(reply.embed()).setComponents(reply.rows()).setAllowedMentions(List.of()).build();
+        return reply.card().edit();
     }
 
     // ------------------------------------------------------------------ main view

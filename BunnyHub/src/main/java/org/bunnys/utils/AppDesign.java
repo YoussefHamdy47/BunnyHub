@@ -9,9 +9,9 @@ public final class AppDesign {
     public static final class Emojis {
         private Emojis() {}
 
-        public static final String VERIFY = "<:verified:821419611438317638>";
-        public static final String ERROR = "<:error:822091680605011978>";
-        public static final String STOP = "<:Stop:1518033663047241929>";
+        public static final String VERIFY = "<:Verified:1572333524386586684>"; // Bot-owned emojis: render in every server and card.
+        public static final String ERROR = "<:Error:1572333523052920867>";
+        public static final String STOP = "<:Stop:1572333525787607060>";
         public static final String EPIC = "<:Epic:824679104220626954>";
         public static final String STEAM = "<:steam:705062577817780315>";
 

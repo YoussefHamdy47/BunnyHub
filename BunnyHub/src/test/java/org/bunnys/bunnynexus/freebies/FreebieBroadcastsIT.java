@@ -37,8 +37,7 @@ class FreebieBroadcastsIT {
 
     String token(FreebieBroadcasts.Reply reply) {
         var preview = assertInstanceOf(FreebieBroadcasts.Preview.class, reply);
-        String id = ((net.dv8tion.jda.api.components.buttons.Button) preview.message().getComponents().getFirst().asActionRow()
-                .getComponents().getFirst()).getCustomId();
+        String id = V2.buttons(preview.message().getComponents()).getFirst().getCustomId();
         return id;
     }
     static String action(String customId) { return customId.split(":", 3)[1]; }
@@ -71,8 +70,8 @@ class FreebieBroadcastsIT {
         String id = draftId(button);
         String quiet = FreebieMessages.BUTTON_PREFIX + ":" + FreebieBroadcasts.SEND_QUIET;
         var preview = assertInstanceOf(FreebieBroadcasts.Preview.class, broadcasts.preview("owner", "T", "B"));
-        var ids = preview.message().getComponents().getFirst().asActionRow().getComponents().stream()
-                .map(c -> ((net.dv8tion.jda.api.components.buttons.Button) c).getCustomId()).toList();
+        var ids = V2.buttons(preview.message().getComponents()).stream()
+                .map(net.dv8tion.jda.api.components.buttons.Button::getCustomId).toList();
         assertTrue(ids.stream().anyMatch(i -> i.startsWith(quiet)), "the preview offers Send without ping");
         assertTrue(broadcasts.confirm("owner", id, action(button).substring(FreebieBroadcasts.SEND.length()), true).contains("pinged"));
         assertTrue(repository.broadcasts().get(id).orElseThrow().ping());
@@ -108,7 +107,7 @@ class FreebieBroadcastsIT {
     @Test void withFallbackServersWithoutTheSectionGetTheirMainChannel() {
         var target = FreebieBroadcasts.target(String.valueOf(FreebieSection.OTHER_PC.code()), true);
         var preview = assertInstanceOf(FreebieBroadcasts.Preview.class, broadcasts.preview("owner", "T", "B", target));
-        assertTrue(preview.message().getEmbeds().get(1).getDescription().contains("1 in their main channel"));
+        assertTrue(V2.text(preview.message().getComponents()).contains("1 in their main channel"));
         assertEquals(Map.of("100000000000000001", "300000000000000005", "100000000000000002", "300000000000000007"), planned(target));
     }
 

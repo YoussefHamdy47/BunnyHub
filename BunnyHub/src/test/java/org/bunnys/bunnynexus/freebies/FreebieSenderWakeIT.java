@@ -179,8 +179,7 @@ class FreebieSenderWakeIT {
     @Test void aConfirmedOwnerAnnouncementIsSentAtOnce() {
         idleSystem(PER_GAME);
         var preview = assertInstanceOf(FreebieBroadcasts.Preview.class, system.announce(OWNER, "Maintenance", "Back soon"));
-        String button = ((net.dv8tion.jda.api.components.buttons.Button) preview.message().getComponents().getFirst().asActionRow()
-                .getComponents().getFirst()).getCustomId();
+        String button = V2.buttons(preview.message().getComponents()).getFirst().getCustomId();
         String[] parts = button.split(":", 3);
         scheduler.runDue();
         assertEquals(0, db.getCollection(FreebieBroadcastStore.JOBS).countDocuments(), "a preview sends nothing");

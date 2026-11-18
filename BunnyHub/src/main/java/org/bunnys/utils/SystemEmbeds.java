@@ -23,8 +23,13 @@ public final class SystemEmbeds {
     public static MessageEmbed missingImplementation() {
         return error("Unavailable", "This command is not implemented yet.");
     }
+    /**
+     * Something broke on our side. The reference goes in the small footer line (errors are sent as cards, where it
+     * renders as code), so the message itself stays one plain sentence.
+     */
     public static MessageEmbed crashed(String reference, boolean vanishes) {
-        return error("Action failed", "Please try again. Error reference: `" + reference + "`."
-                + (vanishes ? " This notice disappears after " + Embeds.ERROR_SECONDS + " seconds." : ""));
+        return new net.dv8tion.jda.api.EmbedBuilder(error("Action failed", "Something went wrong on our side. Please try again."
+                + (vanishes ? "\nThis notice disappears after " + Embeds.ERROR_SECONDS + " seconds." : "")))
+                .setFooter("Reference `" + reference + "` • " + Embeds.FOOTER).build();
     }
 }
