@@ -165,7 +165,7 @@ public final class FreebieExistingSetup {
         var lines = new StringBuilder();
         for (int i = 0; i < found.size(); i++)
             lines.append(chosen.contains(i) ? "☑️ " : "⬜ ").append(MarkdownSanitizer.escape(found.get(i).describe())).append('\n');
-        var embed = Embeds.of("🔎", "You already have some free-game channels or roles").setTimestamp(null)
+        var embed = Embeds.of(null, "You already have some free-game channels or roles").setTimestamp(null)
                 .setDescription((notice == null ? "" : notice + "\n\n")
                         + "Before I create anything: these look like they were made for free games. Pick the ones I should use; "
                         + "I'll create the rest.\n\n" + lines.toString().strip())

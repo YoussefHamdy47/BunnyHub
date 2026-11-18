@@ -112,8 +112,9 @@ public final class FreebieBroadcasts {
         String token = FreebieReleases.token();
         var draft = repository.broadcasts().draft(title, body, actor, token, clock.instant(),
                 target.section().map(s -> String.valueOf(s.code())).orElse(null), target.fallback());
-        var preview = FreebieBroadcastWorker.message(title, body, "Bot announcement • ref preview").getEmbeds().getFirst();
-        var info = Embeds.of("📣", "Send this announcement?")
+        // The announcement exactly as servers get it, then the send panel.
+        var preview = FreebieBroadcastWorker.message(title, body, "Bot announcement • ref preview").getComponents();
+        var info = Embeds.of(null, "Send this announcement?")
                 .setDescription("It goes to **" + servers + "** server(s): " + target.describe() + ", one message each"
                         + (viaFallback > 0 ? " (" + viaFallback + " in their main channel because they have no such section)" : "")
                         + ". Servers following an Announcement Channel do not receive it.\n"
@@ -121,11 +122,12 @@ public final class FreebieBroadcasts {
                         + "@everyone and @here are never pinged.\n"
                         + "Only you can confirm, within 15 minutes. Messages cannot be recalled once sent.")
                 .setTimestamp(null).build();
-        return new Preview(new MessageCreateBuilder().setEmbeds(preview, info)
-                .setComponents(ActionRow.of(Button.danger(FreebieMessages.BUTTON_PREFIX + ":" + SEND + token + ":" + draft.id(), "Send with ping"),
+        var panel = org.bunnys.handler.cards.Card.fromEmbed(info, List.of(ActionRow.of(Button.danger(FreebieMessages.BUTTON_PREFIX + ":" + SEND + token + ":" + draft.id(), "Send with ping"),
                         Button.primary(FreebieMessages.BUTTON_PREFIX + ":" + SEND_QUIET + token + ":" + draft.id(), "Send without ping"),
-                        Button.secondary(FreebieMessages.BUTTON_PREFIX + ":" + STOP + ":" + draft.id(), "Discard")))
-                .setAllowedMentions(List.of()).build());
+                        Button.secondary(FreebieMessages.BUTTON_PREFIX + ":" + STOP + ":" + draft.id(), "Discard")))).components();
+        List<net.dv8tion.jda.api.components.MessageTopLevelComponent> all = new ArrayList<>(preview);
+        all.addAll(panel);
+        return new Preview(new MessageCreateBuilder().useComponentsV2(true).setComponents(all).setAllowedMentions(List.of()).build());
     }
 
     /** The owner's confirmation: DRAFT → SENDING once, then one job per server (idempotent). */

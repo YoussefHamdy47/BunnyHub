@@ -49,10 +49,25 @@ final class MemberDetails {
     };
 
     /**
-     * Discord's account badges, by name.
-     *
-     * <p>Named rather than drawn: the badge artwork is Discord's, and this bot's emoji
-     * uses standard emoji. Inventing approximations would look worse than reading them.
+     * Discord's own badge icons, uploaded as the bot's application emojis (2026-11-17). A flag without an icon is
+     * written out by name.
+     */
+    private static final java.util.Map<User.UserFlag, String> BADGE_EMOJIS = java.util.Map.ofEntries(
+            java.util.Map.entry(User.UserFlag.STAFF, "<:BadgeStaff:1572332010981163030>"),
+            java.util.Map.entry(User.UserFlag.PARTNER, "<:BadgePartner:1572332012226748478>"),
+            java.util.Map.entry(User.UserFlag.HYPESQUAD, "<:BadgeHypeSquadEvents:1572332013556334733>"),
+            java.util.Map.entry(User.UserFlag.BUG_HUNTER_LEVEL_1, "<:BadgeBugHunter:1572332015230132246>"),
+            java.util.Map.entry(User.UserFlag.BUG_HUNTER_LEVEL_2, "<:BadgeBugHunterGold:1572332016479899740>"),
+            java.util.Map.entry(User.UserFlag.HYPESQUAD_BRAVERY, "<:BadgeBravery:1572332018174533642>"),
+            java.util.Map.entry(User.UserFlag.HYPESQUAD_BRILLIANCE, "<:BadgeBrilliance:1572332019546066964>"),
+            java.util.Map.entry(User.UserFlag.HYPESQUAD_BALANCE, "<:BadgeBalance:1572332020913274950>"),
+            java.util.Map.entry(User.UserFlag.EARLY_SUPPORTER, "<:BadgeEarlySupporter:1572332021974433916>"),
+            java.util.Map.entry(User.UserFlag.VERIFIED_DEVELOPER, "<:BadgeVerifiedDeveloper:1572332023455154196>"),
+            java.util.Map.entry(User.UserFlag.CERTIFIED_MODERATOR, "<:BadgeModeratorAlumni:1572332024717385892>"),
+            java.util.Map.entry(User.UserFlag.ACTIVE_DEVELOPER, "<:BadgeActiveDeveloper:1572332026219077705>"));
+
+    /**
+     * Discord's account badges, as their icons (names for any without one).
      *
      * @return null when the account carries none, so the caller can drop the field
      */
@@ -68,10 +83,10 @@ final class MemberDetails {
                     || flag == User.UserFlag.TEAM_USER
                     || flag == User.UserFlag.BOT_HTTP_INTERACTIONS)
                 continue;
-            named.add(flag.getName());
+            named.add(BADGE_EMOJIS.getOrDefault(flag, flag.getName()));
         }
 
-        return named.isEmpty() ? null : String.join(", ", named);
+        return named.isEmpty() ? null : String.join(" ", named);
     }
 
     /**
@@ -94,7 +109,7 @@ final class MemberDetails {
             return null;
 
         if (colours.isHolographic())
-            return "🎨" + " Holographic";
+            return "Holographic";
 
         String primary = swatch(colours.getPrimary());
         if (primary == null)
@@ -102,10 +117,10 @@ final class MemberDetails {
 
         if (colours.isGradient()) {
             String secondary = swatch(colours.getSecondary());
-            return "🎨" + " " + primary + " to " + (secondary == null ? "?" : secondary);
+            return primary + " to " + (secondary == null ? "?" : secondary);
         }
 
-        return "🎨" + " " + primary;
+        return primary;
     }
 
     /** A hex code linked to a full-size swatch, or null when there is no colour. */
@@ -130,11 +145,11 @@ final class MemberDetails {
      * becomes a count rather than taking the embed down.
      */
     static String roleList(List<Role> roles) {
-        StringBuilder text = new StringBuilder("🏷️");
+        StringBuilder text = new StringBuilder();
         int shown = 0;
 
         for (Role role : roles) {
-            String next = " " + role.getAsMention();
+            String next = (text.isEmpty() ? "" : ", ") + role.getAsMention();
             // Leave room for the "and N more" tail before committing to another mention.
             if (text.length() + next.length() > MessageEmbed.VALUE_MAX_LENGTH - 24)
                 break;

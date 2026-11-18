@@ -45,8 +45,8 @@ public final class FreeGamesCommand {
             if (typed != null) {
                 store = FreebieStore.byId(typed.strip().toLowerCase(Locale.ROOT));
                 if (store.isEmpty()) {
-                    ctx.reply(SystemEmbeds.error("Unknown launcher", "Try one of: " + String.join(", ",
-                            Arrays.stream(FreebieStore.values()).map(FreebieStore::id).toList()) + "."), true);
+                    ctx.replyTransient(SystemEmbeds.error("Unknown launcher", "Try one of: " + String.join(", ",
+                            Arrays.stream(FreebieStore.values()).map(FreebieStore::id).toList()) + "."));
                     return;
                 }
             }
@@ -54,7 +54,10 @@ public final class FreeGamesCommand {
         }
     }
 
-    /** Opens the section picker; the picker ({@code FreebieDmSubscribeSelect}) does the consent DM and the save. */
+    /**
+     * Opens the section picker. Picking shows a confirm step ({@code FreebieDmSubscribeSelect}); Confirm
+     * ({@code FreebieDmConfirmButtons}) sends the consent DM and saves.
+     */
     public static final class Dms extends BunnySubcommand {
         public Dms() {
             setName("dms");
@@ -67,20 +70,10 @@ public final class FreeGamesCommand {
             var system = FreebieSystem.current().orElse(null);
             if (system == null) { unavailable(ctx); return; }
             var dms = system.dms();
-            if (!dms.enabled()) { ctx.reply(SystemEmbeds.notice("Free-game DMs", "Personal DM alerts are turned off right now."), true); return; }
+            if (!dms.enabled()) { ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.notice("Free-game DMs", "Personal DM alerts are turned off right now.")), true); return; }
             String user = ctx.getUser().getId();
-            var current = dms.current(user);
-            String rules = "At most " + FreebieDm.DAILY_CAP + " a day. `/free-games help` explains how games are checked.";
-            var embed = Embeds.of(null, current.isPresent() ? "Change your free-game DMs" : "Free-game DMs")
-                    .setDescription(current.isPresent()
-                            ? "You get DMs for **" + FreebieDm.labels(current.get()) + "**. Pick different sections below, "
-                                    + "or use **Unsubscribe** to stop. " + rules
-                            : "Pick the sections you want a DM for. " + rules)
-                    .setTimestamp(null).build();
             // Subscribers get the off switch right here, so changing and stopping DMs is one command.
-            List<ActionRow> rows = new ArrayList<>(FreebieDm.picker(user, current.orElse(Set.of())));
-            if (current.isPresent()) rows.add(ActionRow.of(FreebieDm.unsubscribeButton()));
-            ctx.reply(embed, rows, true);
+            ctx.replyCard(FreebieDm.pickerCard(user, dms.current(user)), true);
         }
     }
 
@@ -109,11 +102,11 @@ public final class FreeGamesCommand {
 
         @Override public void execute(BunnyHub client, CommandContext ctx) {
             var autoSend = FreebieSystem.current().map(system -> system.config().autoSend()).orElse(Set.of());
-            ctx.reply(FreebieGuide.embed(autoSend), true);
+            ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(FreebieGuide.embed(autoSend)), true);
         }
     }
 
     private static void unavailable(CommandContext ctx) {
-        ctx.reply(SystemEmbeds.notice("Free games", "Free-game alerts are not available right now."), true);
+        ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.notice("Free games", "Free-game alerts are not available right now.")), true);
     }
 }

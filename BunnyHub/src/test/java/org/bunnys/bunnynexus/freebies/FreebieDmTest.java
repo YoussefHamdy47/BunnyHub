@@ -39,22 +39,20 @@ class FreebieDmTest {
     }
 
     static List<Button> buttons(MessageCreateData data) {
-        List<Button> buttons = new ArrayList<>();
-        for (var row : data.getComponents()) if (row instanceof ActionRow r) r.getComponents().forEach(c -> buttons.add((Button) c));
-        return buttons;
+        return V2.buttons(data.getComponents());
     }
 
     @Test void theDmCardIsTheAlertCardWithoutAnyMentionPlusUnsubscribe() {
         String job = FreebieDm.jobId(epic.id(), "400000000000000000");
         var card = FreebieDm.card(epic, job);
-        assertTrue(card.getContent().isEmpty(), "no role ping in a DM");
+        assertFalse(V2.text(card.getComponents()).contains("<@"), "no role ping in a DM");
         assertTrue(card.getAllowedMentions().isEmpty());
         assertTrue(card.getMentionedRoles().isEmpty());
         assertTrue(card.getMentionedUsers().isEmpty());
         assertFalse(card.isMentionRepliedUser());
-        var channelCard = FreebieMessages.alertEmbed(epic, FreebieDm.reference(job), true);
-        assertEquals(channelCard, card.getEmbeds().getFirst(), "same card as channel alerts, plus the claim steps");
-        assertEquals("Powered by GamerPower • ref " + FreebieDm.reference(job), card.getEmbeds().getFirst().getFooter().getText());
+        assertTrue(card.isUsingComponentsV2(), "the same card as channel alerts");
+        assertTrue(V2.text(card.getComponents()).contains("-# Powered by GamerPower • ref " + FreebieDm.reference(job)));
+        assertTrue(FreebieDm.carriesReference(V2.posted(card.getComponents()), job));
         var unsubscribe = buttons(card).getLast();
         assertEquals("Unsubscribe", unsubscribe.getLabel());
         assertEquals(FreebieDm.UNSUBSCRIBE_PREFIX, unsubscribe.getCustomId(), "stateless: no user ID in the button");
@@ -143,9 +141,38 @@ class FreebieDmTest {
     @Test void theSummaryReportsDmTotalsInOneLine() {
         var counts = new FreebieRepository.Counts(3, 0, 0, 0);
         var summary = FreebieMessages.summary(epic, counts, List.of(), Map.of(), new FreebieDmJobs.Totals(4, 1, 0, 0, 2));
-        var text = summary.getEmbeds().getFirst().getDescription();
+        var text = V2.text(summary.getComponents());
         assertTrue(text.contains("**Personal DMs** · 4 sent · 2 still queued · 1 over the daily limit · 0 failed · 0 cancelled"), text);
         var none = FreebieMessages.summary(epic, counts, List.of(), Map.of(), new FreebieDmJobs.Totals(0, 0, 0, 0, 0));
-        assertFalse(none.getEmbeds().getFirst().getDescription().contains("Personal DMs"));
+        assertFalse(V2.text(none.getComponents()).contains("Personal DMs"));
+    }
+    @Test void pickingSectionsOnlyAsksForConfirmationAndNamesWhatHappensNext() {
+        String user = "400000000000000000";
+        var picker = FreebieDm.pickerCard(user, Optional.empty()).message();
+        assertTrue(V2.buttons(picker.getComponents()).isEmpty(), "a new subscriber has nothing to confirm yet");
+        assertTrue(V2.text(picker.getComponents()).contains("confirm before anything is turned on"));
+        var subscribed = FreebieDm.pickerCard(user, Optional.of(EnumSet.of(FreebieSection.MAJOR_PC))).message();
+        assertEquals(List.of(FreebieDm.UNSUBSCRIBE_PREFIX), V2.buttons(subscribed.getComponents()).stream().map(Button::getCustomId).toList());
+
+        var sections = EnumSet.of(FreebieSection.MAJOR_PC);
+        var ask = FreebieDm.confirmCard(user, sections, false).message();
+        assertTrue(V2.text(ask.getComponents()).contains("I send you one DM to check I can reach you"));
+        var ids = V2.buttons(ask.getComponents()).stream().map(Button::getCustomId).toList();
+        assertEquals(List.of(FreebieDm.CONFIRM_PREFIX + ":yes:" + user + ":" + FreebieSection.encode(sections),
+                FreebieDm.CONFIRM_PREFIX + ":no:" + user), ids);
+        assertTrue(ids.stream().allMatch(id -> id.length() <= 100), "Discord custom ID limit");
+        var change = FreebieDm.confirmCard(user, sections, true).message();
+        assertEquals("Save", V2.buttons(change.getComponents()).getFirst().getLabel());
+        assertTrue(V2.text(change.getComponents()).contains("No DM is sent"));
+    }
+
+    @Test void anEndedDmCardIsRecognisedAsEnded() {
+        String job = FreebieDm.jobId(epic.id(), "400000000000000000");
+        var card = FreebieDm.card(epic, job).getComponents();
+        String reference = FreebieDm.reference(job);
+        assertFalse(FreebieLifecycleMessages.isEnded(V2.posted(card), reference));
+        var ended = FreebieLifecycleMessages.endedCard(epic, "dm|" + job, card, false, Instant.now()).getComponents();
+        assertTrue(FreebieLifecycleMessages.isEnded(V2.posted(ended), reference));
+        assertTrue(FreebieMessages.carriesReference(V2.posted(ended), reference), "same reference after the edit");
     }
 }

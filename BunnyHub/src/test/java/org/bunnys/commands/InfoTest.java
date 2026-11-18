@@ -39,10 +39,11 @@ class InfoTest {
     }
 
     @Test void nonMemberCardOmitsMembershipAndKeepsAccountDetails() {
-        var card = InfoEmbeds.userInfo(user(), null);
-        assertTrue(card.plainText().contains("**Joined Discord**"));
-        assertFalse(card.plainText().contains("Joined Server"));
-        assertTrue(card.message().isUsingComponentsV2());
+        var embed = InfoEmbeds.userInfo(user(), null);
+        assertTrue(embed.getFields().stream().anyMatch(f -> f.getName().equals("Joined Discord")));
+        assertFalse(embed.getFields().stream().anyMatch(f -> f.getName().equals("Joined Server")));
+        assertTrue(embed.isSendable());
+        assertTrue(embed.getDescription().startsWith("[Public Avatar]("));
     }
 
     @Test void largeRoleListsAreTruncatedAndAdministratorIsShownAlone() {
@@ -56,10 +57,13 @@ class InfoTest {
             roles.add(role);
         }
         when(member.getRoles()).thenReturn(roles);
-        var card = InfoEmbeds.userInfo(user(), member); // build() checks Discord's limits
-        String text = card.plainText();
-        assertTrue(text.contains("### Roles [200]") && text.substring(text.indexOf("### Roles [200]")).contains("more"), text);
-        assertTrue(text.contains("### Key Permissions [1]"));
+        var embed = InfoEmbeds.userInfo(user(), member);
+        assertTrue(embed.isSendable());
+        assertTrue(embed.getFields().stream().allMatch(f -> f.getValue().length() <= MessageEmbed.VALUE_MAX_LENGTH));
+        assertTrue(embed.getFields().stream().anyMatch(f -> f.getName().equals("Roles [200]") && f.getValue().contains("more")));
+        assertTrue(embed.getFields().stream().anyMatch(f -> f.getName().equals("Key Permissions [1]") && f.getValue().equals("Administrator")));
+        assertEquals("Member", embed.getAuthor().getName());
+        assertTrue(embed.getFields().stream().noneMatch(f -> f.getValue().matches("^[\\p{So}].*")), "no decorative emoji in values");
     }
 
     @Test void serverCardWorksWithoutOwnerMemberCacheAndClampsLongFeatures() {
@@ -75,9 +79,14 @@ class InfoTest {
         when(guild.getLocale()).thenReturn(DiscordLocale.ENGLISH_US);
         when(guild.getFeatures()).thenReturn(Set.of("FEATURE_".repeat(200)));
         when(guild.getDescription()).thenReturn("x".repeat(1024));
-        var card = ServerInfoEmbeds.serverInfo(guild); // build() checks Discord's limits
-        assertTrue(card.plainText().contains("👑 **Owner** <@" + guild.getOwnerId() + ">"));
-        assertTrue(card.message().getMentionedUsers().isEmpty(), "the owner is shown, never pinged");
+        var embed = ServerInfoEmbeds.serverInfo(guild);
+        assertTrue(embed.isSendable());
+        assertTrue(embed.getFields().stream().allMatch(f -> f.getValue().length() <= MessageEmbed.VALUE_MAX_LENGTH));
+        assertTrue(embed.getFields().stream().anyMatch(f -> f.getName().equals("Owner") && f.getValue().contains(guild.getOwnerId())));
+        assertEquals(List.of("Total Members", "Owner", "Role Count", "Categories", "Text Channels", "Voice Channels", "Boosts",
+                "Boost Tier", "Verification Level", "Explicit Content Filter", "Region"),
+                embed.getFields().stream().map(MessageEmbed.Field::getName).limit(11).toList(), "the classic grid");
+        assertEquals("Server ID: " + guild.getId(), embed.getFooter().getText());
         verify(guild, never()).getOwner();
     }
 
@@ -110,7 +119,7 @@ class InfoTest {
         var order = inOrder(ctx, request);
         order.verify(ctx).defer();
         order.verify(request).queue(any(), any());
-        verify(ctx).replyCard(argThat(c -> c.plainText().contains("Resolved Member")));
+        verify(ctx).reply(argThat(e -> e.getAuthor().getName().equals("Resolved Member")));
     }
 
     @Test void omittedUserDefaultsToCallerAndUnknownExplicitUserDoesNot() {
@@ -124,7 +133,7 @@ class InfoTest {
         when(ctx.getJDA()).thenReturn(jda);
         var branch = new Info(null).resolveSubcommand("user");
         branch.execute(null, ctx);
-        verify(ctx).replyCard(argThat(c -> c.plainText().contains(user.getAsMention())));
+        verify(ctx).reply(argThat(e -> e.getAuthor().getUrl().endsWith(user.getId())));
         when(ctx.getString("user")).thenReturn("invalid");
         branch.execute(null, ctx);
         verify(ctx).replyTransient(argThat(e -> e.getTitle().endsWith("User Not Found")));

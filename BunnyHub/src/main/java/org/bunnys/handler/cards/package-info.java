@@ -11,7 +11,7 @@
  *       fields share one text block, like embed fields), {@code section(text, button or thumbnail)};</li>
  *   <li>{@code image}, {@code gallery} (up to 10 images side by side), {@code divider}, {@code space};</li>
  *   <li>{@code buttons}, {@code row}, {@code rows} (up to 5 rows inside the card), {@code footer} (small grey line, always last);</li>
- *   <li>{@code accent(color)} for the coloured stripe; plain cards leave it out.</li>
+ *   <li>{@code accent(color)} for the coloured stripe; BunnyNexus cards leave it out, and {@code fromEmbed} drops embed colours.</li>
  * </ul>
  * {@code build()} checks Discord's limits (40 components, 4000 characters of text, 5 rows) and throws instead of
  * letting Discord reject the message; {@code fits()} and {@code remainingText()} let callers shrink text first.

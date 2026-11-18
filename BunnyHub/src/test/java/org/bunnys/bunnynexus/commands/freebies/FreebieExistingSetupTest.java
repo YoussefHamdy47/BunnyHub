@@ -141,7 +141,10 @@ class FreebieExistingSetupTest {
         roles.put(all, EnumSet.copyOf(FreebieSection.MAJOR_PC.stores()));
         try (var panel = FreebieServerSetup.rolePanel(roles)) {
             assertFalse(panel.getAllowedMentions().contains(Message.MentionType.ROLE));
-            var buttons = panel.getComponents().getFirst().asActionRow().getComponents();
+            // The panel is a card: its button rows sit inside it.
+            var buttons = ((net.dv8tion.jda.api.components.container.Container) panel.getComponents().getFirst()).getComponents().stream()
+                    .filter(c -> c instanceof net.dv8tion.jda.api.components.actionrow.ActionRow)
+                    .map(c -> (net.dv8tion.jda.api.components.actionrow.ActionRow) c).findFirst().orElseThrow().getComponents();
             assertEquals("Steam", buttons.get(0).asButton().getLabel());
             assertEquals(FreebieSection.MAJOR_PC.label(), buttons.get(1).asButton().getLabel());
         }

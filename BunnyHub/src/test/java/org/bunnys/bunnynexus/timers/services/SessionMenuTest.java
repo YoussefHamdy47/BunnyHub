@@ -28,6 +28,7 @@ class SessionMenuTest {
         var response = mock(WebhookMessageCreateAction.class, RETURNS_SELF);
         when(hook.editOriginalEmbeds(any(MessageEmbed.class))).thenReturn(edit);
         when(hook.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(response);
+        when(hook.sendMessage(any(net.dv8tion.jda.api.utils.messages.MessageCreateData.class))).thenReturn(response);
         doAnswer(invocation -> {
             java.util.function.Consumer callback = invocation.getArgument(0);
             callback.accept(null);
@@ -75,13 +76,14 @@ class SessionMenuTest {
         when(event.getHook()).thenReturn(hook);
         when(event.isAcknowledged()).thenReturn(true); // the router defers the edit before the handler runs
         when(hook.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(response);
+        when(hook.sendMessage(any(net.dv8tion.jda.api.utils.messages.MessageCreateData.class))).thenReturn(response);
         var timer = new TimerData();
         timer.getSessionData().setMessageID("new");
         try (var service = mockStatic(TimerSessionService.class)) {
             service.when(() -> TimerSessionService.getTimerDataOrThrow("123")).thenReturn(timer);
             SessionMenuManager.handle(event, "end", "123");
             service.verify(() -> TimerSessionService.stopSession("123", event), never());
-            verify(hook).sendMessageEmbeds(argThat((MessageEmbed embed) -> embed.getDescription().contains("expired")));
+            verify(hook).sendMessage(argThat((net.dv8tion.jda.api.utils.messages.MessageCreateData m) -> m.isUsingComponentsV2() && m.toData().toString().contains("expired")));
         }
     }
 }

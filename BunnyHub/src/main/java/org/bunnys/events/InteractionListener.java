@@ -147,14 +147,15 @@ public class InteractionListener extends BunnyEvent {
     }
 
     private static void refuse(GenericCommandInteractionEvent event, String message) {
-        event.replyEmbeds(Embeds.error("Unavailable", message)).setEphemeral(true).queue(null, ignored -> {});
+        event.reply(org.bunnys.handler.cards.Card.fromEmbed(Embeds.error("Unavailable", message)).message()).setEphemeral(true).queue(null, ignored -> {});
     }
 
     private void handleCommand(GenericCommandInteractionEvent event, InteractionContext context,
                                BunnyCommand command, BunnySubcommand subcommand) {
         var denial = CommandGate.check(context, client.getCommandRegistry(), command, subcommand);
         if (denial != null) {
-            context.reply(denial, true);
+            // Not yet acknowledged here, so this is a private reply; sent as a card like every other refusal.
+            context.replyTransient(denial);
             return;
         }
         Runnable execute = () -> {

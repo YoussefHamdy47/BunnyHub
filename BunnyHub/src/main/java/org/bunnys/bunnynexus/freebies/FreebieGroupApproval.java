@@ -22,21 +22,19 @@ final class FreebieGroupApproval {
     static MessageCreateData confirm(FreebieOffer offer, List<FreebieOffer> members, boolean wholeRelease, String token, int channels, int guilds) {
         var lines = new StringBuilder();
         for (var member : members) lines.append("• **").append(text(title(member.title()), 120)).append("**\n");
-        return new MessageCreateBuilder()
-                .setEmbeds(Embeds.of("📣", "Send this release?")
+        return org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Send this release?")
                         .setDescription(lines + (members.size() > 1
                                 ? "\nThese " + members.size() + " games are posted together: one message and one ping per channel."
                                 : "\nPart of an Epic release: games approved later join this post silently.")
                                 + "\nOnly these games, as shown, are approved. If anything changes before you confirm, nothing is approved."
                                 + "\nMessages cannot be recalled once sent.")
                         .addField("CHANNELS", String.valueOf(channels), true)
-                        .addField("SERVERS", String.valueOf(guilds), true).setTimestamp(null).build())
-                .setComponents(ActionRow.of(Button.success(FreebieMessages.BUTTON_PREFIX + ":confirmrelease-" + (wholeRelease ? "r" : "s")
+                        .addField("SERVERS", String.valueOf(guilds), true).setTimestamp(null).build(),
+                List.of(ActionRow.of(Button.success(FreebieMessages.BUTTON_PREFIX + ":confirmrelease-" + (wholeRelease ? "r" : "s")
                         + "-" + token + ":" + offer.id(), members.size() > 1 ? "Yes, send all " + members.size() : "Yes, send it"),
                         // Upper-case scope = the same confirmation without a ping.
                         Button.secondary(FreebieMessages.BUTTON_PREFIX + ":confirmrelease-" + (wholeRelease ? "R" : "S")
-                                + "-" + token + ":" + offer.id(), "Send without ping")))
-                .setAllowedMentions(List.of()).build();
+                                + "-" + token + ":" + offer.id(), "Send without ping")))).message();
     }
 
     static String result(List<FreebieOffer> approved, int skipped, long channels) {

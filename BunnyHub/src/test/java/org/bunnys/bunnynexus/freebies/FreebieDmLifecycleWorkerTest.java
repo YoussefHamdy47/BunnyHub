@@ -31,7 +31,16 @@ class FreebieDmLifecycleWorkerTest {
     private final String reference = FreebieDm.reference(dmId);
     private final Job job = new Job("edit|dm|" + dmId, FreebieLifecycle.Kind.EDIT, "gamerpower:1", "dm|" + dmId,
             null, "500000000000000001", "600000000000000001", true, 0, 1, false, "token", "400000000000000001");
+    private final FreebieOffer offer = FreebieUnitTest.offer("Game", FreebieStore.EPIC);
     private FreebieLifecycleWorker worker;
+
+    /** The DM as Discord returns it: a Components V2 card. */
+    private void posted(List<? extends net.dv8tion.jda.api.components.MessageTopLevelComponent> top) {
+        when(message.isUsingComponentsV2()).thenReturn(true);
+        when(message.getEmbeds()).thenReturn(List.of());
+        doReturn(top).when(message).getComponents();
+        when(message.getComponentTree()).thenReturn(net.dv8tion.jda.api.components.tree.MessageComponentTree.of(top));
+    }
 
     @BeforeEach void setup() {
         when(repository.lifecycle()).thenReturn(jobs);
@@ -46,9 +55,8 @@ class FreebieDmLifecycleWorkerTest {
         when(author.getId()).thenReturn("bot");
         when(message.getAuthor()).thenReturn(author);
         when(message.getId()).thenReturn(job.messageId());
-        var card = FreebieDm.card(FreebieUnitTest.offer("Game", FreebieStore.EPIC), dmId);
-        when(message.getEmbeds()).thenReturn(card.getEmbeds());
-        doReturn(card.getComponents()).when(message).getComponents();
+        posted(FreebieDm.card(offer, dmId).getComponents());
+        when(repository.offer(job.offerId())).thenReturn(Optional.of(offer));
         var edit = mock(MessageEditAction.class, RETURNS_SELF);
         when(edit.submit()).thenReturn(CompletableFuture.completedFuture(message));
         when(message.editMessage(any(MessageEditData.class))).thenReturn(edit);
@@ -71,11 +79,11 @@ class FreebieDmLifecycleWorkerTest {
         drain();
         var edit = ArgumentCaptor.forClass(MessageEditData.class);
         verify(message).editMessage(edit.capture());
-        assertTrue(edit.getValue().getEmbeds().getFirst().getDescription().contains("withdrawn"));
-        assertEquals(message.getEmbeds().getFirst().getFooter().getText(), edit.getValue().getEmbeds().getFirst().getFooter().getText());
-        var row = (net.dv8tion.jda.api.components.actionrow.ActionRow) edit.getValue().getComponents().getFirst();
-        assertTrue(row.getButtons().stream().anyMatch(b -> FreebieDm.UNSUBSCRIBE_PREFIX.equals(b.getCustomId())));
-        assertTrue(row.getButtons().stream().noneMatch(b -> b.getLabel().startsWith("Claim")));
+        var top = edit.getValue().getComponents();
+        assertTrue(V2.text(top).contains("withdrawn"), V2.text(top));
+        assertTrue(FreebieMessages.carriesReference(V2.posted(top), reference), "the exact reference is kept");
+        assertTrue(V2.buttons(top).stream().anyMatch(b -> FreebieDm.UNSUBSCRIBE_PREFIX.equals(b.getCustomId())));
+        assertTrue(V2.buttons(top).stream().noneMatch(b -> b.getLabel().startsWith("Claim")));
         assertTrue(edit.getValue().getAllowedMentions().isEmpty());
         verify(jobs).done(job, job.messageId(), now);
         assertEquals(0, shared.get());
@@ -91,7 +99,7 @@ class FreebieDmLifecycleWorkerTest {
     }
 
     @Test void refusesWrongReferenceEvenForBotAuthoredMessage() {
-        when(message.getEmbeds()).thenReturn(FreebieDm.card(FreebieUnitTest.offer("Game", FreebieStore.EPIC), "different").getEmbeds());
+        posted(FreebieDm.card(offer, "different").getComponents());
         run();
         verify(jobs).skipped(job, FreebieLifecycle.Skip.NOT_OURS, now);
         verify(message, never()).editMessage(any(MessageEditData.class));
@@ -120,9 +128,7 @@ class FreebieDmLifecycleWorkerTest {
     }
 
     @Test void alreadyEndedDmCompletesWithoutAnotherEdit() {
-        var data = FreebieLifecycleMessages.ended(message.getEmbeds(), message.getComponents(), reference, true);
-        when(message.getEmbeds()).thenReturn(data.getEmbeds());
-        doReturn(data.getComponents()).when(message).getComponents();
+        posted(FreebieLifecycleMessages.endedCard(offer, job.deliveryId(), message.getComponents(), true, now).getComponents());
         run();
         verify(jobs).done(job, job.messageId(), now);
         verify(message, never()).editMessage(any(MessageEditData.class));

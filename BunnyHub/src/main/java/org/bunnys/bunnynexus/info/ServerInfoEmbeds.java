@@ -1,53 +1,63 @@
 package org.bunnys.bunnynexus.info;
 
 import net.dv8tion.jda.api.entities.Guild;
-import org.bunnys.handler.cards.Card;
-import org.bunnys.utils.Embeds;
+import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.entities.MessageEmbed;
+import org.bunnys.utils.AppDesign;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 import static org.bunnys.bunnynexus.info.InfoEmbeds.clamp;
-import static org.bunnys.bunnynexus.info.InfoEmbeds.moment;
 
 /** The {@code /info server} card. Rendering only; everything comes from the cached guild. */
 public final class ServerInfoEmbeds {
     private ServerInfoEmbeds() {}
 
-    public static Card serverInfo(Guild guild) {
-        List<String> lines = new ArrayList<>();
+    /** The classic server card: the icon in the corner, plain labels in a three-column grid, the server ID below. */
+    public static MessageEmbed serverInfo(Guild guild) {
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle(guild.getName())
+                .setDescription(guild.getName() + " was created on <t:" + guild.getTimeCreated().toEpochSecond() + ":F>")
+                .setThumbnail(guild.getIconUrl())
+                .setColor(AppDesign.ColorCodes.DEFAULT)
+                .setFooter("Server ID: " + guild.getId(), guild.getIconUrl());
+
         // Deliberately the total, not a humans-and-bots split. That split needs a full
         // member cache, which needs the GUILD_MEMBERS intent this bot does not take -
         // counting whatever happens to be cached would report a confidently wrong number.
-        lines.add("👥 **Members** " + String.format("%,d", guild.getMemberCount()));
-        lines.add("👑 **Owner** <@" + guild.getOwnerId() + ">");
-        lines.add("🏷️ **Roles** " + guild.getRoles().size());
-        lines.add("💬 **Channels** " + guild.getTextChannels().size() + " text · "
-                + guild.getVoiceChannels().size() + " voice · " + guild.getCategories().size() + " categories");
-        lines.add("💎 **Boosts** " + guild.getBoostCount() + " (" + boostTier(guild) + ")");
-        lines.add("✅ **Verification** " + verification(guild));
-        lines.add("🔞 **Age Restriction** " + nsfwLevel(guild));
-        lines.add("🌐 **Language** " + guild.getLocale().getLanguageName());
-        if (guild.getAfkChannel() != null)
-            lines.add("⏱️ **AFK** " + guild.getAfkChannel().getAsMention() + " after "
-                    + duration(guild.getAfkTimeout().getSeconds() * 1000L));
+        embed.addField("Total Members", String.format("%,d", guild.getMemberCount()), true);
+        embed.addField("Owner", "<@" + guild.getOwnerId() + ">", true);
+        embed.addField("Role Count", String.valueOf(guild.getRoles().size()), true);
 
-        // The banner is the one image worth showing large; the icon sits beside the heading.
-        var card = Card.builder()
-                .image(guild.getBannerUrl())
-                .header("## 🏠 " + guild.getName() + "\nCreated " + moment(guild.getTimeCreated().toEpochSecond()), guild.getIconUrl())
-                .divider()
-                .text(String.join("\n", lines));
+        embed.addField("Categories", String.valueOf(guild.getCategories().size()), true);
+        embed.addField("Text Channels", String.valueOf(guild.getTextChannels().size()), true);
+        embed.addField("Voice Channels", String.valueOf(guild.getVoiceChannels().size()), true);
+
+        embed.addField("Boosts", String.valueOf(guild.getBoostCount()), true);
+        embed.addField("Boost Tier", boostTier(guild), true);
+        embed.addField("Verification Level", verification(guild), true);
+
+        embed.addField("Explicit Content Filter", nsfwLevel(guild), true);
+        embed.addField("Region", guild.getLocale().getLocale(), true);
+        if (guild.getAfkChannel() != null) {
+            embed.addField("AFK Channel", guild.getAfkChannel().getAsMention(), true);
+            embed.addField("AFK Timeout", afkTimeout(guild.getAfkTimeout().getSeconds()), true);
+        }
 
         if (guild.getDescription() != null)
-            card.field("Description", clamp("ℹ️ " + guild.getDescription()));
+            embed.addField("Description", clamp(guild.getDescription()), false);
 
         String features = features(guild);
         if (features != null)
-            card.field("Features", clamp("✅ " + features));
+            embed.addField("Features", clamp(features), false);
 
-        return card.footer("Server ID: " + guild.getId() + " • " + Embeds.FOOTER).build();
+        // The banner is the one image worth showing large; the icon is already the thumbnail.
+        if (guild.getBannerUrl() != null)
+            embed.setImage(guild.getBannerUrl());
+
+        return embed.build();
     }
 
     private static String boostTier(Guild guild) {
@@ -111,29 +121,13 @@ public final class ServerInfoEmbeds {
         return String.join(", ", readable);
     }
 
-    /**
-     * Renders a span as {@code 3d 4h 12m 8s}, dropping leading units that are zero.
-     *
-     * <p>Seconds are always kept, so a bot that restarted moments ago reads as "6s"
-     * rather than as an empty string.
-     */
-    private static String duration(long millis) {
-        long totalSeconds = millis / 1000L;
-
-        long days = totalSeconds / 86_400L;
-        long hours = (totalSeconds % 86_400L) / 3_600L;
-        long minutes = (totalSeconds % 3_600L) / 60L;
-        long seconds = totalSeconds % 60L;
-
-        StringBuilder text = new StringBuilder();
-        if (days > 0)
-            text.append(days).append("d ");
-        if (days > 0 || hours > 0)
-            text.append(hours).append("h ");
-        if (days > 0 || hours > 0 || minutes > 0)
-            text.append(minutes).append("m ");
-        text.append(seconds).append("s");
-
-        return text.toString();
+    /** "1 minute", "5 minutes", "1 hour": Discord's own AFK choices, written out. */
+    static String afkTimeout(long seconds) {
+        if (seconds >= 3600 && seconds % 3600 == 0) {
+            long hours = seconds / 3600;
+            return hours + (hours == 1 ? " hour" : " hours");
+        }
+        long minutes = Math.max(1, seconds / 60);
+        return minutes + (minutes == 1 ? " minute" : " minutes");
     }
 }

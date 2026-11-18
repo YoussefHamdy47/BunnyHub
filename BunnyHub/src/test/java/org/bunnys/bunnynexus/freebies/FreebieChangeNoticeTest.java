@@ -57,7 +57,7 @@ class FreebieChangeNoticeTest {
         var channel = FreebieMessages.changeNotice("My Server", new FreebieNoticeStore.Change(FreebieNoticeStore.CHANNEL_DELETED,
                 GONE, Optional.of("epic-games"), List.of("epic", "steam"), List.of(GONE)));
         var embed = channel.getEmbeds().getFirst();
-        assertEquals("A free-game alert channel was deleted", embed.getTitle().replaceAll("^\\S+\\s", ""));
+        assertEquals("A free-game alert channel was deleted", embed.getTitle(), "no decorative emoji");
         String all = embed.getDescription() + embed.getFields().stream().map(f -> f.getValue()).toList();
         assertTrue(all.contains("#epic-games") && all.contains("Epic Games Store, Steam") && all.contains("`/free-games setup`"), all);
         assertTrue(channel.getAllowedMentions().isEmpty());
@@ -105,9 +105,9 @@ class FreebieChangeNoticeTest {
         while (!tasks.isEmpty()) tasks.remove().run();
         var sent = ArgumentCaptor.forClass(MessageCreateData.class);
         verify(dm).sendMessage(sent.capture());
-        var embed = sent.getValue().getEmbeds().getFirst();
-        assertTrue(embed.getTitle().contains("alert channel was deleted"));
-        assertEquals(FreebieMessages.noticeReference(id), embed.getFooter().getText());
+        String text = V2.text(sent.getValue().getComponents());
+        assertTrue(text.contains("alert channel was deleted"), text);
+        assertTrue(text.endsWith("-# " + FreebieMessages.noticeReference(id)), text);
         verify(action).setNonce(FreebieMessages.nonce("notice|" + id));
         verify(notices).sent(job, "accepted", now);
         verify(repository, never()).offer(any());

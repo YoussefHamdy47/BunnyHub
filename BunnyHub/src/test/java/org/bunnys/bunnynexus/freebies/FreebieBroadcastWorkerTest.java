@@ -59,7 +59,7 @@ class FreebieBroadcastWorkerTest {
         verify(channel).sendMessage(captor.capture());
         assertTrue(captor.getValue().getAllowedMentions().isEmpty(), "@everyone in the text never pings");
         assertTrue(captor.getValue().getMentionedRoles().isEmpty());
-        assertEquals(FreebieBroadcastWorker.reference(job.id()), captor.getValue().getEmbeds().getFirst().getFooter().getText());
+        assertTrue(V2.text(captor.getValue().getComponents()).endsWith("-# " + FreebieBroadcastWorker.reference(job.id())));
         verify(send).setNonce(FreebieBroadcastWorker.nonce(job.id()));
         verify(store).submitting(job, now);
         verify(store).sent(job, MESSAGE, now);
@@ -73,8 +73,9 @@ class FreebieBroadcastWorkerTest {
         when(author.getId()).thenReturn("bot");
         when(posted.getAuthor()).thenReturn(author);
         when(posted.getId()).thenReturn(MESSAGE);
-        var embeds = FreebieBroadcastWorker.message("Maintenance", "x", FreebieBroadcastWorker.reference(job.id())).getEmbeds();
-        when(posted.getEmbeds()).thenReturn(embeds);
+        var top = FreebieBroadcastWorker.message("Maintenance", "x", FreebieBroadcastWorker.reference(job.id())).getComponents();
+        when(posted.isUsingComponentsV2()).thenReturn(true);
+        when(posted.getComponentTree()).thenReturn(net.dv8tion.jda.api.components.tree.MessageComponentTree.of(top));
         var history = mock(MessageHistory.class);
         RestAction<List<Message>> past = mock(RestAction.class, RETURNS_SELF);
         when(past.submit()).thenReturn(CompletableFuture.completedFuture(List.of(posted)));
@@ -116,7 +117,7 @@ class FreebieBroadcastWorkerTest {
         run(new FreebieBroadcastStore.Job(job.id(), ID, GUILD, CHANNEL, 1, false, "t", Optional.of(role)));
         var captor = ArgumentCaptor.forClass(MessageCreateData.class);
         verify(channel).sendMessage(captor.capture());
-        assertEquals("<@&" + role + ">", captor.getValue().getContent());
+        assertTrue(V2.text(captor.getValue().getComponents()).startsWith("<@&" + role + ">"));
         assertEquals(Set.of(role), captor.getValue().getMentionedRoles());
         assertTrue(captor.getValue().getAllowedMentions().isEmpty(), "never @everyone, @here or users");
     }
@@ -130,7 +131,7 @@ class FreebieBroadcastWorkerTest {
         var captor = ArgumentCaptor.forClass(MessageCreateData.class);
         verify(channel, times(2)).sendMessage(captor.capture());
         for (var message : captor.getAllValues()) {
-            assertEquals("", message.getContent());
+            assertFalse(V2.text(message.getComponents()).contains("<@&"));
             assertTrue(message.getMentionedRoles().isEmpty());
         }
     }

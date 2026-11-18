@@ -75,6 +75,6 @@ public final class FreebieConnectCommand extends BunnySubcommand {
     }
 
     private static void reply(CommandContext ctx, String text) {
-        ctx.reply(Embeds.of("🎁", "Connect a server", text).build(), true);
+        ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Connect a server", text).build()), true);
     }
 }

@@ -171,7 +171,12 @@ final class FreebieLifecycleWorker {
             return CompletableFuture.failedFuture(new Skipped(Skip.NOT_OURS));
         if (FreebieLifecycleMessages.isEnded(message, reference)) return CompletableFuture.completedFuture(message.getId());
         if (closed || !jobs().owns(job, clock.instant())) return CompletableFuture.failedFuture(new LeaseLost());
-        return message.editMessage(FreebieLifecycleMessages.ended(message.getEmbeds(), message.getComponents(), reference, job.withdrawn()))
+        // A card (personal DMs) is rebuilt from the offer in its ended state; an embed alert is edited in place.
+        var offer = message.isUsingComponentsV2() ? repository.offer(job.offerId()).orElse(null) : null;
+        if (message.isUsingComponentsV2() && offer == null) return CompletableFuture.failedFuture(new Skipped(Skip.NOT_OURS));
+        return message.editMessage(offer != null
+                        ? FreebieLifecycleMessages.endedCard(offer, job.deliveryId(), message.getComponents(), job.withdrawn(), clock.instant())
+                        : FreebieLifecycleMessages.ended(message.getEmbeds(), message.getComponents(), reference, job.withdrawn()))
                 .timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit().thenApply(Message::getId);
     }
 

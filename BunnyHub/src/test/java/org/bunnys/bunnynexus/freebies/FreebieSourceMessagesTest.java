@@ -22,7 +22,7 @@ class FreebieSourceMessagesTest {
             assertTrue(json.contains("200000000000000001")); assertFalse(json.contains("\"everyone\""));
         }
         try (var review = FreebieMessages.review(offer, 1, 1, Set.of("300000000000000001"))) {
-            assertTrue(review.getEmbeds().get(1).getFields().stream().anyMatch(f -> "SOURCE / REGION".equals(f.getName()) && f.getValue().contains("Epic Games")));
+            assertTrue(V2.text(review.getComponents()).matches("(?s).*### SOURCE / REGION\nEpic Games.*"), V2.text(review.getComponents()));
             assertTrue(review.toData().toString().contains("Approve"));
         }
     }

@@ -53,7 +53,7 @@ public class ModalRouter {
                 }
                 else dispatch(client, event, modal, args);
             } else {
-                event.replyEmbeds(SystemEmbeds.error("Unknown Form", "That form is no longer available. Reopen it from the command that created it."))
+                event.reply(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.error("Unknown Form", "That form is no longer available. Reopen it from the command that created it.")).message())
                         .setEphemeral(true).queue();
             }
         } catch (Exception error) {
@@ -73,10 +73,10 @@ public class ModalRouter {
         } catch (RejectedExecutionException rex) {
             BunnyLog.warning("[ModalRouter] Modal interaction rejected under load: " + event.getModalId());
             if (!event.isAcknowledged()) {
-                event.replyEmbeds(SystemEmbeds.busy())
+                event.reply(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.busy()).message())
                         .setEphemeral(true).queue(null, e -> {});
             }
-            else event.getHook().sendMessageEmbeds(SystemEmbeds.busy()).setEphemeral(true).queue();
+            else event.getHook().sendMessage(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.busy()).message()).setEphemeral(true).queue();
         } catch (Throwable e) {
             // Routing itself failed, before any handler ran. Same reporting path as a
             // handler crash: this is exactly as unhandled, and just as invisible without it.

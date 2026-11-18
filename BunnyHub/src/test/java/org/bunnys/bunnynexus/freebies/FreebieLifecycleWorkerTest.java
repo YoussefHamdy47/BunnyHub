@@ -192,7 +192,7 @@ class FreebieLifecycleWorkerTest {
         var captor = ArgumentCaptor.forClass(MessageCreateData.class);
         verify(channel).sendMessage(captor.capture());
         assertTrue(captor.getValue().getMentionedRoles().isEmpty(), "reminders do not ping by default");
-        assertTrue(captor.getValue().getContent().isEmpty());
+        assertFalse(V2.text(captor.getValue().getComponents()).contains("<@&"));
         assertTrue(captor.getValue().getAllowedMentions().isEmpty());
         verify(action, never()).setMessageReference(anyString());
         verify(action).setNonce(FreebieLifecycleMessages.reminderNonce(offer.id(), CHANNEL));
@@ -256,9 +256,9 @@ class FreebieLifecycleWorkerTest {
         run();
         var captor = ArgumentCaptor.forClass(MessageCreateData.class);
         verify(channel, times(1)).sendMessage(captor.capture());
-        var embed = captor.getValue().getEmbeds().getFirst();
-        assertTrue(embed.getDescription().contains("Second Game") && embed.getDescription().contains("2 games"), embed.getDescription());
-        assertTrue(embed.getDescription().contains("/" + CHANNEL + "/" + MESSAGE), "links back to each alert");
+        String text = V2.text(captor.getValue().getComponents());
+        assertTrue(text.contains("Second Game") && text.contains("2 games"), text);
+        assertTrue(text.contains("/" + CHANNEL + "/" + MESSAGE), "links back to each alert");
         assertEquals(2, FreebieLifecycleMessagesTest.buttons(captor.getValue().getComponents()).size());
         assertTrue(captor.getValue().getMentionedRoles().isEmpty());
         verify(action).setNonce(FreebieLifecycleMessages.reminderNonce(id));
@@ -275,7 +275,7 @@ class FreebieLifecycleWorkerTest {
         var captor = ArgumentCaptor.forClass(MessageCreateData.class);
         verify(channel).sendMessage(captor.capture());
         assertTrue(captor.getValue().getMentionedRoles().isEmpty());
-        assertTrue(captor.getValue().getContent().isEmpty());
+        assertFalse(V2.text(captor.getValue().getComponents()).contains("<@&"));
     }
 
     @Test void aReminderForAnOfferThatEndedOrWasStoppedIsCancelled() {
@@ -313,7 +313,9 @@ class FreebieLifecycleWorkerTest {
         @SuppressWarnings("unchecked") RestAction<List<Message>> past = mock(RestAction.class, RETURNS_SELF);
         var earlier = mock(Message.class); var author = mock(User.class);
         when(author.getId()).thenReturn("bot"); when(earlier.getAuthor()).thenReturn(author); when(earlier.getId()).thenReturn("earlier");
-        when(earlier.getEmbeds()).thenReturn(FreebieLifecycleMessages.reminder(offer, CHANNEL, Optional.empty(), now).getEmbeds());
+        var top = FreebieLifecycleMessages.reminder(offer, CHANNEL, Optional.empty(), now).getComponents();
+        when(earlier.isUsingComponentsV2()).thenReturn(true);
+        when(earlier.getComponentTree()).thenReturn(net.dv8tion.jda.api.components.tree.MessageComponentTree.of(top));
         when(channel.getHistory()).thenReturn(history);
         when(history.retrievePast(50)).thenReturn(past);
         when(past.submit()).thenReturn(CompletableFuture.completedFuture(List.of(earlier)));

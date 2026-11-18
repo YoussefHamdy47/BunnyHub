@@ -12,10 +12,10 @@ public final class FreebieSourceCommand extends BunnySubcommand {
     @Override public void execute(BunnyHub client, CommandContext ctx) {
         var system = FreebieSystem.current().orElse(null);
         if (system == null || !system.config().isOwner(ctx.getUser().getId())) {
-            ctx.reply(Embeds.of("🎁", "Source identities", "Only active freebie owners can use this.").build(), true); return;
+            ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Source identities", "Only active freebie owners can use this.").build()), true); return;
         }
         ctx.defer(true);
         var view = system.sourceDecision(ctx.getUser().getId());
-        ctx.reply(Embeds.of("🎁", "Source identities", view.text()).build(), view.rows(), true);
+        ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Source identities", view.text()).build(), view.rows()), true);
     }
 }

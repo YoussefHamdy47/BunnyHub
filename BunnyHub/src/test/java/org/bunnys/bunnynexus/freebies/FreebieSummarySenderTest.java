@@ -72,7 +72,7 @@ class FreebieSummarySenderTest {
         begin();
         var captor = org.mockito.ArgumentCaptor.forClass(MessageCreateData.class);
         verify(channel).sendMessage(captor.capture());
-        assertTrue(captor.getValue().getEmbeds().getFirst().getDescription().contains("**Personal DMs** · 3 sent · 4 still queued"));
+        assertTrue(V2.text(captor.getValue().getComponents()).contains("**Personal DMs** · 3 sent · 4 still queued"));
     }
 
     @Test void failedSendRetriesWithoutRecordingSuccess() {
@@ -130,8 +130,11 @@ class FreebieSummarySenderTest {
         when(user.getId()).thenReturn(author);
         when(message.getAuthor()).thenReturn(user);
         when(message.getId()).thenReturn(id);
-        when(message.getEmbeds()).thenReturn(reference ? FreebieMessages.summary(offer,
-                new FreebieRepository.Counts(2, 0, 0, 0), List.of(), Map.of()).getEmbeds() : List.of());
+        if (reference) {
+            var top = FreebieMessages.summary(offer, new FreebieRepository.Counts(2, 0, 0, 0), List.of(), Map.of()).getComponents();
+            when(message.isUsingComponentsV2()).thenReturn(true);
+            when(message.getComponentTree()).thenReturn(net.dv8tion.jda.api.components.tree.MessageComponentTree.of(top));
+        }
         return message;
     }
 

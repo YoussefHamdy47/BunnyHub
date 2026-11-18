@@ -97,9 +97,9 @@ public class MessageListener extends BunnyEvent {
         // A bare ping is a question, not a command - answer it with the help pointer.
         if (remainder.isEmpty()) {
             if (!mayNotify(event.getAuthor().getId())) return;
-            event.getMessage().replyEmbeds(SystemEmbeds.notice("Hey there",
+            event.getMessage().reply(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.notice("Hey there",
                             "Run `/help` or `@" + event.getJDA().getSelfUser().getName()
-                                    + " help` to see everything I can do."))
+                                    + " help` to see everything I can do.")).message())
                     .mentionRepliedUser(false).queue(null, e -> {});
             return;
         }
@@ -221,7 +221,7 @@ public class MessageListener extends BunnyEvent {
     /** Guidance for a mistyped mention command; a channel message cannot be ephemeral, so it removes itself. */
     private static void replyEmbed(MessageReceivedEvent event, MessageEmbed embed) {
         if (!mayNotify(event.getAuthor().getId())) return;
-        event.getMessage().replyEmbeds(embed).mentionRepliedUser(false).queue(
+        event.getMessage().reply(org.bunnys.handler.cards.Card.fromEmbed(embed).message()).mentionRepliedUser(false).queue(
                 sent -> sent.delete().queueAfter(Embeds.ERROR_SECONDS, TimeUnit.SECONDS, null, ignored -> {}), e -> {});
     }
 

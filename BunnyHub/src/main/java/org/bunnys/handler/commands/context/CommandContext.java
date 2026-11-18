@@ -149,6 +149,19 @@ public abstract class CommandContext implements AccessContext {
         replyMessage(card.message());
     }
 
+    /**
+     * A card that is private when it can be: ephemeral when the interaction was not acknowledged yet, otherwise as
+     * the deferral decided. The mention path has no private messages and replies normally.
+     */
+    public void replyCard(org.bunnys.handler.cards.Card card, boolean ephemeral) {
+        replyMessage(card.message(), ephemeral);
+    }
+
+    /** {@link #replyMessage(MessageCreateData)} that asks for a private reply where the context allows one. */
+    public void replyMessage(MessageCreateData message, boolean ephemeral) {
+        replyMessage(message);
+    }
+
     public void reply(MessageEmbed embed) {
         doReply(embed, List.of(), null, false);
     }
