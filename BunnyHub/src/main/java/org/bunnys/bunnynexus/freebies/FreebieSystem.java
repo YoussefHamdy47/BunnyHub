@@ -158,7 +158,11 @@ public final class FreebieSystem {
             system.enrichment = new FreebieEnrichment(repository.offerCollection(), system.egdataFeed, system.clock);
         }
         instance = system;
-        system.discoveryThread.scheduleWithFixedDelay(guarded("housekeeping", system::housekeeping), 20, 30, TimeUnit.SECONDS);
+        system.discoveryThread.scheduleWithFixedDelay(guarded("housekeeping", system::housekeepingTick), 20, 30, TimeUnit.SECONDS);
+        Runnable runSoon = () -> system.housekeepingRequested = true;
+        system.discovery.onNewGiveaways(runSoon);
+        system.epicDiscovery.onNewGiveaways(runSoon);
+        if (system.steamDiscovery != null) system.steamDiscovery.onNewGiveaways(runSoon);
         system.discovery.start(system.discoveryThread, 15);
         system.epicDiscovery.start(system.discoveryThread, 25);
         if (system.steamDiscovery != null) system.steamDiscovery.start(system.discoveryThread, 35);
@@ -206,7 +210,28 @@ public final class FreebieSystem {
 
     // ------------------------------------------------------------------ housekeeping (discovery thread)
 
+    /**
+     * Every 30 s while something is in progress; every 2 minutes while nothing is, since each run costs about twenty
+     * database round trips. A poll that finds a new game asks for a run, so it is handled as quickly as before.
+     */
+    void housekeepingTick() {
+        if (!housekeepingDue(housekeepingActive, housekeepingRequested, ++quietTicks)) return;
+        quietTicks = 0;
+        housekeepingRequested = false;
+        housekeeping();
+    }
+
+    static boolean housekeepingDue(boolean active, boolean requested, int quietTicks) {
+        return active || requested || quietTicks >= QUIET_TICKS;
+    }
+
+    static final int QUIET_TICKS = 4;
+    private volatile boolean housekeepingActive = true, housekeepingRequested;
+    private int quietTicks; // Discovery thread only.
+
     void housekeeping() {
+        // Stays set if this run stops early (disconnected, or a failure), so the next tick runs on time.
+        housekeepingActive = true;
         Instant now = clock.instant();
         // Advance legacy identity migration in bounded batches, even while disconnected.
         if (repository.sources() != null) repository.sources().backfill();
@@ -219,7 +244,7 @@ public final class FreebieSystem {
         }
         // The kill switch as the database has it (another process may have written it); the sender's tick uses this copy.
         repository.refreshSendingPaused();
-        // Expired leases of every sender queue are recovered here, every 30 s against a 3-minute lease, and not on the
+        // Expired leases of every sender queue are recovered here, at most every 2 minutes against a 3-minute lease, and not on the
         // sender's tick: a recovered row is due at once and still "verify first", so the sender is woken for it and
         // checks the channel's history before any resend. A pause cannot strand them either.
         long due = repository.recoverExpiredLeases(now) + repository.lifecycle().recover(now);
@@ -258,7 +283,8 @@ public final class FreebieSystem {
             if (offer.isEmpty()) break;
             reviews.post(client, offer.get());
         }
-        for (var offer : repository.offersIn(FreebieOffer.State.PENDING, 200)) {
+        var pending = repository.offersIn(FreebieOffer.State.PENDING, 200);
+        for (var offer : pending) {
             if (offer.ended(now)) ended(offer, "ended before review");
             // Once its review message is up (the audit trail and the Stop button), an auto-send launcher goes out.
             // A game of an Epic release is auto-approved through a release snapshot, so the release shares one post.
@@ -272,7 +298,8 @@ public final class FreebieSystem {
                     FreebieMessages.reviewControls(offer, repository.routes().groupPending(offer, now)));
             repository.routes().clearReviewRefresh(offer.id());
         }
-        for (var offer : repository.offersIn(FreebieOffer.State.APPROVED, 200)) {
+        var approved = repository.offersIn(FreebieOffer.State.APPROVED, 200);
+        for (var offer : approved) {
             if (offer.ended(now)) { ended(offer, "the giveaway ended"); continue; }
             if (!offer.fanoutDone()) { fanOut(offer); continue; }
             var counts = repository.counts(offer.id());
@@ -281,8 +308,10 @@ public final class FreebieSystem {
                         .ifPresent(reviews::summarize);
             else reviews.progress(offer, counts, now);
         }
-        for (var offer : repository.summaries().awaiting(now, 50))
+        var awaiting = repository.summaries().awaiting(now, 50);
+        for (var offer : awaiting)
             if (repository.counts(offer.id()).open() == 0) reviews.summarize(offer);
+        housekeepingActive = due > 0 || !pending.isEmpty() || !approved.isEmpty() || !awaiting.isEmpty();
     }
 
     /**

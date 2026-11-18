@@ -69,12 +69,18 @@ public class MessageListener extends BunnyEvent {
         Message.suppressContentIntentWarning();
     }
 
+    private static final java.util.concurrent.atomic.LongAdder SEEN = new java.util.concurrent.atomic.LongAdder();
+
+    /** Messages Discord delivered since the last call: the traffic that keeping mention commands costs. */
+    public static long drainSeen() { return SEEN.sumThenReset(); }
+
     public MessageListener(BunnyHub client) {
         super(client);
     }
 
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
+        SEEN.increment();
         if (event.getAuthor().isBot() || event.isWebhookMessage())
             return;
 

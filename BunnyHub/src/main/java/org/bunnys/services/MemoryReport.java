@@ -37,7 +37,8 @@ public final class MemoryReport implements BunnyService {
             long at = System.nanoTime();
             String reason = due(now, at);
             if (reason == null) return;
-            BunnyLog.report("[Memory] " + reason + ": " + now.line());
+            BunnyLog.report("[Memory] " + reason + ": " + now.line()
+                    + ("hourly".equals(reason) ? " • messages received " + org.bunnys.events.MessageListener.drainSeen() : ""));
             lastLogged = now;
             lastLoggedAt = at;
         } catch (RuntimeException failure) {

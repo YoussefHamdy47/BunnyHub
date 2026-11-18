@@ -99,7 +99,8 @@ public class BunnyHub implements AutoCloseable {
             String token = TokenLoader.getToken(config.getTokenKey());
             MessageRequest.setDefaultMentions(
                     EnumSet.of(Message.MentionType.USER));
-            JDABuilder jdaBuilder = JDABuilder.createLight(token, config.getIntents());
+            // The lowest threshold Discord accepts: login payloads carry fewer members, which the bot never caches.
+            JDABuilder jdaBuilder = JDABuilder.createLight(token, config.getIntents()).setLargeThreshold(50);
 
             if (config.getButtonPackage() != null)
                 ButtonRouter.loadButtons(scanner, config.getButtonPackage());

@@ -85,14 +85,14 @@ class FreebieSenderPacingTest {
 
     @Test void anIdleSenderBacksOffAndReturnsToOneSecondAfterAClaim() {
         sender.start(Duration.ofSeconds(10));
-        scheduler.advance(Duration.ofSeconds(92));
-        assertEquals(List.of(10L, 12L, 17L, 32L, 62L, 92L), ticks, "after an idle tick: 2, 5, 15, then 30 s");
+        scheduler.advance(Duration.ofSeconds(122));
+        assertEquals(List.of(10L, 12L, 17L, 32L, 62L, 122L), ticks, "after an idle tick: 2, 5, 15, 30, then 60 s");
 
         oneClaim();
-        scheduler.advance(Duration.ofSeconds(30)); // The tick at 122 s claims; the pass asks again until the queue is empty.
-        assertEquals(List.of(122L, 122L), ticks.subList(6, 8));
+        scheduler.advance(Duration.ofSeconds(60)); // The tick at 182 s claims; the pass asks again until the queue is empty.
+        assertEquals(List.of(182L, 182L), ticks.subList(6, 8));
         scheduler.advance(Duration.ofSeconds(8));
-        assertEquals(List.of(123L, 125L, 130L), ticks.subList(8, ticks.size()), "1 s after the claim, then backing off again");
+        assertEquals(List.of(183L, 185L, 190L), ticks.subList(8, ticks.size()), "1 s after the claim, then backing off again");
     }
 
     @Test void wakeRunsOneTickAtOnceAndConcurrentWakesShareIt() throws Exception {
@@ -139,7 +139,7 @@ class FreebieSenderPacingTest {
 
     @Test void theTickRecoversNoLeasesAndRunsNoPublishingCleanUp() {
         sender.start(Duration.ZERO);
-        scheduler.advance(Duration.ofMinutes(5));
+        scheduler.advance(Duration.ofMinutes(10));
         assertTrue(ticks.size() > 10);
         verify(repository, never()).recoverExpiredLeases(any());
         verify(repository, never()).sendingPaused();
@@ -175,17 +175,17 @@ class FreebieSenderPacingTest {
         verify(pages, times(3)).publishPending(anyInt());
     }
 
-    @Test void theNoticeTickBacksOffFromFiveToThirtySecondsAndWakes() {
+    @Test void theNoticeTickBacksOffToSixtySecondsAndWakes() {
         List<Long> claims = new ArrayList<>();
         when(notices.claim(any())).thenAnswer(call -> { claims.add(Duration.between(start, scheduler.now()).toSeconds()); return Optional.empty(); });
         notifier.start(scheduler, Duration.ofSeconds(10));
         scheduler.advance(Duration.ofSeconds(130));
-        assertEquals(List.of(10L, 20L, 40L, 70L, 100L, 130L), claims, "after an idle tick: 10, 20, then 30 s");
+        assertEquals(List.of(10L, 20L, 40L, 70L, 130L), claims, "after an idle tick: 10, 20, 30, then 60 s");
         verify(notices, never()).recover(any());
         notifier.wake();
         notifier.wake();
         scheduler.runDue();
-        assertEquals(List.of(130L, 130L), claims.subList(5, claims.size()), "two wakes, one tick, at once");
+        assertEquals(List.of(130L, 130L), claims.subList(4, claims.size()), "two wakes, one tick, at once");
     }
 
     @Test void closingStopsTheTickForGood() {

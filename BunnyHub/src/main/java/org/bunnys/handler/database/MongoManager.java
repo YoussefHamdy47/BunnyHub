@@ -2,6 +2,7 @@ package org.bunnys.handler.database;
 
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
+import com.mongodb.connection.ServerMonitoringMode;
 import com.mongodb.MongoCompressor;
 import com.mongodb.client.ClientSession;
 import com.mongodb.client.MongoClient;
@@ -60,6 +61,8 @@ public final class MongoManager {
         }
     }
 
+    static final int HEARTBEAT_SECONDS = 60;
+
     /** Pure configuration factory so timeout policy can be verified without connecting. */
     static MongoClientSettings settings(String uri, int poolSize, Duration timeout) {
         if (poolSize < 1 || timeout == null || timeout.toMillis() < 1)
@@ -78,6 +81,13 @@ public final class MongoManager {
                         .readTimeout((int) Math.min(Integer.MAX_VALUE, millis), TimeUnit.MILLISECONDS))
                 // Idle connections are closed after a few minutes: a bot is quiet most of the time, and each open
                 // connection holds a socket and buffers. The pool grows back on demand, up to poolSize.
+                // Topology checks: one polling connection per node, once a minute, instead of a streaming connection plus
+                // a round-trip-time connection reporting every 10 s. A failed operation still triggers an immediate re-check,
+                // so failover does not wait for this. Values in the connection string win.
+                .applyToServerSettings(server -> {
+                    if (connection.getServerMonitoringMode() == null) server.serverMonitoringMode(ServerMonitoringMode.POLL);
+                    if (connection.getHeartbeatFrequency() == null) server.heartbeatFrequency(HEARTBEAT_SECONDS, TimeUnit.SECONDS);
+                })
                 .applyToConnectionPoolSettings(pool -> pool.maxSize(poolSize).minSize(0)
                         .maxConnectionIdleTime(IDLE_CONNECTION_MINUTES, TimeUnit.MINUTES)
                         .maxWaitTime(Math.min(2000, millis), TimeUnit.MILLISECONDS))

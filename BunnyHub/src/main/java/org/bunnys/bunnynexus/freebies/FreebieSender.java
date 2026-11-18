@@ -35,7 +35,7 @@ final class FreebieSender {
     private static final Duration LEASE = Duration.ofMinutes(3), SEND_TIMEOUT = Duration.ofSeconds(45);
     /** The wait after a tick that found work, and the waits after each further tick in a row that found none. */
     static final Duration BUSY_DELAY = Duration.ofSeconds(1);
-    static final List<Duration> IDLE_DELAYS = List.of(Duration.ofSeconds(2), Duration.ofSeconds(5), Duration.ofSeconds(15), Duration.ofSeconds(30));
+    static final List<Duration> IDLE_DELAYS = List.of(Duration.ofSeconds(2), Duration.ofSeconds(5), Duration.ofSeconds(15), Duration.ofSeconds(30), Duration.ofSeconds(60));
 
     private final FreebieRepository repository;
     private final Supplier<JDA> jda;
