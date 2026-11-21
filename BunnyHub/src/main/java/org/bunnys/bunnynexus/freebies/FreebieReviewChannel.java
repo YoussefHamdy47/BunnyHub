@@ -159,6 +159,23 @@ final class FreebieReviewChannel {
         }
     }
 
+    /** Posts the weekly "Free next week" card. Blocking, on the discovery worker only; true once Discord accepted it. */
+    boolean postUpcoming(net.dv8tion.jda.api.utils.messages.MessageCreateData card) {
+        var channel = channel(jda.get(), config.reviewChannelFor(FreebieStore.EPIC));
+        if (channel == null) channel = channel(jda.get(), config.reviewChannelId());
+        if (channel == null) return false;
+        try {
+            channel.sendMessage(card).timeout(45, TimeUnit.SECONDS).submit().get(50, TimeUnit.SECONDS);
+            return true;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (ExecutionException | TimeoutException | RuntimeException failure) {
+            BunnyLog.warning("[Freebies] Free next week card not posted | " + FailureDiagnostics.describe(failure));
+            return false;
+        }
+    }
+
     void notifyOwners(String text) {
         var channel = channel(jda.get(), config.reviewChannelId());
         if (channel == null) { BunnyLog.warning("[Freebies] " + text); return; }

@@ -11,6 +11,8 @@ final class EpicFeed implements FreebieFeed {
     private final Clock clock;
     private final OkHttpClient client;
     private final FreebieHttp.Calls calls = new FreebieHttp.Calls();
+    /** The last good response, so "Free next week" needs no request of its own. */
+    private volatile byte[] lastBody;
     EpicFeed(Clock clock) {
         this.clock = clock;
         client = FreebieHttp.client(host -> {
@@ -28,13 +30,18 @@ final class EpicFeed implements FreebieFeed {
             return calls.execute(client, request, response -> {
                 if (response.code() != 200) return new Result(State.FAILED, List.of(),
                         GamerPowerFeed.retryAfter(response.header("Retry-After"), clock.instant()), "HTTP " + response.code());
-                return new EpicIntake().decode(response.body().byteStream().readNBytes(GamerPowerIntake.MAX_BYTES + 1), clock.instant());
+                byte[] body = response.body().byteStream().readNBytes(GamerPowerIntake.MAX_BYTES + 1);
+                lastBody = body;
+                return new EpicIntake().decode(body, clock.instant());
             });
         } catch (IOException failure) {
             return new Result(State.FAILED, List.of(), Optional.empty(), "network: " + failure.getClass().getSimpleName());
         }
     }
     OkHttpClient client() { return client; }
+
+    /** Next week's free games from the last poll; empty before the first one. */
+    List<FreebieUpcoming> upcoming() { return EpicIntake.upcoming(lastBody, clock.instant()); }
 
     @Override public void close() { calls.close(); }
 }

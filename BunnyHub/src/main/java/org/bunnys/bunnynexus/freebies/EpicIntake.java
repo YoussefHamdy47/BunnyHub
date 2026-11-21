@@ -93,6 +93,43 @@ final class EpicIntake {
                 Optional.of(usd(number(price, "originalPrice"))), image, page, page, Optional.of(start), Optional.of(end),
                 "US (en-US); availability elsewhere may differ"));
     }
+    /**
+     * The games Epic lists as free in a promotion that has not started yet, soonest first. Read leniently: a row that
+     * does not parse (a "Mystery Game" without a store page, say) is skipped, and an unusable body gives no games.
+     */
+    static List<FreebieUpcoming> upcoming(byte[] bytes, Instant now) {
+        if (bytes == null || bytes.length > GamerPowerIntake.MAX_BYTES) return List.of();
+        try {
+            Document root = Document.parse(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
+            List<FreebieUpcoming> games = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            for (Document row : list(doc(doc(doc(root, "data"), "Catalog"), "searchStore"), "elements")) {
+                try {
+                    if (!"BASE_GAME".equals(row.getString("offerType")) || !(row.get("promotions") instanceof Document promotions)) continue;
+                    Instant start = null, end = null;
+                    for (Document group : list(promotions, "upcomingPromotionalOffers"))
+                        for (Document promotion : list(group, "promotionalOffers")) {
+                            Document discount = doc(promotion, "discountSetting");
+                            if (!"PERCENTAGE".equals(discount.getString("discountType")) || number(discount, "discountPercentage") != 0) continue;
+                            Instant a = Instant.parse(text(promotion, "startDate", 40)), b = Instant.parse(text(promotion, "endDate", 40));
+                            if (!a.isAfter(now) || !a.isBefore(b)) continue;
+                            if (start == null || a.isBefore(start)) { start = a; end = b; }
+                        }
+                    if (start == null) continue;
+                    List<String> slugs = list(row, "offerMappings").stream().filter(m -> "productHome".equals(m.getString("pageType")))
+                            .map(m -> text(m, "pageSlug", 200)).distinct().toList();
+                    if (slugs.size() != 1 || !slugs.getFirst().matches("[a-z0-9]+(?:-[a-z0-9]+)*") || !seen.add(slugs.getFirst())) continue;
+                    Optional<URI> image = list(row, "keyImages").stream().filter(i -> "OfferImageWide".equals(i.getString("type")))
+                            .map(i -> safeImage(i.getString("url"))).flatMap(Optional::stream).findFirst();
+                    games.add(new FreebieUpcoming(text(row, "title", 256), URI.create("https://store.epicgames.com/en-US/p/" + slugs.getFirst()),
+                            image, start, end));
+                } catch (RuntimeException unusable) { /* skip this row */ }
+            }
+            games.sort(Comparator.comparing(FreebieUpcoming::start));
+            return List.copyOf(games);
+        } catch (RuntimeException unusable) { return List.of(); }
+    }
+
     private static void validatePromotion(Document promotion) {
         Instant start = Instant.parse(text(promotion, "startDate", 40)), end = Instant.parse(text(promotion, "endDate", 40));
         if (!start.isBefore(end)) throw new IllegalArgumentException();

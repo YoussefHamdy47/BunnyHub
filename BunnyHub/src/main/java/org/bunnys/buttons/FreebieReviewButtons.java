@@ -40,6 +40,16 @@ public class FreebieReviewButtons extends BunnyButton {
             replace(event, result, result.startsWith("Sending") ? FreebieSystem.announcementStopControls(offerId) : List.of());
             return;
         }
+        if (action.equals("upcoming")) {
+            // The weekly "Free next week" card: the announcement preview, privately, with its send buttons.
+            event.deferReply(true).complete();
+            switch (system.upcomingAnnouncement(actor)) {
+                case org.bunnys.bunnynexus.freebies.FreebieBroadcasts.Preview preview ->
+                        event.getHook().sendMessage(preview.message()).setEphemeral(true).queue();
+                case org.bunnys.bunnynexus.freebies.FreebieBroadcasts.Problem problem -> followUp(event, problem.text());
+            }
+            return;
+        }
         if (action.equals("broadcaststop")) {
             event.deferEdit().complete();
             replace(event, system.stopAnnouncement(actor, offerId), List.of());
