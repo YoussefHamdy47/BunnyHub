@@ -59,7 +59,8 @@ public final class LocalReplicaSet implements AutoCloseable {
             for (int i = 0; i < 3; i++) members.add(new Document("_id", i).append("host", "127.0.0.1:" + ports.get(i)));
             direct.getFirst().getDatabase("admin").runCommand(new Document("replSetInitiate",
                     new Document("_id", name).append("members", members)
-                            .append("settings", new Document("electionTimeoutMillis", 2000))));
+                            // MongoDB 9 requires the election timeout to exceed the heartbeat interval (2 s by default).
+                            .append("settings", new Document("electionTimeoutMillis", 2000).append("heartbeatIntervalMillis", 500))));
             String hosts = String.join(",", ports.stream().map(p -> "127.0.0.1:" + p).toList());
             client = connect("mongodb://" + hosts + "/?replicaSet=" + name, 20);
             client.getDatabase("admin").runCommand(new Document("ping", 1));
@@ -80,11 +81,26 @@ public final class LocalReplicaSet implements AutoCloseable {
     @Override public void close() {
         if (client != null) client.close();
         direct.forEach(MongoClient::close);
-        // Only handles created by this fixture are stopped; logs/data retained for diagnosis.
+        // Only handles created by this fixture are stopped.
         processes.forEach(Process::destroy);
         for (var process : processes) {
             try { if (!process.waitFor(5, TimeUnit.SECONDS)) { process.destroyForcibly(); process.waitFor(5, TimeUnit.SECONDS); } }
             catch (InterruptedException interrupted) { process.destroyForcibly(); Thread.currentThread().interrupt(); }
+        }
+        // Each run writes hundreds of MB of database files; keeping them filled the disk (657 runs, 329 GB).
+        // -Dbunny.test.keepData=true keeps one run's data and logs for diagnosis.
+        if (!Boolean.getBoolean("bunny.test.keepData")) delete(directory);
+    }
+
+    /** Windows can hold a stopped server's files for a moment, so a few tries a second apart. Best effort. */
+    private static void delete(Path root) {
+        for (int attempt = 0; attempt < 5 && root != null && Files.exists(root); attempt++) {
+            try (var paths = Files.walk(root)) {
+                paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                    try { Files.deleteIfExists(path); } catch (java.io.IOException stillLocked) { /* next attempt */ }
+                });
+            } catch (java.io.IOException | java.io.UncheckedIOException unreadable) { /* next attempt */ }
+            if (Files.exists(root)) try { Thread.sleep(1000); } catch (InterruptedException stop) { Thread.currentThread().interrupt(); return; }
         }
     }
 }
