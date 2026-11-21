@@ -268,6 +268,7 @@ public final class FreebieSystem {
         if (due > 0) sender.wake();
         JDA client = jda.get();
         if (client == null || client.getStatus() != JDA.Status.CONNECTED) return;
+        checkUpcoming();
         if (!now.isBefore(nextSweep)) {
             var swept = cleanup().sweep(client, now);
             nextSweep = now.plus(SWEEP_EVERY);
@@ -429,10 +430,37 @@ public final class FreebieSystem {
      * as open (its own rules apply). Database read: never call this on a JDA thread.
      */
     public boolean sourceQuestionOpen(String customId) {
+        // The weekly "Free next week" card is optional: it never holds Clear finished back.
+        if (customId.startsWith(FreebieMessages.BUTTON_PREFIX + ":" + FreebieUpcoming.ACTION + ":")) return false;
         return FreebieSourceDecisions.question(customId).map(q -> repository.sources().questionOpen(q[0], q[1])).orElse(true);
     }
 
     public java.time.Instant now() { return clock.instant(); }
+
+    /** Next week's free Epic games, from the last Epic poll (no request of its own). */
+    public List<FreebieUpcoming> upcoming() { return epicFeed == null ? List.of() : epicFeed.upcoming(); }
+
+    /** "Prepare announcement" on the weekly card: the usual announcement preview, to Epic alert channels. */
+    public FreebieBroadcasts.Reply upcomingAnnouncement(String actorId) {
+        var games = upcoming();
+        if (games.isEmpty()) return new FreebieBroadcasts.Problem("Epic hasn't listed next week's free games yet.");
+        return broadcasts.preview(actorId, FreebieUpcoming.TITLE, FreebieUpcoming.body(games),
+                new FreebieBroadcasts.Target(Optional.of(FreebieStore.EPIC.section()), false));
+    }
+
+    private String upcomingPosted; // Discovery thread only; null until read from the database.
+
+    /** Once a week, when Epic lists new upcoming games: the card for the owners. Discovery thread, after a poll. */
+    void checkUpcoming() {
+        var games = upcoming();
+        if (games.isEmpty()) return;
+        String week = FreebieUpcoming.key(games);
+        if (upcomingPosted == null) upcomingPosted = repository.upcomingPosted().orElse("");
+        if (week.equals(upcomingPosted)) return;
+        if (!reviews.postUpcoming(FreebieUpcoming.reviewCard(games))) return;
+        repository.upcomingPosted(week, clock.instant());
+        upcomingPosted = week;
+    }
 
     /**
      * First click: shows exactly what would be sent and asks for a second confirmation. A game of an Epic release is

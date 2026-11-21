@@ -122,7 +122,7 @@ final class FreebieComponentCards {
             parts.add(Separator.createDivider(Separator.Spacing.SMALL));
             parts.addAll(rows);
         }
-        parts.add(TextDisplay.of(SUBTEXT + m.footer()));
+        parts.add(TextDisplay.of(SUBTEXT + m.footer() + FreebieInvite.line()));
         return Container.of(parts);
     }
 
@@ -170,7 +170,7 @@ final class FreebieComponentCards {
             parts.add(Separator.createDivider(Separator.Spacing.SMALL));
             parts.add(ActionRow.of(button));
         });
-        parts.add(TextDisplay.of(SUBTEXT + members.getFirst().footer()));
+        parts.add(TextDisplay.of(SUBTEXT + members.getFirst().footer() + (live > 0 ? FreebieInvite.line() : "")));
         return Container.of(parts);
     }
 

@@ -227,4 +227,22 @@ class FreebieComponentCardsTest {
         assertFalse(FreebieFeatures.load(key -> key.equals("FREEBIE_COMPONENTS_V2") ? "false" : null, warning -> {}).componentsV2());
         assertTrue(FreebieFeatures.DEFAULT.componentsV2());
     }
+
+    @Test void liveCardsInviteToTheBotAndKeepTheirReference() {
+        String url = "https://discord.com/oauth2/authorize?client_id=1&scope=bot";
+        FreebieInvite.set(url);
+        try {
+            var m = member("a", LIVE);
+            var one = FreebieComponentCards.create(List.of(m), List.of(), false, now);
+            assertTrue(one.toData().toString().contains(url), "one game");
+            assertTrue(FreebieMessages.carriesReference(posted(one), m.reference()), "the reference line is untouched");
+            var two = FreebieComponentCards.create(List.of(member("a", LIVE), member("b", LIVE)), List.of(), false, now);
+            assertTrue(two.toData().toString().contains(FreebieInvite.LABEL), "several games");
+            var ended = FreebieComponentCards.create(List.of(member("a", ENDED), member("b", ENDED)), List.of(), false, now);
+            assertFalse(ended.toData().toString().contains(url), "an ended page no longer advertises");
+            var dm = FreebieDm.card(FreebieLifecycleTest.live(), FreebieDm.jobId("gamerpower:1", "400000000000000000"));
+            assertTrue(dm.toData().toString().contains(url), "DM alerts too");
+        } finally { FreebieInvite.set(null); }
+        assertEquals("", FreebieInvite.line(), "nothing before the bot is ready");
+    }
 }

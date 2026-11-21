@@ -333,12 +333,20 @@ public final class FreebieMessages {
      * buttons cover the newest few so the common case is one click.
      */
     public static MessageCreateData liveList(List<FreebieOffer> offers, Optional<FreebieStore> store) {
+        return liveList(offers, store, List.of());
+    }
+
+    /** As above, with next week's free Epic games at the end (shown for every launcher, or Epic). */
+    public static MessageCreateData liveList(List<FreebieOffer> offers, Optional<FreebieStore> store, List<FreebieUpcoming> upcoming) {
+        boolean next = !upcoming.isEmpty() && store.map(s -> s == FreebieStore.EPIC).orElse(true);
         String scope = store.map(FreebieStore::label).orElse("every launcher");
         var card = org.bunnys.handler.cards.Card.builder()
                 .text("### Free right now" + store.map(s -> " on " + s.label()).orElse("") + "\n-# The free games collection");
         if (offers.isEmpty()) {
-            return card.text("Nothing is free on " + scope + " right now. New games are checked every few minutes."
-                    + "\nSet up your next discovery with `/free-games setup`.").build().message();
+            card.text("Nothing is free on " + scope + " right now. New games are checked every few minutes."
+                    + "\nSet up your next discovery with `/free-games setup`.");
+            if (next) card.divider().text(FreebieUpcoming.listSection(upcoming));
+            return card.build().message();
         }
         // One line per game with its own Claim button beside it; Discord's 40 components fit ten of them.
         card.divider();
@@ -353,6 +361,7 @@ public final class FreebieMessages {
             listed++;
         }
         int more = offers.size() - listed;
+        if (next) card.divider().text(FreebieUpcoming.listSection(upcoming));
         return card.footer(listed + (listed == 1 ? " game" : " games") + (more > 0 ? " shown, " + more + " more" : "")
                 + " • Sources credited on individual cards").build().message();
     }

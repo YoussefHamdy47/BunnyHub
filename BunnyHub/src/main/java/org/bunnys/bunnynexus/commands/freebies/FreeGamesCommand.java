@@ -50,7 +50,7 @@ public final class FreeGamesCommand {
                     return;
                 }
             }
-            ctx.replyMessage(FreebieMessages.liveList(system.liveNow(store), store));
+            ctx.replyMessage(FreebieMessages.liveList(system.liveNow(store), store, system.upcoming()));
         }
     }
 

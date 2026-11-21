@@ -364,6 +364,15 @@ public final class FreebieRepository {
         synchronized (pauseLock) { pauseWrites++; pausedCopy = paused; }
     }
 
+    /** The week of the last "Free next week" card posted for the owners (see {@link FreebieUpcoming#key}). */
+    Optional<String> upcomingPosted() {
+        return Optional.ofNullable(control.find(eq("_id", "upcoming")).first()).map(d -> d.getString("week"));
+    }
+
+    void upcomingPosted(String week, Instant now) {
+        control.updateOne(eq("_id", "upcoming"), combine(set("week", week), set("postedAt", Date.from(now))), new UpdateOptions().upsert(true));
+    }
+
     public Overview overview() {
         return new Overview(offers.countDocuments(eq("state", "PENDING")), offers.countDocuments(eq("state", "APPROVED")),
                 deliveries.countDocuments(in("state", "PENDING", "SENDING", "BLOCKED")),

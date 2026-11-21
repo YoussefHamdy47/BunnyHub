@@ -16,6 +16,8 @@ class BumpRemindersTest {
     final AtomicReference<Instant> saved = new AtomicReference<>();
     final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
 
+    { executor.setRemoveOnCancelPolicy(true); }
+
     @AfterEach void stop() { executor.shutdownNow(); }
 
     BumpReminders reminders(Optional<Instant> last, boolean dmOpen) {
@@ -57,5 +59,22 @@ class BumpRemindersTest {
         assertEquals(1, sent.size());
         assertNull(saved.get());
         assertTrue(nextInMinutes() <= 15);
+    }
+
+    @Test void iJustBumpedStartsTheTwoHoursFromTheClick() throws Exception {
+        var reminders = reminders(Optional.of(now.minus(Duration.ofMinutes(100))), true);
+        reminders.start();
+        settle();
+        assertTrue(nextInMinutes() <= 20, "about 20 minutes left before the click");
+        assertTrue(sent.isEmpty());
+        assertTrue(BumpReminders.message().toData().toString().contains(BumpReminders.BUTTON));
+        var card = reminders.bumpedNow();
+        settle();
+        assertEquals(now, saved.get(), "the click is saved as the last bump");
+        assertTrue(nextInMinutes() >= 119, "the old reminder is replaced by one two hours out");
+        assertTrue(card.plainText().contains("<t:" + now.plus(BumpReminders.EVERY).getEpochSecond() + ":R>"));
+        assertEquals(Optional.of(reminders), BumpReminders.current());
+        reminders.shutdown();
+        assertTrue(BumpReminders.current().isEmpty());
     }
 }

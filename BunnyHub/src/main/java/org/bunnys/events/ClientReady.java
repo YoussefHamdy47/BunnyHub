@@ -23,6 +23,7 @@ public class ClientReady extends BunnyEvent {
     public void onReady(ReadyEvent event) {
         // Deploy commands cleanly through our single centralized manager
         client.getCommandRegistry().deployCommands(event.getJDA());
+        org.bunnys.bunnynexus.freebies.FreebieInvite.from(event.getJDA());
 
         long endTime = System.currentTimeMillis();
         double duration = (endTime - client.getStartTime()) / 1000.0;
