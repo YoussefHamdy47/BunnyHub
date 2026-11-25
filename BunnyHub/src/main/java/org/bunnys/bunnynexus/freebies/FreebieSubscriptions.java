@@ -46,8 +46,15 @@ public final class FreebieSubscriptions {
     public record ChannelChange(SaveResult result, Set<FreebieStore> added, Set<FreebieStore> removed) {}
 
     private final MongoCollection<Document> subscriptions;
+    private final FreebieRolePickers rolePickers;
 
-    public FreebieSubscriptions(MongoDatabase db) { subscriptions = db.getCollection(COLLECTION); }
+    public FreebieSubscriptions(MongoDatabase db) {
+        subscriptions = db.getCollection(COLLECTION);
+        rolePickers = new FreebieRolePickers(db);
+    }
+
+    /** Where this server's public role picker was last posted. */
+    public FreebieRolePickers rolePickers() { return rolePickers; }
 
     public void installIndexes() {
         subscriptions.createIndex(Indexes.ascending("store", "_id"), new IndexOptions().name("subscription_store"));
@@ -190,6 +197,7 @@ public final class FreebieSubscriptions {
 
     /** The bot was removed from the server: its alert settings are no longer deliverable. */
     public long removeGuild(String guildId) {
+        rolePickers.forget(guildId);
         return subscriptions.deleteMany(eq("guildId", guildId)).getDeletedCount();
     }
 

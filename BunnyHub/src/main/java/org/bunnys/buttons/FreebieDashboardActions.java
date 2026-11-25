@@ -4,6 +4,7 @@ import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import org.bunnys.bunnynexus.commands.freebies.FreebieAutoSetup;
 import org.bunnys.bunnynexus.commands.freebies.FreebieCatchUp;
+import org.bunnys.bunnynexus.commands.freebies.DealBoardSetup;
 import org.bunnys.bunnynexus.commands.freebies.FreebieDashboard;
 import org.bunnys.bunnynexus.commands.freebies.FreebieExistingSetup;
 import org.bunnys.bunnynexus.commands.freebies.FreebieServerSetup;
@@ -50,6 +51,9 @@ public class FreebieDashboardActions extends BunnyButton {
             if (result.isEmpty()) return; // Asked which existing channels and roles to use.
             notice = result.get();
         } else notice = switch (args[1]) {
+            case DealBoardSetup.AUTO_ACTION -> org.bunnys.bunnynexus.deals.DealSystem.current()
+                    .map(deals -> DealBoardSetup.autoSetup(guild, event.getMember(), deals))
+                    .orElse("⚠️ Deals are not available right now.");
             case FreebieDashboard.ROLE_PANEL -> {
                 var actor = event.getMember();
                 // The picker hands roles out on the admin's behalf, so they must be able to hand them out themselves.
@@ -57,13 +61,16 @@ public class FreebieDashboardActions extends BunnyButton {
                     yield "⚠️ Posting a role picker needs **Manage Roles**.";
                 var roles = FreebieServerSetup.pickableRoles(guild, subscriptions.forGuild(guild.getId()));
                 roles.keySet().removeIf(role -> !actor.canInteract(role));
+                var dealRole = DealBoardSetup.pickableRole(guild).filter(actor::canInteract);
                 var channel = event.getGuildChannel();
-                if (roles.isEmpty())
+                if (roles.isEmpty() && dealRole.isEmpty())
                     yield "⚠️ No section pings a role members can safely pick. A picker role must grant nothing beyond "
                             + "@everyone, have no channel overrides, and sit below both my role and yours (auto-setup creates such roles).";
                 if (!guild.getSelfMember().hasPermission(channel, Permission.VIEW_CHANNEL, Permission.MESSAGE_SEND, Permission.MESSAGE_EMBED_LINKS))
                     yield "⚠️ I can't post in " + channel.getAsMention() + ". Open the dashboard in the channel where the picker should go.";
-                channel.sendMessage(FreebieServerSetup.rolePanel(roles)).complete();
+                if (channel instanceof net.dv8tion.jda.api.entities.channel.middleman.StandardGuildMessageChannel standard)
+                    FreebieServerSetup.postRolePanel(guild, standard, roles, dealRole, subscriptions, java.time.Instant.now());
+                else channel.sendMessage(FreebieServerSetup.rolePanel(roles, dealRole)).complete();
                 yield "✅ Role picker posted in " + channel.getAsMention() + ".";
             }
             default -> "⚠️ Unknown action.";

@@ -37,6 +37,8 @@ public enum FreebieStore {
 
     public String id() { return id; }
     public String label() { return label; }
+    /** The launcher's custom emoji (🎁 for "Other"). */
+    public String badge() { return FreebieCards.emoji(this); }
     public FreebieSection section() { return section; }
 
     public static Optional<FreebieStore> byId(String id) {

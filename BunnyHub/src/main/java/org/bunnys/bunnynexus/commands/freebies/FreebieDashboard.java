@@ -116,11 +116,14 @@ public final class FreebieDashboard {
                 + "-# Quick setup: one channel in one step. Launcher pings: a different role per launcher, like @Epic.");
         var pings = launcherPings(saved);
         for (var state : states.values()) embed.addField(state.section().label(), describe(guild, state, pings), false);
+        var dealBoard = DealBoardSetup.state(guild);
+        dealBoard.ifPresent(board -> embed.addField("Deals board", DealBoardSetup.describe(guild, board), false));
         long channels = saved.stream().map(Subscription::channelId).distinct().count();
         Embeds.footer(embed, channels + "/" + FreebieSubscriptions.MAX_CHANNELS_PER_GUILD + " alert channels used");
 
         List<Button> sections = new ArrayList<>();
         for (var state : states.values()) sections.add(sectionButton(guild, state));
+        dealBoard.ifPresent(board -> sections.add(DealBoardSetup.button(guild, board)));
         String id = guild.getId();
         return new Reply(embed.build(), List.of(ActionRow.of(sections), ActionRow.of(
                 (saved.isEmpty() ? Button.primary(NAV_PREFIX + ":" + QUICK + ":" + id, "Quick setup")
@@ -220,10 +223,14 @@ public final class FreebieDashboard {
             picker.addOption(section.label(), String.valueOf(section.code()));
         picker.setDefaultValues(chosen.stream().map(s -> String.valueOf(s.code())).toList());
         String codes = FreebieCatchUp.token(chosen, post);
-        return new Reply(embed.build(), List.of(ActionRow.of(picker.build()), ActionRow.of(
+        List<Button> buttons = new ArrayList<>(List.of(
                 Button.success(RUN_PREFIX + ":" + ONE_CHANNEL + ":" + guildId + ":" + codes, "One channel for everything"),
                 Button.primary(RUN_PREFIX + ":" + CHANNEL_PER_SECTION + ":" + guildId + ":" + codes, "A channel per section"),
-                Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + guildId + ":" + FreebieCatchUp.token(chosen, post.next()), post.toggle()),
-                Button.secondary(NAV_PREFIX + ":" + HOME + ":" + guildId, "Back"))));
+                Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + guildId + ":" + FreebieCatchUp.token(chosen, post.next()), post.toggle())));
+        // Deals have their own channel and role: #deals and @Deals, created separately from the free-game sections.
+        if (org.bunnys.bunnynexus.deals.DealSystem.current().isPresent())
+            buttons.add(Button.secondary(RUN_PREFIX + ":" + DealBoardSetup.AUTO_ACTION + ":" + guildId, "Create deals board"));
+        buttons.add(Button.secondary(NAV_PREFIX + ":" + HOME + ":" + guildId, "Back"));
+        return new Reply(embed.build(), List.of(ActionRow.of(picker.build()), ActionRow.of(buttons)));
     }
 }

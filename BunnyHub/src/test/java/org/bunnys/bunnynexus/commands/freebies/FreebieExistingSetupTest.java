@@ -141,13 +141,36 @@ class FreebieExistingSetupTest {
         roles.put(all, EnumSet.copyOf(FreebieSection.MAJOR_PC.stores()));
         try (var panel = FreebieServerSetup.rolePanel(roles)) {
             assertFalse(panel.getAllowedMentions().contains(Message.MentionType.ROLE));
-            // The panel is a card: its button rows sit inside it.
-            var buttons = ((net.dv8tion.jda.api.components.container.Container) panel.getComponents().getFirst()).getComponents().stream()
-                    .filter(c -> c instanceof net.dv8tion.jda.api.components.actionrow.ActionRow)
-                    .map(c -> (net.dv8tion.jda.api.components.actionrow.ActionRow) c).findFirst().orElseThrow().getComponents();
-            assertEquals("Steam", buttons.get(0).asButton().getLabel());
-            assertEquals(FreebieSection.MAJOR_PC.label(), buttons.get(1).asButton().getLabel());
+            // The panel is a card: each role has its own row with the button beside it.
+            var buttons = net.dv8tion.jda.api.components.tree.MessageComponentTree.of(panel.getComponents())
+                    .findAll(net.dv8tion.jda.api.components.buttons.Button.class);
+            assertEquals("Steam", buttons.get(0).getLabel());
+            assertEquals("<:steam:705062577817780315>", buttons.get(0).getEmoji().getFormatted(), "the launcher's own emoji");
+            assertEquals(FreebieSection.MAJOR_PC.label(), buttons.get(1).getLabel());
         }
+    }
+
+    @Test void rolePickerOffersTheDealsRoleOnceWithItsOwnTitle() {
+        var all = mock(Role.class); when(all.getId()).thenReturn("8");
+        var deals = mock(Role.class); when(deals.getId()).thenReturn("9");
+        Map<Role, Set<FreebieStore>> roles = new LinkedHashMap<>();
+        roles.put(all, EnumSet.copyOf(FreebieSection.MAJOR_PC.stores()));
+        var card = FreebieServerSetup.rolePanelCard(roles, Optional.of(deals));
+        assertTrue(card.plainText().contains("Free game and deal pings"));
+        assertTrue(card.plainText().contains("**Game deals**\n<:steam:705062577817780315> <:GOG:1572185523924115587> 75% off"));
+        assertTrue(card.plainText().contains("<:Epic:824679104220626954> <:steam:705062577817780315>"), "launcher emojis, not names");
+        var ids = net.dv8tion.jda.api.components.tree.MessageComponentTree.of(card.components())
+                .findAll(net.dv8tion.jda.api.components.buttons.Button.class).stream().map(b -> b.getCustomId()).toList();
+        assertEquals(List.of(FreebieServerSetup.ROLE_PREFIX + ":8", FreebieServerSetup.ROLE_PREFIX + ":9"), ids);
+        assertTrue(FreebieServerSetup.rolePanelCard(roles, Optional.empty()).plainText().contains("Free game pings"));
+        Map<Role, Set<FreebieStore>> many = new LinkedHashMap<>();
+        for (int i = 0; i < 25; i++) { var r = mock(Role.class); when(r.getId()).thenReturn("7" + i); many.put(r, EnumSet.of(FreebieStore.STEAM)); }
+        var big = FreebieServerSetup.rolePanelCard(many, Optional.of(deals));
+        assertTrue(big.componentCount() <= org.bunnys.handler.cards.Card.MAX_COMPONENTS, "25 roles fall back to button rows");
+        assertEquals(25, net.dv8tion.jda.api.components.tree.MessageComponentTree.of(big.components())
+                .findAll(net.dv8tion.jda.api.components.buttons.Button.class).size());
+        assertEquals(1, net.dv8tion.jda.api.components.tree.MessageComponentTree.of(FreebieServerSetup.rolePanelCard(roles, Optional.of(all)).components())
+                .findAll(net.dv8tion.jda.api.components.buttons.Button.class).size(), "a deals role that is already offered is not repeated");
     }
 
     @Test void autoSetupUsesThePickedChannelsAndRolesWithoutCreatingAnything() {
@@ -187,10 +210,16 @@ class FreebieExistingSetupTest {
         when(subscriptions.setSection(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(org.bunnys.bunnynexus.freebies.FreebieSubscriptions.SaveResult.UPDATED);
         when(subscriptions.save(any(), any(), any())).thenReturn(org.bunnys.bunnynexus.freebies.FreebieSubscriptions.SaveResult.CREATED);
+        var pickers = mock(org.bunnys.bunnynexus.freebies.FreebieRolePickers.class);
+        when(subscriptions.rolePickers()).thenReturn(pickers);
+        var posted = mock(Message.class);
+        when(posted.getId()).thenReturn("900");
+        when(post.complete()).thenReturn(posted);
 
         var sections = EnumSet.of(FreebieSection.MAJOR_PC);
         var found = FreebieExistingSetup.scan(guild, sections, false);
         String notice = FreebieAutoSetup.run(guild, actor, sections, false, subscriptions, found);
+        verify(pickers).posted(eq(GUILD), any(), eq("900"), any());
 
         assertTrue(notice.startsWith("✅"), notice);
         var remaining = EnumSet.copyOf(FreebieSection.MAJOR_PC.stores());

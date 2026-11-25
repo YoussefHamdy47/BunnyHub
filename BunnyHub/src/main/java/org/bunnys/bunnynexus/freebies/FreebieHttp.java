@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * each keeping its own. Each feed derives its client with {@link #client}, which always sets that feed's DNS guard,
  * no proxy, no redirects and its timeouts; nothing on the base is trusted for those.
  */
-final class FreebieHttp {
+public final class FreebieHttp {
     private static final OkHttpClient BASE = new OkHttpClient.Builder().proxy(Proxy.NO_PROXY)
             .followRedirects(false).followSslRedirects(false).build();
 
@@ -26,22 +26,22 @@ final class FreebieHttp {
     static OkHttpClient base() { return BASE; }
 
     /** A client sharing the base's pool and dispatcher, with {@code dns} as its only resolver. */
-    static OkHttpClient client(Dns dns, Duration timeout) {
+    public static OkHttpClient client(Dns dns, Duration timeout) {
         return BASE.newBuilder().dns(dns).proxy(Proxy.NO_PROXY).followRedirects(false).followSslRedirects(false)
                 .callTimeout(timeout).connectTimeout(timeout).readTimeout(timeout).writeTimeout(timeout).build();
     }
 
-    interface Reader<T> { T read(Response response) throws IOException; }
+    public interface Reader<T> { T read(Response response) throws IOException; }
 
     /**
      * The calls one feed has open. The pool and dispatcher are shared, so closing a feed cancels only its own calls
      * (including a body still being read) and leaves the other feeds working.
      */
-    static final class Calls implements AutoCloseable {
+    public static final class Calls implements AutoCloseable {
         private final Set<Call> open = ConcurrentHashMap.newKeySet();
         private volatile boolean closed;
 
-        <T> T execute(OkHttpClient client, Request request, Reader<T> reader) throws IOException {
+        public <T> T execute(OkHttpClient client, Request request, Reader<T> reader) throws IOException {
             Call call = client.newCall(request);
             open.add(call);
             try {

@@ -27,6 +27,10 @@ public final class AppDesign {
         public static final String SWITCH = "<:Switch:1572185538616631337>";
         public static final String ANDROID = "<:Android:1572185540030242857>";
         public static final String IOS = "<:iOS:1572185541514891267>";
+        // Key stores for game deals, added 2026-11-23 (Humble and GreenManGaming from Wikimedia Commons, Fanatical's site icon).
+        public static final String HUMBLE = "<:Humble:1574402743584686252>";
+        public static final String FANATICAL = "<:Fanatical:1574402745560080434>";
+        public static final String GREEN_MAN_GAMING = "<:GreenManGaming:1574402747262959688>";
 
         // Progress Bar Components
         public static final String PROGRESS_BAR_LEFT_EMPTY = "<:leftEmpty:1068143435095220265>";
