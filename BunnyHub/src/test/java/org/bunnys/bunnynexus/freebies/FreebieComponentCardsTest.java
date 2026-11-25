@@ -119,6 +119,28 @@ class FreebieComponentCardsTest {
         assertTrue(children(endedCard, MediaGallery.class).isEmpty(), "no art without a live game");
     }
 
+    @Test void anAdCardSitsUnderTheGameCardSurvivesEditsAndGoesWhenNothingIsClaimable() {
+        var ad = Container.of(TextDisplay.of("### Deals board\nBig discounts.\n-# From BunnyNexus"));
+        var data = FreebieComponentCards.create(List.of(member("a", LIVE)), List.of(), false, now, Optional.of(ad));
+        var top = new ArrayList<MessageTopLevelComponent>(data.getComponents());
+        assertEquals(2, top.stream().filter(c -> c instanceof Container).count(), "the game card, then the ad card");
+        assertSame(ad, top.getLast());
+        assertEquals(Optional.empty(), FreebieComponentCards.topText(top, true), "an ad is never read as the ping line");
+        assertEquals(Optional.of(ad), FreebieComponentCards.adCard(top));
+        assertTrue(FreebieMessages.carriesReference(posted(data), member("a", LIVE).reference()), "history recovery still finds the alert");
+
+        var pinged = new ArrayList<MessageTopLevelComponent>(FreebieComponentCards.create(List.of(member("a", LIVE)), List.of(ROLE), false, now,
+                Optional.of(ad)).getComponents());
+        assertEquals(Optional.of("<@&" + ROLE + "> 1 new free game"), FreebieComponentCards.topText(pinged, true));
+        assertEquals(Optional.of(ad), FreebieComponentCards.adCard(pinged));
+
+        var kept = FreebieComponentCards.edit(List.of(member("a", LIVE), member("b", ENDED)), false, now, Optional.empty(), Optional.of(ad));
+        assertEquals(Optional.of(ad), FreebieComponentCards.adCard(new ArrayList<MessageTopLevelComponent>(kept.getComponents())));
+        var gone = FreebieComponentCards.edit(List.of(member("a", ENDED)), false, now, Optional.empty(), Optional.of(ad));
+        assertEquals(1, gone.getComponents().stream().filter(c -> c instanceof Container).count(), "no ad once nothing is claimable");
+        assertEquals(Optional.empty(), FreebieComponentCards.adCard(top.subList(0, 1)));
+    }
+
     @Test void aSingleEndedGameKeepsItsReferenceAndHasNoButtons() {
         var m = member("a", WITHDRAWN);
         var edit = FreebieComponentCards.edit(List.of(m), true, now, Optional.empty());

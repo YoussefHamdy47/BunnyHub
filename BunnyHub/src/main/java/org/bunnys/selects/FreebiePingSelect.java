@@ -24,6 +24,6 @@ public class FreebiePingSelect extends BunnySelect {
         }
         FreebieLauncherPings.form(args[1], event.getValues().getFirst()).ifPresentOrElse(
                 form -> event.replyModal(form).queue(),
-                () -> event.reply("This menu is out of date. Run `/free-games setup` again.").setEphemeral(true).queue());
+                () -> event.reply(org.bunnys.handler.commands.CommandLinks.render("This menu is out of date. Run `/free-games setup` again.")).setEphemeral(true).queue());
     }
 }

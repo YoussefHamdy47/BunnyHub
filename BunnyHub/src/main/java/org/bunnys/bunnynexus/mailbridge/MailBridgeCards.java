@@ -45,7 +45,7 @@ public final class MailBridgeCards {
     public static MessageCreateData unclassified(MailMessage mail, String reason) {
         MessageEmbed embed = new EmbedBuilder().setColor(MailCategory.UNKNOWN.colour()).setTitle("Unclassified task email")
                 .setDescription("A task email arrived but didn't match exactly one task, so it wasn't forwarded. "
-                        + "Check the patterns with `/mail-bridge diagnose`.")
+                        + org.bunnys.handler.commands.CommandLinks.render("Check the patterns with `/mail-bridge diagnose`."))
                 .addField("Why", untrusted(reason, 200), true)
                 .addField("Sender domain", untrusted(mail.senderDomain().isEmpty() ? "unknown" : mail.senderDomain(), 100), true)
                 .addField("Received", "<t:" + mail.received().getEpochSecond() + ":F>", false)

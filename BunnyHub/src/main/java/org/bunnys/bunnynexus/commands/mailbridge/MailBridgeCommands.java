@@ -51,7 +51,7 @@ public final class MailBridgeCommands {
         public Check() { setName("check"); setDescription("Check Gmail now instead of waiting for the next poll"); }
         @Override void run(MailBridge bridge, CommandContext ctx) {
             bridge.pollNow();
-            reply(ctx, "Checking Gmail now. Run `/mail-bridge status` in a few seconds to see the result.");
+            reply(ctx, org.bunnys.handler.commands.CommandLinks.render("Checking Gmail now. Run `/mail-bridge status` in a few seconds to see the result."));
         }
     }
 

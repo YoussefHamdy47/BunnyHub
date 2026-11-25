@@ -190,7 +190,7 @@ final class TimerEmbeds {
                 currentField = new StringBuilder();
             }
             if (subjects.size() > displayedSubjects)
-                currentField.append("\nFurther courses are listed in `/timer gpa`.\n");
+                currentField.append(org.bunnys.handler.commands.CommandLinks.render("\nFurther courses are listed in `/timer gpa`.\n"));
             double avgSubMs = semesterMs / subjects.size();
             currentField.append("\n✦ Average Study Time Per Subject: `").append(formatMs(avgSubMs)).append("`\n\u200B");
 
@@ -253,7 +253,7 @@ final class TimerEmbeds {
 
         if (accountSubjects.isEmpty() && semesterSubjects.isEmpty()) {
             var empty = Embeds.of(AppDesign.Emojis.VERIFY, userName + "'s Academic Record",
-                    "No courses yet. Add one with `/timer add-subject`.");
+                    org.bunnys.handler.commands.CommandLinks.render("No courses yet. Add one with `/timer add-subject`."));
             pages.add(Embeds.footer(empty, "Page 1 of 1", avatarUrl).build());
             return pages;
         }

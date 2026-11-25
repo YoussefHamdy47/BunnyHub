@@ -104,7 +104,7 @@ public class MessageListener extends BunnyEvent {
         if (remainder.isEmpty()) {
             if (!mayNotify(event.getAuthor().getId())) return;
             event.getMessage().reply(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.notice("Hey there",
-                            "Run `/help` or `@" + event.getJDA().getSelfUser().getName()
+                            org.bunnys.handler.commands.CommandLinks.render("Run `/help` or `@") + event.getJDA().getSelfUser().getName()
                                     + " help` to see everything I can do.")).message())
                     .mentionRepliedUser(false).queue(null, e -> {});
             return;

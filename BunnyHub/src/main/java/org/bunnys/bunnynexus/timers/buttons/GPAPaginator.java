@@ -128,7 +128,7 @@ public final class GPAPaginator {
 
         MenuAction action = MenuAction.fromString(actionId);
         if (action == null) {
-            Replies.error(event, "Unknown action", "Reopen the menu with `/timer gpa`.");
+            Replies.error(event, "Unknown action", org.bunnys.handler.commands.CommandLinks.render("Reopen the menu with `/timer gpa`."));
             return;
         }
 

@@ -108,7 +108,7 @@ public final class SessionMenuManager {
     private static void start(ButtonInteractionEvent event, String userId) {
         var pending = PendingSessionManager.getAndRemove(userId, event.getMessageId());
         if (pending == null) {
-            Replies.error(event, "Session expired", "This session was never started and has expired. Run `/timer start` again.");
+            Replies.error(event, "Session expired", org.bunnys.handler.commands.CommandLinks.render("This session was never started and has expired. Run `/timer start` again."));
             return;
         }
         MessageEmbed card;

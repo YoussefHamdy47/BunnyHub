@@ -503,6 +503,9 @@ public final class FreebieSystem {
     /** /freebie-admin announce: saves a draft and shows exactly what every subscribed server would get. */
     public FreebieBroadcasts.Reply announce(String actorId, String title, String body) { return announce(actorId, title, body, null, false); }
 
+    /** Every server with free-game alerts and its main alert channel (the one announcements use). Blocking. */
+    public Map<String, String> mainChannels() { return broadcasts.recipients(); }
+
     /**
      * {@code section}: a section code ({@link FreebieSection#code()}) to reach only servers with that section's
      * channel, or null for every server's main channel. {@code fallback}: servers without that section get it in
