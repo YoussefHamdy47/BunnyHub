@@ -183,7 +183,7 @@ public final class FreebieAutoSetup {
             notice.append("\nPings: ").append(String.join(", ", pings.keySet().stream().map(Role::getAsMention).toList())).append('.');
         if (!pickable.isEmpty()) {
             var panelChannel = used.iterator().next();
-            panelChannel.sendMessage(FreebieServerSetup.rolePanel(pickable)).complete();
+            FreebieServerSetup.postRolePanel(guild, panelChannel, pickable, DealBoardSetup.pickableRole(guild), subscriptions, now);
             notice.append("\nMembers can pick their pings from the role picker in ").append(panelChannel.getAsMention()).append('.');
         }
         if (pickable.size() < pings.size())

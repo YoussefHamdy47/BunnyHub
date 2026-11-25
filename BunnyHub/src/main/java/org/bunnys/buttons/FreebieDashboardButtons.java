@@ -1,6 +1,7 @@
 package org.bunnys.buttons;
 
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import org.bunnys.bunnynexus.commands.freebies.DealBoardSetup;
 import org.bunnys.bunnynexus.commands.freebies.FreebieCatchUp;
 import org.bunnys.bunnynexus.commands.freebies.FreebieDashboard;
 import org.bunnys.bunnynexus.commands.freebies.FreebieLauncherPings;
@@ -40,6 +41,8 @@ public class FreebieDashboardButtons extends BunnyButton {
                         args.length == 4 ? FreebieCatchUp.choiceOf(args[3]) : FreebieCatchUp.AUTO))).queue();
             }
             case FreebieDashboard.QUICK -> event.replyModal(FreebieDashboardForms.quickForm(args[2])).queue();
+            // freebie_dash:deals:<guild>:<channel|->: the deals board form (shown only while deals run).
+            case DealBoardSetup.ACTION -> event.replyModal(DealBoardSetup.form(args)).queue();
             case FreebieDashboard.PINGS -> {
                 event.deferEdit().complete();
                 var saved = system.subscriptions().forGuild(args[2]);

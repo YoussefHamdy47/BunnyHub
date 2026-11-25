@@ -256,13 +256,12 @@ class FreebieDashboardTest {
         try (var panel = FreebieServerSetup.sectionRolePanel(roles)) {
             assertTrue(panel.getMentionedRoles().isEmpty());
             assertFalse(panel.getAllowedMentions().contains(Message.MentionType.ROLE));
-            // The panel is a card: its button rows sit inside it.
-            var buttons = ((net.dv8tion.jda.api.components.container.Container) panel.getComponents().getFirst()).getComponents().stream()
-                    .filter(c -> c instanceof net.dv8tion.jda.api.components.actionrow.ActionRow)
-                    .map(c -> (net.dv8tion.jda.api.components.actionrow.ActionRow) c).findFirst().orElseThrow().getComponents();
+            // The panel is a card: each role's button sits beside it.
+            var buttons = net.dv8tion.jda.api.components.tree.MessageComponentTree.of(panel.getComponents())
+                    .findAll(net.dv8tion.jda.api.components.buttons.Button.class);
             assertEquals(1, buttons.size());
-            assertEquals(FreebieServerSetup.ROLE_PREFIX + ":" + ROLE, buttons.getFirst().asButton().getCustomId());
-            assertEquals("All free games", buttons.getFirst().asButton().getLabel());
+            assertEquals(FreebieServerSetup.ROLE_PREFIX + ":" + ROLE, buttons.getFirst().getCustomId());
+            assertEquals("All free games", buttons.getFirst().getLabel());
         }
         assertTrue(FreebieServerSetup.isPingRole(ROLE, List.of(new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.of(ROLE)))));
         assertFalse(FreebieServerSetup.isPingRole(ROLE, List.of(new Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.empty()))));

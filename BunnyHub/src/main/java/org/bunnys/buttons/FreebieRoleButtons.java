@@ -2,6 +2,7 @@ package org.bunnys.buttons;
 
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import org.bunnys.bunnynexus.commands.freebies.DealBoardSetup;
 import org.bunnys.bunnynexus.commands.freebies.FreebieServerSetup;
 import org.bunnys.bunnynexus.freebies.FreebieSystem;
 import org.bunnys.handler.BunnyHub;
@@ -29,8 +30,9 @@ public class FreebieRoleButtons extends BunnyButton {
         event.deferReply(true).complete();
         var role = guild.getRoleById(args[1]);
         var self = guild.getSelfMember();
-        if (role == null || !FreebieServerSetup.isPingRole(role.getId(), system.subscriptions().forGuild(guild.getId()))
-                || !FreebieServerSetup.selfAssignable(role, self)) {
+        boolean offered = role != null && (FreebieServerSetup.isPingRole(role.getId(), system.subscriptions().forGuild(guild.getId()))
+                || DealBoardSetup.pickableRole(guild).filter(role::equals).isPresent());
+        if (!offered || !FreebieServerSetup.selfAssignable(role, self)) {
             followUp(event, "This ping role is no longer offered here. Ask an admin to post a new role picker.");
             return;
         }

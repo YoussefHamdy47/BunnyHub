@@ -54,7 +54,7 @@ public final class GamerPowerFeed implements FreebieFeed {
         return addresses;
     }
 
-    static boolean isPublic(InetAddress address) {
+    public static boolean isPublic(InetAddress address) {
         return !(address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()
                 || address.isSiteLocalAddress() || address.isMulticastAddress()
                 || (address.getAddress().length == 16 && (address.getAddress()[0] & 0xfe) == 0xfc) // IPv6 unique-local
@@ -82,7 +82,7 @@ public final class GamerPowerFeed implements FreebieFeed {
         }
     }
 
-    static Optional<Duration> retryAfter(String header, Instant now) {
+    public static Optional<Duration> retryAfter(String header, Instant now) {
         if (header == null || header.length() > 128) return Optional.empty();
         String value = header.strip();
         try {
