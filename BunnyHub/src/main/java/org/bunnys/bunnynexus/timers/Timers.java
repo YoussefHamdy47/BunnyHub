@@ -59,7 +59,7 @@ public class Timers {
     public void checkUser() {
         loadData();
         if (cachedUser == null || cachedTimerData == null)
-            throw new StateFailure("You don't have a BunnyHub Timers account. Use `/timer register <semester>` first.");
+            throw new StateFailure(org.bunnys.handler.commands.CommandLinks.render("You don't have a BunnyHub Timers account. Use `/timer register` with your semester's name first."));
     }
 
     public void checkSemester() {
@@ -88,7 +88,7 @@ public class Timers {
         }
         if (cachedTimerData.getCurrentSemester() != null && cachedTimerData.getCurrentSemester().getSemesterName() != null)
             throw new StateFailure("Semester `" + cachedTimerData.getCurrentSemester().getSemesterName() + "` is already active.\n"
-                    + "Use `/timer end_semester` to close it before starting a new one.");
+                    + org.bunnys.handler.commands.CommandLinks.render("Use `/timer end_semester` to close it before starting a new one."));
 
         TimerAccountService.registerSemester(userId, cleanName);
         String description = brandNewAccount

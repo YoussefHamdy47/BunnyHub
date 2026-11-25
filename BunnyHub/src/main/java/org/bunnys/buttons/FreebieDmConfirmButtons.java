@@ -23,7 +23,7 @@ public class FreebieDmConfirmButtons extends BunnyButton {
     public void execute(BunnyHub client, ButtonInteractionEvent event, String[] args) {
         var system = FreebieSystem.current().orElse(null);
         if (system == null || args.length < 3 || !args[2].equals(event.getUser().getId())) {
-            event.reply(org.bunnys.handler.cards.Card.builder().text("Use `/free-games dms` to choose your own free-game DMs.").build().message())
+            event.reply(org.bunnys.handler.cards.Card.builder().text(org.bunnys.handler.commands.CommandLinks.render("Use `/free-games dms` to choose your own free-game DMs.")).build().message())
                     .setEphemeral(true).queue();
             return;
         }
@@ -32,7 +32,7 @@ public class FreebieDmConfirmButtons extends BunnyButton {
             return;
         }
         var sections = args.length == 4 ? FreebieSection.decode(args[3]) : java.util.Set.<FreebieSection>of();
-        if (sections.isEmpty()) { event.editMessage(Card.builder().text("Pick at least one section with `/free-games dms`.").build().edit()).queue(); return; }
+        if (sections.isEmpty()) { event.editMessage(Card.builder().text(org.bunnys.handler.commands.CommandLinks.render("Pick at least one section with `/free-games dms`.")).build().edit()).queue(); return; }
 
         // Answer the click straight away so it never looks stuck while the check DM and the save run.
         event.editMessage(FreebieDm.sendingCard().edit()).complete();

@@ -29,6 +29,12 @@ public final class FreebieAdmin extends BunnyCommand {
         addSubcommand(new org.bunnys.bunnynexus.commands.freebies.FreebieConnectCommand());
         addSubcommand(new org.bunnys.bunnynexus.commands.freebies.FreebieSourceCommand());
         addSubcommand(new org.bunnys.bunnynexus.commands.freebies.FreebieAnnounceCommand());
+        addSubcommand(new org.bunnys.bunnynexus.commands.freebies.ProductUpdateCommand());
+        addSubcommand(org.bunnys.bunnynexus.commands.freebies.AdCommands.add());
+        addSubcommand(org.bunnys.bunnynexus.commands.freebies.AdCommands.list());
+        addSubcommand(org.bunnys.bunnynexus.commands.freebies.AdCommands.preview());
+        addSubcommand(org.bunnys.bunnynexus.commands.freebies.AdCommands.pause());
+        addSubcommand(org.bunnys.bunnynexus.commands.freebies.AdCommands.remove());
         addSubcommand(new org.bunnys.bunnynexus.commands.freebies.FreebieHistoryCommands(false));
         addSubcommand(new org.bunnys.bunnynexus.commands.freebies.FreebieHistoryCommands(true));
     }

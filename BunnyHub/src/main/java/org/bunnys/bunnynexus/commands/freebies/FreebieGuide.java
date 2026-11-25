@@ -19,10 +19,10 @@ public final class FreebieGuide {
         return Embeds.of(null, "Free games guide")
                 .setDescription("Get free games from Epic, Steam, GOG, consoles, mobile and more.")
                 .addField("For everyone",
-                        "`/free-games list` See what's free right now. Add `launcher:` to show just one.\n"
-                                + "`/free-games dms` Get free games by DM for the sections you pick, or stop them.", false)
+                        org.bunnys.handler.commands.CommandLinks.render("`/free-games list` See what's free right now. Add `launcher:` to show just one.\n")
+                                + org.bunnys.handler.commands.CommandLinks.render("`/free-games dms` Get free games by DM for the sections you pick, or stop them."), false)
                 .addField("Set up your server (needs Manage Server)",
-                        "1. Run `/free-games setup`.\n"
+                        org.bunnys.handler.commands.CommandLinks.render("1. Run `/free-games setup`.\n")
                                 + "2. Click **Quick setup**, pick a channel and what to post. That's it.\n"
                                 + "Prefer separate channels? **Create channels for me** makes them, with a ping role each.", false)
                 .addField("Make it yours",

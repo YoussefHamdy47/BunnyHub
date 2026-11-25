@@ -26,7 +26,7 @@ public class FreebieDmSubscribeSelect extends BunnySelect {
         var system = FreebieSystem.current().orElse(null);
         var sections = FreebieSection.decode(String.join("", event.getValues()));
         if (system == null || args.length != 2 || !args[1].equals(event.getUser().getId()) || sections.isEmpty()) {
-            event.reply(org.bunnys.handler.cards.Card.builder().text("Use `/free-games dms` to choose your own free-game DMs.").build().message())
+            event.reply(org.bunnys.handler.cards.Card.builder().text(org.bunnys.handler.commands.CommandLinks.render("Use `/free-games dms` to choose your own free-game DMs.")).build().message())
                     .setEphemeral(true).queue();
             return;
         }
@@ -54,7 +54,7 @@ public class FreebieDmSubscribeSelect extends BunnySelect {
             case DISABLED -> "Personal DM alerts are turned off right now.";
             case BUSY -> "Your subscription is still being set up. Try again in a minute.";
             case DM_REFUSED -> "**I couldn't DM you, so nothing was saved.** Allow **direct messages from server members** "
-                    + "(Privacy Settings for a server we share), then run `/free-games dms` again.";
+                    + org.bunnys.handler.commands.CommandLinks.render("(Privacy Settings for a server we share), then run `/free-games dms` again.");
         };
     }
 }

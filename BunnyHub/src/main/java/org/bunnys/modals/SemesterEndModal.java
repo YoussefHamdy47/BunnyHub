@@ -23,7 +23,7 @@ public class SemesterEndModal extends BunnyModal {
     @Override
     public void execute(BunnyHub client, ModalInteractionEvent event, String[] args) {
         if (args.length < 4) {
-            Replies.error(event, "Expired form", "Run `/timer end_semester` again.");
+            Replies.error(event, "Expired form", org.bunnys.handler.commands.CommandLinks.render("Run `/timer end_semester` again."));
             return;
         }
         String ownerId = args[1];
@@ -33,7 +33,7 @@ public class SemesterEndModal extends BunnyModal {
             requestTime = Long.parseLong(args[2]);
             confirmedRevision = Timers.parseRevisionToken(args[3]);
         } catch (NumberFormatException e) {
-            Replies.error(event, "Expired form", "Run `/timer end_semester` again.");
+            Replies.error(event, "Expired form", org.bunnys.handler.commands.CommandLinks.render("Run `/timer end_semester` again."));
             return;
         }
         if (!event.getUser().getId().equals(ownerId)) {

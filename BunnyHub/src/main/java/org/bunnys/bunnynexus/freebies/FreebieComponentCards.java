@@ -43,13 +43,18 @@ final class FreebieComponentCards {
     static final String SUBTEXT = "-# ";
 
     static MessageCreateData create(List<Member> members, List<String> pingRoles, boolean checkout, Instant now) {
+        return create(members, pingRoles, checkout, now, Optional.empty());
+    }
+
+    /** {@code ad}: the ad card shown under the game card while a game is claimable. */
+    static MessageCreateData create(List<Member> members, List<String> pingRoles, boolean checkout, Instant now, Optional<Container> ad) {
         Optional<String> header = Optional.empty();
         if (!pingRoles.isEmpty()) {
             var mentions = new StringJoiner(" ");
             for (String role : pingRoles) mentions.add("<@&" + role + ">");
             header = Optional.of(mentions + " " + FreebieAnnouncementCards.headline(members));
         }
-        var builder = new MessageCreateBuilder().useComponentsV2(true).setComponents(components(members, header, checkout, now))
+        var builder = new MessageCreateBuilder().useComponentsV2(true).setComponents(components(members, header, checkout, now, ad))
                 .setAllowedMentions(List.of()).mentionRepliedUser(false);
         if (!pingRoles.isEmpty()) builder.mentionRoles(pingRoles);
         return builder.build();
@@ -62,27 +67,54 @@ final class FreebieComponentCards {
      * {@code N new free games}; it goes away once no game is claimable. Edits never notify.
      */
     static MessageEditData edit(List<Member> members, boolean checkout, Instant now, Optional<String> postedHeader) {
+        return edit(members, checkout, now, postedHeader, Optional.empty());
+    }
+
+    /** As above, keeping the posted ad card ({@link #ad}) while a game is claimable. */
+    static MessageEditData edit(List<Member> members, boolean checkout, Instant now, Optional<String> postedHeader, Optional<Container> postedAd) {
         boolean live = members.stream().anyMatch(m -> m.status() == Status.LIVE);
         Optional<String> header = live ? postedHeader.map(h -> HEADLINE.matcher(h).find()
                 ? HEADLINE.matcher(h).replaceFirst(FreebieAnnouncementCards.headline(members)) : h) : Optional.empty();
-        return new MessageEditBuilder().useComponentsV2(true).setComponents(components(members, header, checkout, now))
+        return new MessageEditBuilder().useComponentsV2(true).setComponents(components(members, header, checkout, now, postedAd))
                 .setAllowedMentions(List.of()).build();
     }
 
-    /** The mention line of a posted V2 page: its first top-level text block, when there is one. */
-    static Optional<String> header(Message message) {
-        if (!message.isUsingComponentsV2()) return Optional.empty();
-        return message.getComponents().stream().filter(c -> c instanceof TextDisplay).map(c -> ((TextDisplay) c).getContent())
-                .findFirst();
+    /** The mention line of a posted V2 page: a top-level text block above the card, when there is one. */
+    static Optional<String> header(Message message) { return message.isUsingComponentsV2() ? topText(message.getComponents(), true) : Optional.empty(); }
+
+    /** The ad card of a posted V2 page (the second card, which only an ad adds), kept as posted on edits. */
+    static Optional<Container> ad(Message message) { return message.isUsingComponentsV2() ? adCard(message.getComponents()) : Optional.empty(); }
+
+    /** A top-level text block above the card (the mention line). */
+    static Optional<String> topText(List<? extends MessageTopLevelComponent> components, boolean above) {
+        for (var c : components) {
+            if (c instanceof Container) return Optional.empty();
+            if (c instanceof TextDisplay text) return Optional.of(text.getContent());
+        }
+        return Optional.empty();
+    }
+
+    /** The second card, which only an ad adds. */
+    static Optional<Container> adCard(List<? extends MessageTopLevelComponent> components) {
+        var cards = components.stream().filter(c -> c instanceof Container).map(c -> (Container) c).toList();
+        return cards.size() < 2 ? Optional.empty() : Optional.of(cards.get(1));
     }
 
     static List<MessageTopLevelComponent> components(List<Member> members, Optional<String> header, boolean checkout, Instant now) {
+        return components(members, header, checkout, now, Optional.empty());
+    }
+
+    static List<MessageTopLevelComponent> components(List<Member> members, Optional<String> header, boolean checkout, Instant now,
+                                                     Optional<Container> ad) {
+        // The ad goes once no game is claimable, like the mention line.
+        var shownAd = ad.filter(a -> members.stream().anyMatch(m -> m.status() == Status.LIVE));
         // Shrinking order when the text limit is reached: descriptions, region text, the links in titles and mobile
         // lines (link URLs count as text; the Claim buttons keep theirs), then long titles.
         for (Detail detail : Detail.values()) {
             List<MessageTopLevelComponent> top = new ArrayList<>();
             header.ifPresent(h -> top.add(TextDisplay.of(h)));
             top.add(members.size() == 1 ? single(members.getFirst(), checkout, now, detail) : several(members, checkout, now, detail));
+            shownAd.ifPresent(top::add);
             if (textLength(top) <= TEXT_LIMIT || detail == Detail.BARE) return top;
         }
         throw new IllegalStateException("unreachable");

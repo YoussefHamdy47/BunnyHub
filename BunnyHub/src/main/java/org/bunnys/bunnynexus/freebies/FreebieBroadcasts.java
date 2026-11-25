@@ -139,7 +139,7 @@ public final class FreebieBroadcasts {
         var broadcast = repository.broadcasts().confirm(id, token, actor, now, ping);
         if (broadcast.isEmpty()) return "This draft expired, was discarded, was already sent, or belongs to another owner. Nothing was sent.";
         int servers = plan(id);
-        return "Sending to " + servers + " server(s)" + (ping ? " with each server's free-game role pinged" : " without pings") + ". Progress is in `/freebie-admin status`; use the button below to stop the rest.";
+        return "Sending to " + servers + " server(s)" + (ping ? " with each server's free-game role pinged" : " without pings") + org.bunnys.handler.commands.CommandLinks.render(". Progress is in `/freebie-admin status`; use the button below to stop the rest.");
     }
 
     private int plan(String id) {

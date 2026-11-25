@@ -49,6 +49,7 @@ public class BunnyHub implements AutoCloseable {
         this.autocompleteExecutor = new InteractionExecutor("BunnyAutocomplete", config.getAutocompletePoolSize(), config.getAutocompleteQueueCapacity(), config.getAutocompleteUserCapacity());
         this.startTime = System.currentTimeMillis();
         this.commandRegistry = new CommandRegistry(this, config.getDeveloperIds(), config.getTestServerIds());
+        org.bunnys.handler.commands.CommandLinks.use(this.commandRegistry::getCommandIds);
 
         BunnyLog.setLogActions(config.isLogActions());
 

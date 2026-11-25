@@ -8,7 +8,7 @@ import org.bunnys.utils.BunnyLog;
 import org.bunnys.utils.FailureDiagnostics;
 import java.util.concurrent.RejectedExecutionException;
 
-/** Drops a server's daily-deals setting when the bot is removed. Without it the post turns off after 3 failed days. */
+/** Drops a server's deals board when the bot is removed. Without it the board turns off after 3 failed days. */
 @SuppressWarnings("unused") // Discovered reflectively by EventLoader.
 public class DealGuildLeave extends BunnyEvent {
     public DealGuildLeave(BunnyHub client) { super(client); }
@@ -23,11 +23,11 @@ public class DealGuildLeave extends BunnyEvent {
             client.getCommandExecutor().execute(() -> {
                 try { system.repository().forget(guildId); }
                 catch (RuntimeException failure) {
-                    BunnyLog.warning("[Deals] Could not remove the daily post of left server " + guildId + " | " + FailureDiagnostics.describe(failure));
+                    BunnyLog.warning("[Deals] Could not remove the Deals Board of left server " + guildId + " | " + FailureDiagnostics.describe(failure));
                 }
             });
         } catch (RejectedExecutionException busy) {
-            BunnyLog.warning("[Deals] Busy; the daily post of left server " + guildId + " turns off after 3 failed days.");
+            BunnyLog.warning("[Deals] Busy; the Deals Board of left server " + guildId + " turns off after 3 failed days.");
         }
     }
 }

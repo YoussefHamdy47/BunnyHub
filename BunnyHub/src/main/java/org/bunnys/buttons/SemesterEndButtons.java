@@ -38,7 +38,7 @@ public class SemesterEndButtons extends BunnyButton {
                         List.of(ActionRow.of(disabled)));
             } else if (action.equals("confirm")) {
                 if (args.length < 4) {
-                    Replies.error(event, "Expired prompt", "Run `/timer end_semester` again.");
+                    Replies.error(event, "Expired prompt", org.bunnys.handler.commands.CommandLinks.render("Run `/timer end_semester` again."));
                     return;
                 }
                 // A modal must be the first answer to the click; the buttons are locked right after.

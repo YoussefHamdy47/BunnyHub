@@ -49,14 +49,14 @@ public class DealBoardModal extends BunnyModal {
             before.filter(b -> b.messageId().isPresent())
                     .ifPresent(b -> deals.removeBoardMessage(guild.getId(), b.channelId(), b.messageId().get()));
             DealBoardSetup.refreshRolePanel(guild);
-            notice = "Deals board turned off.";
+            notice = "Deals Board turned off.";
         } else {
             // Same checks as free-game channels: the bot can post there, and the role is a real, pingable one.
             var problem = FreebieSettingsCommands.validate(guild, channel, role);
             if (problem.isPresent()) notice = "⚠️ " + problem.get();
             else {
                 DealBoardSetup.save(guild, channel, role.map(r -> r.getId()), stores, hours, event.getUser().getId(), deals);
-                notice = "Deals board on in " + channel.getAsMention() + ". It appears there in a moment.";
+                notice = "Deals Board on in " + channel.getAsMention() + ". It appears there in a moment.";
             }
         }
         event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieDashboard.dashboard(guild,

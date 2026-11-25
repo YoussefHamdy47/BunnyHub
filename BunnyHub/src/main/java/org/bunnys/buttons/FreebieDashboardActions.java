@@ -51,6 +51,11 @@ public class FreebieDashboardActions extends BunnyButton {
             if (result.isEmpty()) return; // Asked which existing channels and roles to use.
             notice = result.get();
         } else notice = switch (args[1]) {
+            case FreebieDashboard.UPDATES -> org.bunnys.bunnynexus.updates.ProductUpdates.current().map(updates -> {
+                boolean off = args.length == 4 && "off".equals(args[3]);
+                updates.prefs().setOff(guild.getId(), off, event.getUser().getId(), java.time.Instant.now());
+                return off ? "Product updates are off for this server." : "Product updates are on for this server.";
+            }).orElse("⚠️ Product updates are not available right now.");
             case DealBoardSetup.AUTO_ACTION -> org.bunnys.bunnynexus.deals.DealSystem.current()
                     .map(deals -> DealBoardSetup.autoSetup(guild, event.getMember(), deals))
                     .orElse("⚠️ Deals are not available right now.");

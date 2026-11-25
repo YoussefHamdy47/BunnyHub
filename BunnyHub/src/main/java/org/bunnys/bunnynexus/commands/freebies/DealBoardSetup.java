@@ -62,7 +62,7 @@ public final class DealBoardSetup {
         var ping = on.map(DealRepository.Board::ping).orElse(DealRepository.Ping.NONE);
         String role = ping.roleId().filter(r -> guild.getRoleById(r) != null).orElse(FreebieDashboard.NONE);
         return Button.of(on.isPresent() ? ButtonStyle.SUCCESS : ButtonStyle.SECONDARY, String.join(":", FreebieDashboard.NAV_PREFIX,
-                ACTION, guild.getId(), channel, role, Integer.toHexString(mask(ping.stores())), String.valueOf(ping.everyHours())), "Deals board");
+                ACTION, guild.getId(), channel, role, Integer.toHexString(mask(ping.stores())), String.valueOf(ping.everyHours())), "Deals Board");
     }
 
     static int mask(Set<DealStore> stores) {
@@ -97,7 +97,7 @@ public final class DealBoardSetup {
             } catch (NumberFormatException malformed) { /* defaults */ }
         }
         every.setDefaultValues(String.valueOf(DealRepository.Ping.CHOICES.contains(hours) ? hours : DealRepository.Ping.DEFAULT_HOURS));
-        return Modal.create(MODAL_PREFIX + ":" + args[2], "Deals board")
+        return Modal.create(MODAL_PREFIX + ":" + args[2], "Deals Board")
                 .addComponents(Label.of("Channel", "A quiet channel works best. Leave empty to turn the board off.", channel.build()),
                         Label.of("Role to ping for new deals", "Optional. The first post never pings.", role.build()),
                         Label.of("Launchers that ping", "Leave empty for every launcher", launchers.build()),
@@ -112,12 +112,14 @@ public final class DealBoardSetup {
      */
     public static String autoSetup(Guild guild, Member actor, DealSystem deals) {
         if (!actor.hasPermission(Permission.MANAGE_ROLES, Permission.MANAGE_CHANNEL))
-            return "⚠️ Creating the deals board needs **Manage Roles** and **Manage Channels**.";
+            return "⚠️ Creating the Deals Board needs **Manage Roles** and **Manage Channels**.";
         var self = guild.getSelfMember();
         if (!self.hasPermission(Permission.MANAGE_ROLES, Permission.MANAGE_CHANNEL))
             return "⚠️ I need **Manage Roles** and **Manage Channels** in Server Settings → Roles to set this up.";
+        // Next to the server's free-game alerts when it has them, otherwise in a "Free Games" category.
         var categories = guild.getCategoriesByName(FreebieServerSetup.CATEGORY_NAME, true);
-        Category category = categories.isEmpty() ? guild.createCategory(FreebieServerSetup.CATEGORY_NAME).complete() : categories.getFirst();
+        Category category = alertCategory(guild).orElseGet(() -> categories.isEmpty()
+                ? guild.createCategory(FreebieServerSetup.CATEGORY_NAME).complete() : categories.getFirst());
         TextChannel channel = category.getTextChannels().stream().filter(c -> c.getName().equals(CHANNEL_NAME)).findFirst()
                 .orElseGet(() -> category.createTextChannel(CHANNEL_NAME).setTopic("Big discounts on well-reviewed PC games, kept up to date.")
                         .addPermissionOverride(guild.getPublicRole(), EnumSet.noneOf(Permission.class), EnumSet.of(Permission.MESSAGE_SEND))
@@ -127,9 +129,21 @@ public final class DealBoardSetup {
         Role role = guild.getRolesByName(ROLE_NAME, false).stream().filter(r -> FreebieServerSetup.selfAssignable(r, self)).findFirst()
                 .orElseGet(() -> guild.createRole().setName(ROLE_NAME).setMentionable(true).setPermissions(0L).complete());
         boolean pickerUpdated = save(guild, channel, Optional.of(role.getId()), Set.of(), DealRepository.Ping.DEFAULT_HOURS, actor.getId(), deals);
-        return "✅ Deals board on in " + channel.getAsMention() + ", pinging " + role.getAsMention() + " at most once a day. "
+        return "✅ Deals Board on in " + channel.getAsMention() + ", pinging " + role.getAsMention() + " at most once a day. "
                 + (pickerUpdated ? "The role picker now has a **Game deals** button so members can opt in."
                 : "Use **Post role picker** so members can opt in.");
+    }
+
+    /** The category holding this server's free-game alert channels (the one most of them share). */
+    static Optional<Category> alertCategory(Guild guild) {
+        var freebies = org.bunnys.bunnynexus.freebies.FreebieSystem.current().orElse(null);
+        if (freebies == null) return Optional.empty();
+        Map<Category, Long> counts = new HashMap<>();
+        for (var s : freebies.subscriptions().forGuild(guild.getId())) {
+            var channel = guild.getChannelById(StandardGuildMessageChannel.class, s.channelId());
+            if (channel != null && channel.getParentCategory() != null) counts.merge(channel.getParentCategory(), 1L, Long::sum);
+        }
+        return counts.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey);
     }
 
     /**

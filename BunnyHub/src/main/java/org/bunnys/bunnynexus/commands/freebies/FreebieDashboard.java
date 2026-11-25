@@ -34,7 +34,8 @@ public final class FreebieDashboard {
     public static final String NAV_PREFIX = "freebie_dash", RUN_PREFIX = "freebie_dashrun",
             AUTO_SELECT_PREFIX = "freebie_autosel", SECTION_MODAL_PREFIX = "freebie_section";
     public static final String OPEN_SECTION = "s", AUTO = "auto", HOME = "home", ONE_CHANNEL = "one",
-            CHANNEL_PER_SECTION = "split", ROLE_PANEL = "panel", QUICK = "quick", PINGS = "pings", HELP = "help";
+            CHANNEL_PER_SECTION = "split", ROLE_PANEL = "panel", QUICK = "quick", PINGS = "pings", HELP = "help",
+            UPDATES = "updates";
     /** Launcher pings: the picker ({@code freebie_ping:<guild>}) and its form ({@code freebie_pingform:<guild>:<launcher>}). */
     public static final String PING_SELECT_PREFIX = "freebie_ping", PING_MODAL_PREFIX = "freebie_pingform",
             QUICK_MODAL_PREFIX = "freebie_quick";
@@ -117,7 +118,10 @@ public final class FreebieDashboard {
         var pings = launcherPings(saved);
         for (var state : states.values()) embed.addField(state.section().label(), describe(guild, state, pings), false);
         var dealBoard = DealBoardSetup.state(guild);
-        dealBoard.ifPresent(board -> embed.addField("Deals board", DealBoardSetup.describe(guild, board), false));
+        dealBoard.ifPresent(board -> embed.addField("Deals Board", DealBoardSetup.describe(guild, board), false));
+        var updatesOff = org.bunnys.bunnynexus.updates.ProductUpdates.current().map(u -> u.prefs().get(guild.getId()).off());
+        updatesOff.ifPresent(off -> embed.addField("Product updates", off ? "Off\n-# You won't hear about new BunnyNexus features."
+                : "On\n-# At most one short message every 14 days when BunnyNexus gets a feature you don't use yet.", false));
         long channels = saved.stream().map(Subscription::channelId).distinct().count();
         Embeds.footer(embed, channels + "/" + FreebieSubscriptions.MAX_CHANNELS_PER_GUILD + " alert channels used");
 
@@ -125,13 +129,21 @@ public final class FreebieDashboard {
         for (var state : states.values()) sections.add(sectionButton(guild, state));
         dealBoard.ifPresent(board -> sections.add(DealBoardSetup.button(guild, board)));
         String id = guild.getId();
-        return new Reply(embed.build(), List.of(ActionRow.of(sections), ActionRow.of(
+        List<Button> extras = new ArrayList<>();
+        // One click: #deals and @Deals next to the free-game channels, board on, picker updated.
+        if (dealBoard.isPresent() && dealBoard.get().filter(org.bunnys.bunnynexus.deals.DealRepository.Board::on).isEmpty())
+            extras.add(Button.primary(RUN_PREFIX + ":" + DealBoardSetup.AUTO_ACTION + ":" + id, "Create Deals Board"));
+        updatesOff.ifPresent(off -> extras.add(Button.secondary(RUN_PREFIX + ":" + UPDATES + ":" + id + ":" + (off ? "on" : "off"),
+                off ? "Turn product updates on" : "Turn product updates off")));
+        List<ActionRow> rows = new ArrayList<>(List.of(ActionRow.of(sections), ActionRow.of(
                 (saved.isEmpty() ? Button.primary(NAV_PREFIX + ":" + QUICK + ":" + id, "Quick setup")
                         : Button.secondary(NAV_PREFIX + ":" + QUICK + ":" + id, "Quick setup")),
                 Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + id, "Create channels for me"),
                 Button.secondary(NAV_PREFIX + ":" + PINGS + ":" + id, "Launcher pings").withDisabled(saved.isEmpty()),
                 Button.secondary(RUN_PREFIX + ":" + ROLE_PANEL + ":" + id, "Post role picker"),
                 Button.secondary(NAV_PREFIX + ":" + HELP + ":" + id, "Help"))));
+        if (!extras.isEmpty()) rows.add(ActionRow.of(extras));
+        return new Reply(embed.build(), rows);
     }
 
     /** Each enabled launcher's ping(s), across every channel that posts it. */
@@ -229,7 +241,7 @@ public final class FreebieDashboard {
                 Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + guildId + ":" + FreebieCatchUp.token(chosen, post.next()), post.toggle())));
         // Deals have their own channel and role: #deals and @Deals, created separately from the free-game sections.
         if (org.bunnys.bunnynexus.deals.DealSystem.current().isPresent())
-            buttons.add(Button.secondary(RUN_PREFIX + ":" + DealBoardSetup.AUTO_ACTION + ":" + guildId, "Create deals board"));
+            buttons.add(Button.secondary(RUN_PREFIX + ":" + DealBoardSetup.AUTO_ACTION + ":" + guildId, "Create Deals Board"));
         buttons.add(Button.secondary(NAV_PREFIX + ":" + HOME + ":" + guildId, "Back"));
         return new Reply(embed.build(), List.of(ActionRow.of(picker.build()), ActionRow.of(buttons)));
     }

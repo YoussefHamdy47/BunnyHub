@@ -118,7 +118,7 @@ public final class FreebieDm {
     public static final String CONFIRM_PREFIX = "freebie_dmok", YES = "yes", NO = "no";
 
     private static String rules() {
-        return "-# At most " + DAILY_CAP + " a day. `/free-games help` explains how games are checked.";
+        return "-# At most " + DAILY_CAP + org.bunnys.handler.commands.CommandLinks.render(" a day. `/free-games help` explains how games are checked.");
     }
 
     /** Step 1: the section picker. Picking only shows the confirm step; nothing is saved or sent yet. */
