@@ -50,7 +50,11 @@ final class FreebieBroadcastWorker {
 
     /** {@code ping}: the one role that may be mentioned; never @everyone, @here or users, whatever the text says. */
     static MessageCreateData message(String title, String body, String reference, Optional<String> ping) {
-        var card = org.bunnys.handler.cards.Card.builder().heading(title).text(body).footer(reference);
+        return message(title, body, reference, ping, null);
+    }
+
+    static MessageCreateData message(String title, String body, String reference, Optional<String> ping, String imageUrl) {
+        var card = org.bunnys.handler.cards.Card.builder().heading(title).text(body).image(imageUrl).footer(reference);
         ping.ifPresent(role -> card.above("<@&" + role + ">").mentionRoles(role));
         return card.build().message();
     }
@@ -113,7 +117,7 @@ final class FreebieBroadcastWorker {
                 else if (!closed && store().submitting(job, at)) {
                     // "Send with ping": only this server's saved free-game role, and only while the role still exists.
                     Optional<String> ping = broadcast.ping() ? job.roleId().filter(id -> guild.getRoleById(id) != null) : Optional.empty();
-                    var request = channel.sendMessage(message(broadcast.title(), broadcast.body(), reference, ping)).setNonce(nonce(job.id()))
+                    var request = channel.sendMessage(message(broadcast.title(), broadcast.body(), reference, ping, broadcast.imageUrl())).setNonce(nonce(job.id()))
                             .timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit();
                     submitted = true;
                     request.whenComplete((message, sendError) -> dispatch(release, () -> {

@@ -516,6 +516,11 @@ public final class FreebieSystem {
         return broadcasts.preview(actorId, title, body, FreebieBroadcasts.target(section, fallback));
     }
 
+    public FreebieBroadcasts.Reply announce(String actorId, String title, String body, String section, boolean fallback, String imageUrl) {
+        requireOwner(actorId);
+        return broadcasts.preview(actorId, title, body, FreebieBroadcasts.target(section, fallback), imageUrl);
+    }
+
     /** The owner's confirmation button ({@code broadcast-<token>}). */
     public String confirmAnnouncement(String actorId, String id, String action) {
         requireOwner(actorId);

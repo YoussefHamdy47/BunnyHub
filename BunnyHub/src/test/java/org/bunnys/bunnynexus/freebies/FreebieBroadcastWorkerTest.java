@@ -44,6 +44,37 @@ class FreebieBroadcastWorkerTest {
         when(channel.sendMessage(any(MessageCreateData.class))).thenReturn(send);
     }
 
+    @Test void sendsTheSavedImageAndKeepsTheRecoveryReference() {
+        String image = "https://example.com/banner.png";
+        when(store.get(ID)).thenReturn(Optional.of(new FreebieBroadcastStore.Broadcast(
+                ID, "Deals", "Look here", "SENDING", "owner", false, null, false, image)));
+        var message = mock(Message.class);
+        when(message.getId()).thenReturn(MESSAGE);
+        when(send.submit()).thenReturn(CompletableFuture.completedFuture(message));
+        run(job);
+        var captor = ArgumentCaptor.forClass(MessageCreateData.class);
+        verify(channel).sendMessage(captor.capture());
+        assertTrue(captor.getValue().toData().toString().contains(image));
+        assertTrue(FreebieBroadcastWorker.carries(V2.posted(captor.getValue().getComponents()),
+                FreebieBroadcastWorker.reference(job.id())));
+        assertTrue(captor.getValue().getAllowedMentions().isEmpty());
+        verify(store).sent(job, MESSAGE, now);
+    }
+
+    @Test void storedImagesAreOptionalForOlderBroadcasts() {
+        var old = new org.bson.Document("_id", ID).append("title", "Deals").append("body", "Text")
+                .append("state", "DRAFT").append("actor", "owner");
+        assertNull(FreebieBroadcastStore.Broadcast.read(old).imageUrl());
+        old.append("imageUrl", "https://example.com/banner.png");
+        assertEquals("https://example.com/banner.png", FreebieBroadcastStore.Broadcast.read(old).imageUrl());
+    }
+
+    @Test void imageUrlsMustBeAbsoluteHttpsWithoutCredentials() {
+        assertTrue(FreebieBroadcasts.validImageUrl("https://example.com/banner.png?size=large"));
+        for (String invalid : List.of("file:///tmp/a.png", "http://example.com/a.png", "https:///a",
+                "https://user:password@example.com/a.png", "not a url", "https://example.com/" + "a".repeat(2048)))
+            assertFalse(FreebieBroadcasts.validImageUrl(invalid), invalid);
+    }
     boolean run(FreebieBroadcastStore.Job job) {
         boolean async = new FreebieBroadcastWorker(repository, work::add, Clock.fixed(now, ZoneOffset.UTC)).start(client, job, () -> {});
         while (!work.isEmpty()) work.remove().run();

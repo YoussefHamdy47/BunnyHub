@@ -42,14 +42,17 @@ final class FreebieBroadcastStore {
      * {@code section}: only servers with an alert channel for this section code (null: every server, main channel).
      * {@code fallback}: a server without that section gets the announcement in its main channel instead of nothing.
      */
-    record Broadcast(String id, String title, String body, String state, String actor, boolean ping, String section, boolean fallback) {
+    record Broadcast(String id, String title, String body, String state, String actor, boolean ping, String section, boolean fallback, String imageUrl) {
+        Broadcast(String id, String title, String body, String state, String actor, boolean ping, String section, boolean fallback) {
+            this(id, title, body, state, actor, ping, section, fallback, null);
+        }
         Broadcast(String id, String title, String body, String state, String actor, boolean ping) {
             this(id, title, body, state, actor, ping, null, false);
         }
         Broadcast(String id, String title, String body, String state, String actor) { this(id, title, body, state, actor, false); }
         static Broadcast read(Document d) {
             return new Broadcast(d.getString("_id"), d.getString("title"), d.getString("body"), d.getString("state"), d.getString("actor"),
-                    d.getBoolean("ping", false), d.getString("section"), d.getBoolean("fallback", false));
+                    d.getBoolean("ping", false), d.getString("section"), d.getBoolean("fallback", false), d.getString("imageUrl"));
         }
     }
     /** {@code roleId}: the server's saved free-game role for the chosen channel, if any. */
@@ -68,11 +71,15 @@ final class FreebieBroadcastStore {
 
     /** The target is saved with the draft, so planning (and recovery after a crash) uses exactly what was previewed. */
     Broadcast draft(String title, String body, String actor, String token, Instant now, String section, boolean fallback) {
+        return draft(title, body, actor, token, now, section, fallback, null);
+    }
+
+    Broadcast draft(String title, String body, String actor, String token, Instant now, String section, boolean fallback, String imageUrl) {
         String id = "bc" + Long.toString(now.toEpochMilli(), 36) + token.substring(0, 6);
-        broadcasts.insertOne(new Document("_id", id).append("schemaVersion", 1).append("title", title).append("body", body)
+        broadcasts.insertOne(new Document("_id", id).append("schemaVersion", 1).append("title", title).append("body", body).append("imageUrl", imageUrl)
                 .append("state", "DRAFT").append("actor", actor).append("token", token).append("section", section).append("fallback", fallback)
                 .append("until", Date.from(now.plus(DRAFT_LIFETIME))).append("createdAt", Date.from(now)));
-        return new Broadcast(id, title, body, "DRAFT", actor, false, section, fallback);
+        return new Broadcast(id, title, body, "DRAFT", actor, false, section, fallback, imageUrl);
     }
 
     /** DRAFT → SENDING, once, by the owner who previewed it, before the draft expires. */

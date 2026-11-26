@@ -95,9 +95,26 @@ public final class FreebieBroadcasts {
     /** Typed "\n" becomes a line break; slash-command options cannot contain real line breaks. */
     static String body(String raw) { return raw == null ? "" : raw.replace("\\n", "\n").strip(); }
 
+    static boolean validImageUrl(String value) {
+        try {
+            var uri = java.net.URI.create(value);
+            return value.length() <= 2048 && "https".equalsIgnoreCase(uri.getScheme())
+                    && uri.getHost() != null && uri.getUserInfo() == null;
+        } catch (IllegalArgumentException invalid) {
+            return false;
+        }
+    }
+
     Reply preview(String actor, String title, String rawBody) { return preview(actor, title, rawBody, Target.ALL); }
 
     Reply preview(String actor, String title, String rawBody, Target target) {
+        return preview(actor, title, rawBody, target, null);
+    }
+
+    Reply preview(String actor, String title, String rawBody, Target target, String imageUrl) {
+        imageUrl = imageUrl == null || imageUrl.isBlank() ? null : imageUrl.strip();
+        if (imageUrl != null && !validImageUrl(imageUrl))
+            return new Problem("Use a direct HTTPS image URL (up to 2048 characters).");
         String body = body(rawBody);
         title = title == null ? "" : title.strip();
         if (title.isEmpty() || body.isEmpty()) return new Problem("Give the announcement a title and a message.");
@@ -111,9 +128,9 @@ public final class FreebieBroadcasts {
                 : "No server has free-game alerts set up, so there is nobody to announce to.");
         String token = FreebieReleases.token();
         var draft = repository.broadcasts().draft(title, body, actor, token, clock.instant(),
-                target.section().map(s -> String.valueOf(s.code())).orElse(null), target.fallback());
+                target.section().map(s -> String.valueOf(s.code())).orElse(null), target.fallback(), imageUrl);
         // The announcement exactly as servers get it, then the send panel.
-        var preview = FreebieBroadcastWorker.message(title, body, "Bot announcement • ref preview").getComponents();
+        var preview = FreebieBroadcastWorker.message(title, body, "Bot announcement • ref preview", Optional.empty(), imageUrl).getComponents();
         var info = Embeds.of(null, "Send this announcement?")
                 .setDescription("It goes to **" + servers + "** server(s): " + target.describe() + ", one message each"
                         + (viaFallback > 0 ? " (" + viaFallback + " in their main channel because they have no such section)" : "")

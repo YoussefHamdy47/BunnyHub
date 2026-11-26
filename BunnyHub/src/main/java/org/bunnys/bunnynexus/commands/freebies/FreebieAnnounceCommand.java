@@ -25,6 +25,7 @@ public final class FreebieAnnounceCommand extends BunnySubcommand {
                 .addChoice("Every server (main channel)", ALL);
         for (FreebieSection s : FreebieSection.values()) section.addChoice(s.label(), String.valueOf(s.code()));
         addOption(section);
+        addOption(new OptionData(OptionType.STRING, "image-url", "Optional direct HTTPS image URL", false).setMaxLength(2048));
         addOption(new OptionData(OptionType.STRING, "if-missing", "With a section: what to do for a server without that section", false)
                 .addChoice("Skip that server", SKIP).addChoice("Use its main channel", MAIN));
     }
@@ -45,7 +46,7 @@ public final class FreebieAnnounceCommand extends BunnySubcommand {
         ctx.defer(true);
         String section = ctx.getString("section");
         boolean fallback = MAIN.equals(ctx.getString("if-missing"));
-        switch (system.announce(user, ctx.getString("title"), ctx.getString("message"), ALL.equals(section) ? null : section, fallback)) {
+        switch (system.announce(user, ctx.getString("title"), ctx.getString("message"), ALL.equals(section) ? null : section, fallback, ctx.getString("image-url"))) {
             case FreebieBroadcasts.Problem problem -> ctx.replyCard(org.bunnys.handler.cards.Card.fromEmbed(Embeds.of(null, "Announcement", problem.text()).build()), true);
             case FreebieBroadcasts.Preview preview -> ctx.replyMessage(preview.message());
         }

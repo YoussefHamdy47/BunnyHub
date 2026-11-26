@@ -84,6 +84,8 @@ server, in its alert channel (the major PC one when set). Run it in a review cha
 with the server count, and nothing is sent until you press **Send with ping** (each server's free-game role) or
 **Send without ping** within 15 minutes. @everyone and @here are never pinged. Add `section:` (for example Indie & other PC) to reach only servers with
 that section's channel; `if-missing: Use its main channel` sends the rest to their main channel instead of skipping them.
+Add `image-url:` with a stable, direct HTTPS image URL to include an image in the preview and delivered announcement.
+The URL is saved with the draft for retries; omit it for text-only announcements.
 **Stop this announcement** cancels the servers not reached yet. Type `\n` in the message for a new line.
 
 Possible duplicates between GamerPower and Epic are held, not posted twice: the review channel gets one
