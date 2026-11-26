@@ -32,7 +32,7 @@ class DealCardsTest {
     @Test void theFirstPageShowsTopDealsWithStoreLinks() throws Exception {
         var card = DealCards.listCard(DealFixtures.snapshot(), Optional.empty(), 0);
         String text = card.plainText();
-        for (String part : List.of("Good deals right now", "top deals first",
+        for (String part : List.of("58 good deals right now", "best rated first", "then biggest discount, then lowest price", "reviews)",
                 "Steam and GOG price by region, so yours may be different.", "Prices from Steam and GOG", "Page 1 of 8"))
             assertTrue(text.contains(part), part);
         assertFalse(text.contains("cheapest first"));
@@ -61,7 +61,7 @@ class DealCardsTest {
     @Test void aStoreFilterShowsOnlyThatStore() throws Exception {
         var snapshot = DealFixtures.snapshot();
         var gog = DealCards.listCard(snapshot, Optional.of(DealStore.GOG), 0);
-        assertTrue(gog.plainText().contains("Good deals on <:GOG:1572185523924115587> GOG"));
+        assertTrue(gog.plainText().contains("33 good deals on <:GOG:1572185523924115587> GOG"));
         assertTrue(buttons(gog).stream().filter(b -> b.getUrl() != null).allMatch(b -> b.getUrl().startsWith("https://www.gog.com/")));
         var empty = DealCards.listCard(new DealSnapshot(List.of(), DealFixtures.FETCHED, 0), Optional.of(DealStore.STEAM), 0);
         assertTrue(empty.plainText().contains("No deals on Steam pass the bar right now"));
@@ -74,6 +74,25 @@ class DealCardsTest {
         String text = DealCards.listCard(new DealSnapshot(List.of(deal), DealFixtures.FETCHED, 1), Optional.empty(), 0).plainText();
         assertFalse(text.contains("[x]"));
         assertTrue(text.contains("\\*Bold\\*"));
+    }
+
+    @Test void aBoardWithAPingRoleOffersAGetPingedButton() throws Exception {
+        var snapshot = DealFixtures.snapshot();
+        var card = DealCards.boardCard(snapshot, DealCards.Notice.NONE, Optional.of("500000000000000001"));
+        var last = buttons(card).getLast();
+        assertEquals("freebie_role:500000000000000001", last.getCustomId());
+        assertEquals("Get pinged", last.getLabel());
+        assertEquals(4, buttons(card).size(), "See all, Steam, GOG, Get pinged");
+        assertTrue(buttons(DealCards.boardCard(snapshot, DealCards.Notice.NONE)).stream().noneMatch(b -> b.getCustomId().startsWith("freebie_role")));
+    }
+
+    @Test void reviewCountsAreShort() {
+        assertEquals("950", DealCards.count(950));
+        assertEquals("1K", DealCards.count(1000));
+        assertEquals("1.2K", DealCards.count(1250));
+        assertEquals("12K", DealCards.count(12_900));
+        assertEquals("120K", DealCards.count(120_400));
+        assertEquals("1.3M", DealCards.count(1_340_000));
     }
 
     @Test void moneyIsDollarsAndCents() {
@@ -94,9 +113,14 @@ class DealCardsTest {
             assertTrue(text.contains(top.title()));
         }
         assertTrue(shown.values().stream().allMatch(list -> list.size() == DealCards.PER_LAUNCHER));
-        assertEquals(List.of("deals:store:steam", "deals:store:gog"), buttons(card).stream().map(Button::getCustomId).toList());
-        assertEquals("Steam (25)", buttons(card).getFirst().getLabel());
-        assertTrue(buttons(card).stream().allMatch(b -> b.getEmoji() != null), "every launcher button has its emoji");
+        assertEquals(List.of("deals:store:all", "deals:store:steam", "deals:store:gog"), buttons(card).stream().map(Button::getCustomId).toList());
+        assertEquals("See all 58 deals", buttons(card).getFirst().getLabel());
+        assertEquals("Steam (25)", buttons(card).get(1).getLabel());
+        assertTrue(buttons(card).stream().skip(1).allMatch(b -> b.getEmoji() != null), "every launcher button has its emoji");
+        // Nobody should think the four shown are all there is.
+        for (String part : List.of("58 good deals right now", "top 4 of 25", "top 4 of 33", "+ 21 more on Steam", "+ 29 more on GOG",
+                "tap **Steam (25)** below", "The buttons open every deal"))
+            assertTrue(text.contains(part), part + " in " + text);
         assertTrue(card.componentCount() <= Card.MAX_COMPONENTS && card.textLength() <= Card.MAX_TEXT);
         onlyStoreLinks(card);
         var empty = DealCards.boardCard(new DealSnapshot(List.of(), DealFixtures.FETCHED, 0), DealCards.Notice.NONE).plainText();

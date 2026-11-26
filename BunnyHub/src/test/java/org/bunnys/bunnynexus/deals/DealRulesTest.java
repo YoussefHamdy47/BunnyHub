@@ -35,7 +35,11 @@ class DealRulesTest {
         var steam = kept.stream().filter(d -> d.store() == DealStore.STEAM).toList();
         var titles = steam.stream().map(Deal::title).toList();
         assertTrue(titles.indexOf("Peggle Deluxe") > 0, "lowest price no longer leads the list");
-        assertTrue(steam.getFirst().reviews() > steam.stream().filter(d -> d.title().equals("Peggle Deluxe")).findFirst().orElseThrow().reviews());
+        assertEquals("TOEM: A Photo Adventure", titles.getFirst(), "99% positive from 10K reviews, 90% off");
+        // Same rating point (97% from thousands of reviews): the bigger discount, then the lower price.
+        assertTrue(titles.indexOf("Peggle Deluxe") < titles.indexOf("Gorogoa"), "80% off before 75% off");
+        assertTrue(titles.indexOf("Euro Truck Simulator 2") < titles.indexOf("South Park™: The Stick of Truth™"), "$4.99 before $7.49");
+        for (int i = 1; i < kept.size(); i++) assertTrue(DealRules.ORDER.compare(kept.get(i - 1), kept.get(i)) <= 0);
         assertEquals(kept.size(), kept.stream().map(Deal::id).distinct().count(), "a game on both Steam pages appears once");
     }
 
@@ -50,13 +54,33 @@ class DealRulesTest {
     }
 
     @Test void ratingReviewCountAndDiscountEachImproveRanking() {
-        var base = candidate("base", DealStore.STEAM, 90, 10000, 80, 99);
+        var base = candidate("base", DealStore.STEAM, 90, 1000, 80, 99);
         for (var better : List.of(
-                candidate("rating", DealStore.STEAM, 98, 10000, 80, 999),
+                candidate("rating", DealStore.STEAM, 98, 1000, 80, 999),
                 candidate("reviews", DealStore.STEAM, 90, 100000, 80, 999),
-                candidate("discount", DealStore.STEAM, 90, 10000, 90, 999))) {
+                candidate("discount", DealStore.STEAM, 90, 1000, 90, 999))) {
             assertEquals(better, DealRules.rank(List.of(base, better)).getFirst());
         }
+    }
+
+    @Test void fewReviewsCountForLessThanManyGoodOnes() {
+        // 5 stars from 2 reviews against 4.7 stars from 100,000.
+        var two = candidate("two", DealStore.GOG, 50, 2, 90, 99);
+        var many = candidate("many", DealStore.GOG, 47, 100000, 75, 999);
+        assertTrue(DealRules.score(two) < 0.4, String.valueOf(DealRules.score(two)));
+        assertEquals(93, DealRules.ratingPoints(many));
+        assertEquals(List.of(many, two), DealRules.byRelevance(List.of(two, many)), "rating by review count comes before discount and price");
+    }
+
+    @Test void thenTheBiggerDiscountThenTheLowerPrice() {
+        // The same rating from the same number of reviews: discount decides, then the price after it.
+        var cheap75 = candidate("cheap75", DealStore.STEAM, 95, 50000, 75, 99);
+        var dear90 = candidate("dear90", DealStore.STEAM, 95, 50000, 90, 1999);
+        var cheap90 = candidate("cheap90", DealStore.STEAM, 95, 50000, 90, 499);
+        assertEquals(List.of(cheap90, dear90, cheap75), DealRules.byRelevance(List.of(cheap75, dear90, cheap90)));
+        // A better-rated game still leads a cheaper, bigger discount.
+        var better = candidate("better", DealStore.STEAM, 98, 50000, 75, 2999);
+        assertEquals(better, DealRules.byRelevance(List.of(cheap90, better)).getFirst());
     }
 
     @Test void theBestCandidateIsKeptEvenWhenItArrivesAfterTheLimit() {
@@ -74,7 +98,7 @@ class DealRulesTest {
 
     @Test void storesUseComparableRatingAndReviewScalesAndPriceOnlyBreaksTies() {
         var steam = candidate("steam", DealStore.STEAM, 90, 10000, 80, 999);
-        var gog = candidate("gog", DealStore.GOG, 45, 1000, 80, 999);
+        var gog = candidate("gog", DealStore.GOG, 45, 10000, 80, 999);
         assertEquals(DealRules.score(steam), DealRules.score(gog), 0.000001);
         var cheap = candidate("cheap", DealStore.STEAM, 90, 10000, 80, 99);
         assertEquals(cheap, DealRules.rank(List.of(steam, cheap)).getFirst());

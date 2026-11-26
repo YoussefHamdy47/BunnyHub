@@ -10,8 +10,15 @@ import java.util.*;
  * separately identified mobile variants and the platforms a secondary source reported. Read-only view.
  */
 record FreebieFacts(Optional<EpicLinks.Offer> epicOffer, Optional<String> groupKey, Optional<FreebieRegions.Evidence> regions,
-                    List<Variant> variants, Optional<String> reportedPlatforms, boolean official) {
+                    List<Variant> variants, Optional<String> reportedPlatforms, boolean official,
+                    Optional<org.bunnys.bunnynexus.ratings.GameRating> rating) {
     static final FreebieFacts NONE = new FreebieFacts(Optional.empty(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), false);
+
+    /** Without a Steam rating ({@code rating} on the offer, saved by {@link FreebieRatings}). */
+    FreebieFacts(Optional<EpicLinks.Offer> epicOffer, Optional<String> groupKey, Optional<FreebieRegions.Evidence> regions,
+                 List<Variant> variants, Optional<String> reportedPlatforms, boolean official) {
+        this(epicOffer, groupKey, regions, variants, reportedPlatforms, official, Optional.empty());
+    }
 
     /**
      * A separately identified platform offer (Android or iOS) with its own catalog pair, window, page and restrictions.
@@ -53,6 +60,6 @@ record FreebieFacts(Optional<EpicLinks.Offer> epicOffer, Optional<String> groupK
         Document reported = d.get("reported", Document.class);
         var platforms = Optional.ofNullable(reported).map(r -> r.get("gamerpower", Document.class)).map(g -> g.getString("platforms"));
         return new FreebieFacts(epic, Optional.ofNullable(d.getString("groupKey")), evidence, List.copyOf(variants), platforms,
-                d.get("official") != null);
+                d.get("official") != null, org.bunnys.bunnynexus.ratings.GameRating.read(d.get("rating", Document.class)));
     }
 }

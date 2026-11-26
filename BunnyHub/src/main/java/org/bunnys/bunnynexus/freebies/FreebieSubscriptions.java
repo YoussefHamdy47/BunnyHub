@@ -22,6 +22,13 @@ import static com.mongodb.client.model.Filters.*;
  */
 public final class FreebieSubscriptions {
     public static final String COLLECTION = "FreebieSubscriptions";
+    /**
+     * {@code freebie_role:<role>}: toggles a saved ping role on whoever presses it (FreebieRoleButtons). Used by the role
+     * picker, free-game posts and the Deals Board.
+     */
+    public static final String ROLE_BUTTON = "freebie_role";
+    /** The label of the role button on free-game posts and the Deals Board; pressing it again removes the role. */
+    public static final String ROLE_BUTTON_LABEL = "Get pinged";
     public static final int MAX_CHANNELS_PER_GUILD = 5;
     /** Every launcher in every allowed channel; bounds per-server reads. */
     public static final int MAX_PER_GUILD = MAX_CHANNELS_PER_GUILD * FreebieStore.values().length;

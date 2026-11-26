@@ -42,8 +42,8 @@ public class FreebieRoleButtons extends BunnyButton {
         }
         boolean has = member.getRoles().contains(role);
         (has ? guild.removeRoleFromMember(member, role) : guild.addRoleToMember(member, role)).complete();
-        followUp(event, has ? "Removed " + role.getAsMention() + ". You won't be pinged for these free games any more."
-                : "Added " + role.getAsMention() + ". You'll be pinged when these free games are posted.");
+        followUp(event, has ? "Removed " + role.getAsMention() + ". You won't be pinged for these posts any more."
+                : "Added " + role.getAsMention() + ". You'll be pinged when new ones are posted. Press the button again to remove it.");
     }
 
     private static void followUp(ButtonInteractionEvent event, String text) {

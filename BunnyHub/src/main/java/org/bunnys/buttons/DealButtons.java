@@ -21,7 +21,11 @@ public class DealButtons extends BunnyButton {
     @Override public void execute(BunnyHub client, ButtonInteractionEvent event, String[] args) {
         try {
             // deals:store:<launcher> on a board: that launcher's full list, privately.
-            if (args.length == 3 && "store".equals(args[1])) { showStore(event, DealStore.byChoice(args[2])); return; }
+            if (args.length == 3 && "store".equals(args[1])) {
+                // "all" opens every deal; a launcher opens that launcher's list.
+                showStore(event, "all".equals(args[2]) ? Optional.empty() : DealStore.byChoice(args[2]), "all".equals(args[2]));
+                return;
+            }
             if (args.length != 4 || !"page".equals(args[1]) || !args[3].matches("[0-9]{1,3}")) { event.deferEdit().queue(); return; }
             Optional<DealStore> store = "all".equals(args[2]) ? Optional.empty() : DealStore.byChoice(args[2]);
             if (store.isEmpty() && !"all".equals(args[2])) { event.deferEdit().queue(); return; }
@@ -33,9 +37,9 @@ public class DealButtons extends BunnyButton {
         }
     }
 
-    private static void showStore(ButtonInteractionEvent event, Optional<DealStore> store) {
+    private static void showStore(ButtonInteractionEvent event, Optional<DealStore> store, boolean all) {
         var system = DealSystem.current().orElse(null);
-        if (system == null || store.isEmpty() || system.snapshot().stale(system.now())) {
+        if (system == null || (store.isEmpty() && !all) || system.snapshot().stale(system.now())) {
             event.reply(DealCards.unavailable().message()).setEphemeral(true).queue();
             return;
         }

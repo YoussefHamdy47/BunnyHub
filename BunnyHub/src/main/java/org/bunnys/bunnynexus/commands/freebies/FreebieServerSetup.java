@@ -27,7 +27,7 @@ import java.util.*;
 public final class FreebieServerSetup {
     private FreebieServerSetup() {}
 
-    public static final String ROLE_PREFIX = "freebie_role";
+    public static final String ROLE_PREFIX = org.bunnys.bunnynexus.freebies.FreebieSubscriptions.ROLE_BUTTON;
     static final String CATEGORY_NAME = "Free Games", SHARED_CHANNEL = "free-games";
 
     /** Outcome of the section form: a line for the dashboard, and where catch-up could post live games. */

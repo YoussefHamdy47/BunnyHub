@@ -50,7 +50,7 @@ class DealRefreshTest {
         assertEquals(now, snapshot.fetchedAt());
         assertSame(snapshot, saved.get());
         for (int i = 1; i < snapshot.deals().size(); i++)
-            assertTrue(DealRules.score(snapshot.deals().get(i - 1)) >= DealRules.score(snapshot.deals().get(i)), "top deals first");
+            assertTrue(DealRules.ORDER.compare(snapshot.deals().get(i - 1), snapshot.deals().get(i)) <= 0, "top deals first");
     }
 
     @Test void whenOneStoreFailsItsPreviousDealsAreKept() {

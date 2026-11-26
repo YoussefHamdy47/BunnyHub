@@ -45,19 +45,35 @@ final class DealRules {
     }
 
     /**
-     * Rating x review popularity x discount. Logarithmic review counts reward broad appeal without letting
-     * raw counts dominate. Normalize by each store's review floor because GOG has far fewer reviews.
-     * Price only breaks a relevance tie; IDs make equal deals stable across source ordering changes.
+     * How sure the store's reviews make us that the game is good: the lower bound of the 95% Wilson interval of its share
+     * of positive reviews (Steam's percent positive, GOG's stars out of 5). Few reviews pull it down: 5 stars from
+     * 2 reviews scores about 0.34, 4.7 stars from 100,000 about 0.94. Same scale for both stores.
      */
     static double score(Deal deal) {
-        double rating = deal.rating() / (deal.store() == DealStore.STEAM ? 100.0 : 50.0);
-        double reviews = (double) deal.reviews() / (deal.store() == DealStore.STEAM ? MIN_STEAM_REVIEWS : MIN_GOG_REVIEWS);
-        return rating * Math.log1p(reviews) * deal.percentOff() / 100.0;
+        double positive = deal.rating() / (deal.store() == DealStore.STEAM ? 100.0 : 50.0);
+        double n = deal.reviews();
+        if (n <= 0) return 0;
+        double z = 1.96, z2 = z * z;
+        double centre = positive + z2 / (2 * n);
+        double spread = z * Math.sqrt(positive * (1 - positive) / n + z2 / (4 * n * n));
+        return Math.max(0, (centre - spread) / (1 + z2 / n));
     }
 
+    /** {@link #score} in whole points: games within a point of each other count as equally rated. */
+    static int ratingPoints(Deal deal) { return (int) Math.floor(score(deal) * 100 + 1e-9); }
+
+    /**
+     * Best first: confidence-adjusted rating (by the point), then the bigger discount, then the lower price after the
+     * discount. The exact score and the ID only settle what is left, so the order is stable whatever order the stores
+     * list games in.
+     */
+    static final Comparator<Deal> ORDER = Comparator.comparingInt(DealRules::ratingPoints).reversed()
+            .thenComparing(Comparator.comparingInt(Deal::percentOff).reversed())
+            .thenComparingLong(Deal::saleCents)
+            .thenComparing(Comparator.comparingDouble(DealRules::score).reversed())
+            .thenComparing(Deal::id);
+
     static List<Deal> byRelevance(List<Deal> deals) {
-        return deals.stream().sorted(Comparator.comparingDouble(DealRules::score).reversed()
-                .thenComparing(Comparator.comparingInt(Deal::percentOff).reversed())
-                .thenComparingLong(Deal::saleCents).thenComparing(Deal::id)).toList();
+        return deals.stream().sorted(ORDER).toList();
     }
 }

@@ -28,11 +28,17 @@ final class DealBoard {
      * What every board shows for one snapshot, built once per refresh instead of once per server: the deals on it,
      * its content key and the silent edit. A post is still built per board (its notice names that board's new games).
      */
-    record View(DealSnapshot snapshot, List<Deal> shown, String key, MessageEditData edit) {
+    record View(DealSnapshot snapshot, List<Deal> shown, String key, Map<Optional<String>, MessageEditData> edits) {
         static View of(DealSnapshot snapshot) {
             List<Deal> shown = DealCards.boardDeals(snapshot).values().stream().flatMap(List::stream).toList();
-            return new View(snapshot, shown, contentKey(shown, snapshot), DealCards.boardEdit(snapshot));
+            return new View(snapshot, shown, contentKey(shown, snapshot), new java.util.concurrent.ConcurrentHashMap<>());
         }
+
+        /** The silent edit for boards offering this ping role (or none): built once per role per refresh. */
+        MessageEditData edit(Optional<String> role) { return edits.computeIfAbsent(role, r -> DealCards.boardEdit(snapshot, r)); }
+
+        /** The content key of a board offering this role: a role added, changed or removed edits the board. */
+        String key(Optional<String> role) { return key + role.map(r -> "|role " + r).orElse(""); }
     }
 
     /** What a board update reads and writes; {@link DealRepository} in production. */
@@ -103,7 +109,8 @@ final class DealBoard {
         Instant now = clock.instant();
         DealSnapshot snapshot = view.snapshot();
         List<Deal> shown = view.shown();
-        String key = view.key();
+        Optional<String> role = board.ping().roleId();
+        String key = view.key(role);
         if (board.messageId().isEmpty()) return post(board, snapshot, DealCards.Notice.NONE, shown, key, now, false);
         List<Deal> fresh = shown.stream().filter(d -> !board.shownGames().contains(d.id())).toList();
         if (!fresh.isEmpty()) {
@@ -113,7 +120,7 @@ final class DealBoard {
             return post(board, snapshot, notice, shown, key, now, ping);
         }
         if (board.contentKey().filter(key::equals).isPresent()) return Action.NOTHING;
-        var result = discord.edit(board.guildId(), board.channelId(), board.messageId().get(), view.edit());
+        var result = discord.edit(board.guildId(), board.channelId(), board.messageId().get(), view.edit(role));
         if (result.gone()) return post(board, snapshot, DealCards.Notice.NONE, shown, key, now, false);
         if (result.failure().isPresent()) return failed(board, result.failure().get(), now);
         store.edited(board.guildId(), board.messageId().get(), key);
@@ -129,7 +136,7 @@ final class DealBoard {
 
     private Action post(DealRepository.Board board, DealSnapshot snapshot, DealCards.Notice notice, List<Deal> shown,
                         String key, Instant now, boolean pinged) {
-        var result = discord.post(board.guildId(), board.channelId(), DealCards.board(snapshot, notice));
+        var result = discord.post(board.guildId(), board.channelId(), DealCards.board(snapshot, notice, board.ping().roleId()));
         if (result.messageId().isEmpty()) return failed(board, result.failure().orElse("Discord refused the post"), now);
         store.posted(board.guildId(), board.channelId(), result.messageId().get(), remember(board.shownGames(), shown), key, now, pinged);
         return pinged ? Action.PINGED : board.messageId().isEmpty() ? Action.POSTED : Action.REPOSTED;
@@ -152,7 +159,7 @@ final class DealBoard {
     static String contentKey(List<Deal> shown, DealSnapshot snapshot) {
         var text = new StringBuilder();
         shown.forEach(d -> text.append(d.id()).append(':').append(d.saleCents()).append(':').append(d.normalCents()).append(':')
-                .append(d.endsAt().map(Instant::getEpochSecond).orElse(0L)).append(';'));
+                .append(d.endsAt().map(Instant::getEpochSecond).orElse(0L)).append(':').append(DealCards.rating(d)).append(':').append(snapshot.lowest(d)).append(';'));
         for (DealStore store : DealStore.values()) text.append(snapshot.forStore(Optional.of(store)).size()).append(',');
         // The day keeps the board's "updated" time at most a day old even when the deals stay the same.
         return Integer.toHexString(text.toString().hashCode()) + ":" + LocalDate.ofInstant(snapshot.fetchedAt(), ZoneOffset.UTC);
