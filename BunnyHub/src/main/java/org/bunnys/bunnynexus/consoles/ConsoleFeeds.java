@@ -5,6 +5,8 @@ import okhttp3.OkHttpClient;
 import org.bunnys.bunnynexus.freebies.ConditionalFetch;
 import org.bunnys.bunnynexus.freebies.FreebieHttp;
 import org.bunnys.bunnynexus.freebies.GamerPowerFeed;
+import org.bunnys.bunnynexus.ratings.GameRating;
+import org.bunnys.bunnynexus.ratings.SteamRatings;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -47,6 +49,13 @@ final class ConsoleFeeds implements ConsoleNews.Source, AutoCloseable {
         return Optional.of(ConsoleItem.parse(fetch.get(URI.create(ConsoleItem.FEED))));
     }
 
+    /** Steam's rating for one PS Plus game: exact title, and only when one Steam game has it. */
+    private final SteamRatings steam = new SteamRatings(ConsoleNewsSystem.AGENT);
+
+    @Override public Optional<GameRating> steamRating(String title) {
+        return steam.forTitle(title, Optional.empty()) instanceof SteamRatings.Found found ? Optional.of(found.rating()) : Optional.empty();
+    }
+
     @Override public void committed() { fetch.commit(); }
 
     @Override public void rolledBack() { fetch.rollback(); }
@@ -66,5 +75,5 @@ final class ConsoleFeeds implements ConsoleNews.Source, AutoCloseable {
 
     private byte[] get(String url) throws IOException { return fetch.get(URI.create(url)); }
 
-    @Override public void close() { calls.close(); }
+    @Override public void close() { calls.close(); steam.close(); }
 }

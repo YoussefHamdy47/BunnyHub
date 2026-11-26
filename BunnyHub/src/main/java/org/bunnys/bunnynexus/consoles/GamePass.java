@@ -24,13 +24,26 @@ public final class GamePass {
         Shelf(String id, String sigl, String heading) { this.id = id; this.sigl = sigl; this.heading = heading; }
     }
 
-    /** One game. {@code console}: runs on Xbox consoles, or unknown (a game not yet released lists no packages). */
-    public record Game(String id, String title, Optional<String> image, boolean console, Optional<LocalDate> release) {
+    /**
+     * One game. {@code console}: runs on Xbox consoles, or unknown (a game not yet released lists no packages).
+     * {@code genre}: the store's first category. {@code stars}/{@code ratings}: the Microsoft Store's all-time average
+     * out of 5 and how many people rated (0 when too few to show). {@code tags}: "PC too", "Series X|S optimized" and
+     * the like.
+     */
+    public record Game(String id, String title, Optional<String> image, boolean console, Optional<LocalDate> release,
+                       Optional<String> genre, double stars, long ratings, List<String> tags) {
+        public Game { tags = List.copyOf(tags); }
+
+        public Game(String id, String title, Optional<String> image, boolean console, Optional<LocalDate> release) {
+            this(id, title, image, console, release, Optional.empty(), 0, 0, List.of());
+        }
+
         public String link() { return "https://www.xbox.com/en-US/games/store/x/" + id; }
 
         Document toDocument() {
             return new Document("id", id).append("title", title).append("image", image.orElse(null)).append("console", console)
-                    .append("release", release.map(LocalDate::toString).orElse(null));
+                    .append("release", release.map(LocalDate::toString).orElse(null)).append("genre", genre.orElse(null))
+                    .append("stars", stars).append("ratings", ratings).append("tags", tags);
         }
 
         static Optional<Game> read(Document d) {
@@ -38,9 +51,22 @@ public final class GamePass {
                 String id = d.getString("id");
                 if (!PRODUCT.matcher(id).matches()) return Optional.empty();
                 return Optional.of(new Game(id, d.getString("title"), Optional.ofNullable(d.getString("image")).filter(GamePass::imageHost),
-                        d.getBoolean("console", true), Optional.ofNullable(d.getString("release")).map(LocalDate::parse)));
+                        d.getBoolean("console", true), Optional.ofNullable(d.getString("release")).map(LocalDate::parse),
+                        Optional.ofNullable(d.getString("genre")), d.get("stars") instanceof Number n ? n.doubleValue() : 0,
+                        d.get("ratings") instanceof Number r ? r.longValue() : 0, d.getList("tags", String.class, List.of())));
             } catch (RuntimeException unreadable) { return Optional.empty(); }
         }
+    }
+
+    /** Fewer ratings than this and the store's average says little: it is not shown. */
+    static final int MIN_RATINGS = 20;
+    /** Store attributes worth a tag, in the order shown. */
+    private static final Map<String, String> TAGS = new LinkedHashMap<>();
+    static {
+        TAGS.put("ConsoleGen9Optimized", "Series X|S optimized");
+        TAGS.put("XblOnlineCoop", "Online co-op");
+        TAGS.put("XblLocalCoop", "Couch co-op");
+        TAGS.put("XblOnlineMultiPlayer", "Online multiplayer");
     }
 
     static final String SIGLS = "catalog.gamepass.com", CATALOG = "displaycatalog.mp.microsoft.com", IMAGES = "store-images.s-microsoft.com";
@@ -82,7 +108,26 @@ public final class GamePass {
                 if (id == null || !PRODUCT.matcher(id).matches() || local.isEmpty()) continue;
                 String title = local.getFirst().getString("ProductTitle");
                 if (title == null || title.isBlank()) continue;
-                games.add(new Game(id, title.strip(), image(local.getFirst()), console(p), release(p)));
+                var props = p.get("Properties", Document.class);
+                Optional<String> genre = Optional.empty();
+                List<String> tags = new ArrayList<>();
+                if (props != null) {
+                    genre = props.getList("Categories", String.class, List.of()).stream().filter(c -> !"Other".equals(c)).findFirst()
+                            .or(() -> Optional.ofNullable(props.getString("Category")));
+                    var attributes = props.getList("Attributes", Document.class, List.of()).stream().map(a -> a.getString("Name")).toList();
+                    TAGS.forEach((name, tag) -> { if (attributes.contains(name)) tags.add(tag); });
+                    if (attributes.contains("XPA") || runsOnPc(p)) tags.addFirst("PC too");
+                }
+                double stars = 0;
+                long ratings = 0;
+                var market = p.getList("MarketProperties", Document.class, List.of());
+                if (!market.isEmpty()) for (Document usage : market.getFirst().getList("UsageData", Document.class, List.of()))
+                    if ("AllTime".equals(usage.getString("AggregateTimeSpan")) && usage.get("AverageRating") instanceof Number avg
+                            && usage.get("RatingCount") instanceof Number count && count.longValue() >= MIN_RATINGS) {
+                        stars = Math.clamp(avg.doubleValue(), 0, 5);
+                        ratings = count.longValue();
+                    }
+                games.add(new Game(id, title.strip(), image(local.getFirst()), console(p), release(p), genre, stars, ratings, tags));
             }
         } catch (RuntimeException unreadable) { return List.of(); }
         return games;
@@ -109,6 +154,18 @@ public final class GamePass {
     }
 
     /** True when a package runs on Xbox, or when no package is listed yet. */
+    private static boolean runsOnPc(Document product) {
+        for (Document sku : product.getList("DisplaySkuAvailabilities", Document.class, List.of())) {
+            var skuDoc = sku.get("Sku", Document.class);
+            var props = skuDoc == null ? null : skuDoc.get("Properties", Document.class);
+            if (props == null) continue;
+            for (Document pkg : props.getList("Packages", Document.class, List.of()))
+                for (Document platform : pkg.getList("PlatformDependencies", Document.class, List.of()))
+                    if ("Windows.Desktop".equals(platform.getString("PlatformName"))) return true;
+        }
+        return false;
+    }
+
     private static boolean console(Document product) {
         boolean anyPackage = false;
         for (Document sku : product.getList("DisplaySkuAvailabilities", Document.class, List.of())) {

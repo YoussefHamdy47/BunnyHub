@@ -1,6 +1,7 @@
 package org.bunnys.bunnynexus.consoles;
 
 import org.bson.Document;
+import org.bunnys.bunnynexus.ratings.GameRating;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
@@ -8,6 +9,8 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -21,7 +24,41 @@ import java.util.regex.Pattern;
  * Pure.
  */
 public record PsPlusPost(String id, Kind kind, String month, List<String> games, boolean more, URI link, Instant published,
-                         Optional<LocalDate> from, Optional<LocalDate> until, Optional<String> image) {
+                         Optional<LocalDate> from, Optional<LocalDate> until, Optional<String> image, List<Game> details) {
+    /**
+     * One game as the post describes it: its own heading ("Dragon Ball Xenoverse 2 | PS5, PS4"), the picture above it
+     * and the first sentence below it; {@code rating}: its Steam players' rating, when exactly one Steam game has that title.
+     */
+    public record Game(String name, List<String> platforms, Optional<String> image, Optional<String> blurb, Optional<GameRating> rating) {
+        public Game { platforms = List.copyOf(platforms); }
+
+        Game withRating(Optional<GameRating> found) { return new Game(name, platforms, image, blurb, found); }
+
+        /** The PlayStation Store search for this game (the blog links no store pages). */
+        public String storeSearch() {
+            return "https://store.playstation.com/en-us/search/" + URLEncoder.encode(name, StandardCharsets.UTF_8).replace("+", "%20");
+        }
+
+        Document toDocument(Instant at) {
+            return new Document("name", name).append("platforms", platforms).append("image", image.orElse(null))
+                    .append("blurb", blurb.orElse(null)).append("rating", rating.map(r -> r.toDocument(at)).orElse(null));
+        }
+
+        static Game read(Document d) {
+            return new Game(d.getString("name"), d.getList("platforms", String.class, List.of()),
+                    Optional.ofNullable(d.getString("image")).filter(PsPlusPost::ownImage), Optional.ofNullable(d.getString("blurb")),
+                    Optional.ofNullable(d.get("rating", Document.class)).flatMap(GameRating::read));
+        }
+    }
+
+    public PsPlusPost(String id, Kind kind, String month, List<String> games, boolean more, URI link, Instant published,
+                      Optional<LocalDate> from, Optional<LocalDate> until, Optional<String> image) {
+        this(id, kind, month, games, more, link, published, from, until, image, List.of());
+    }
+
+    PsPlusPost withDetails(List<Game> found) {
+        return new PsPlusPost(id, kind, month, games, more, link, published, from, until, image, found);
+    }
     public enum Kind {
         MONTHLY("monthly", "Monthly Games", "PS Plus Essential, Extra or Premium"),
         CATALOG("catalog", "Game Catalog", "PS Plus Extra or Premium");
@@ -34,6 +71,7 @@ public record PsPlusPost(String id, Kind kind, String month, List<String> games,
 
     public PsPlusPost {
         games = List.copyOf(games);
+        details = List.copyOf(details);
     }
 
     static final String HOST = "blog.playstation.com";
@@ -87,9 +125,78 @@ public record PsPlusPost(String id, Kind kind, String month, List<String> games,
             from = Optional.of(date(dates.group(1), dates.group(2), dates.group(3), pub));
             if (dates.group(4) != null) until = Optional.of(date(dates.group(4), dates.group(5), dates.group(6), from.get()));
         }
-        var image = IMAGE.matcher(text(item, "content:encoded"));
+        String content = text(item, "content:encoded");
+        var image = IMAGE.matcher(content);
         return Optional.of(new PsPlusPost(id, kind, title.group(2), games, more, link, published, from, until,
-                image.find() ? Optional.of(image.group(1).replace("&amp;", "&")) : Optional.empty()));
+                image.find() ? Optional.of(image.group(1).replace("&amp;", "&")) : Optional.empty(), details(content, games)));
+    }
+
+    private static final Pattern HEADING = Pattern.compile("(?is)<h[2-4][^>]*>(.*?)</h[2-4]>");
+    private static final Pattern PLATFORM = Pattern.compile("\\b(PS5|PS4|PS VR2)\\b");
+    private static final String IMAGE_BOX = "View and download image Download the image close Close Download this image";
+    static final int MAX_BLURB = 180;
+
+    /**
+     * Each listed game's section of the post: a heading "Name | PS5, PS4", the last picture before it and the first
+     * sentence after it. Games without such a heading are left out; the order is the title's.
+     */
+    static List<Game> details(String html, List<String> games) {
+        record Section(String name, List<String> platforms, Optional<String> image, Optional<String> blurb) {}
+        List<int[]> spans = new ArrayList<>();
+        List<String> headings = new ArrayList<>();
+        Matcher h = HEADING.matcher(html);
+        while (h.find()) { spans.add(new int[]{h.start(), h.end()}); headings.add(plain(h.group(1))); }
+        List<Section> sections = new ArrayList<>();
+        int previousEnd = 0;
+        for (int i = 0; i < spans.size(); i++) {
+            String heading = headings.get(i);
+            int bar = heading.lastIndexOf('|');
+            int start = spans.get(i)[0], end = spans.get(i)[1], next = i + 1 < spans.size() ? spans.get(i + 1)[0] : html.length();
+            if (bar > 0) {
+                List<String> platforms = new ArrayList<>();
+                Matcher p = PLATFORM.matcher(heading.substring(bar));
+                while (p.find()) if (!platforms.contains(p.group(1))) platforms.add(p.group(1));
+                Optional<String> picture = Optional.empty();
+                Matcher img = IMAGE.matcher(html.substring(previousEnd, start));
+                while (img.find()) picture = Optional.of(img.group(1).replace("&amp;", "&"));
+                sections.add(new Section(heading.substring(0, bar).strip(), platforms, picture, sentence(plain(html.substring(end, next)))));
+            }
+            previousEnd = end;
+        }
+        List<Game> found = new ArrayList<>();
+        for (String game : games) {
+            String wanted = key(game);
+            sections.stream().filter(sec -> !wanted.isEmpty() && (key(sec.name()).startsWith(wanted) || wanted.startsWith(key(sec.name()))))
+                    .findFirst().ifPresent(sec -> found.add(new Game(game, sec.platforms(), sec.image(), sec.blurb(), Optional.empty())));
+        }
+        return found;
+    }
+
+    /** Letters and digits only, lower case: "Tony Hawk’s Pro Skater 3 + 4" matches "Tony Hawk's Pro Skater 3+4". */
+    private static String key(String name) { return name.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]", ""); }
+
+    /** The first sentence, without the image box's button text, at most {@link #MAX_BLURB} characters. */
+    static Optional<String> sentence(String text) {
+        String clean = text.replace(IMAGE_BOX, " ").replaceAll("\\s+", " ").strip();
+        if (clean.isEmpty()) return Optional.empty();
+        int stop = -1;
+        for (String end : List.of(". ", "! ", "? ")) {
+            int at = clean.indexOf(end);
+            if (at > 0 && (stop < 0 || at < stop)) stop = at + 1;
+        }
+        String first = stop > 0 ? clean.substring(0, stop) : clean;
+        if (first.length() > MAX_BLURB) {
+            int cut = first.lastIndexOf(' ', MAX_BLURB - 1);
+            first = first.substring(0, cut > 40 ? cut : MAX_BLURB - 1) + "…";
+        }
+        return Optional.of(first);
+    }
+
+    static boolean ownImage(String url) {
+        try {
+            var uri = URI.create(url);
+            return "https".equals(uri.getScheme()) && HOST.equals(uri.getHost());
+        } catch (RuntimeException bad) { return false; }
     }
 
     /** "A, B, and C" / "A, B and more" into the games; true when the title ends in "and more". */
@@ -137,7 +244,7 @@ public record PsPlusPost(String id, Kind kind, String month, List<String> games,
         return new Document("id", id).append("kind", kind.id).append("month", month).append("games", games).append("more", more)
                 .append("link", link.toString()).append("published", Date.from(published))
                 .append("from", from.map(LocalDate::toString).orElse(null)).append("until", until.map(LocalDate::toString).orElse(null))
-                .append("image", image.orElse(null));
+                .append("image", image.orElse(null)).append("details", details.stream().map(g -> g.toDocument(published)).toList());
     }
 
     static Optional<PsPlusPost> read(Document d) {
@@ -147,7 +254,8 @@ public record PsPlusPost(String id, Kind kind, String month, List<String> games,
             return Optional.of(new PsPlusPost(d.getString("id"), Kind.byId(d.getString("kind")).orElseThrow(), d.getString("month"),
                     d.getList("games", String.class), d.getBoolean("more", false), link, d.getDate("published").toInstant(),
                     Optional.ofNullable(d.getString("from")).map(LocalDate::parse), Optional.ofNullable(d.getString("until")).map(LocalDate::parse),
-                    Optional.ofNullable(d.getString("image"))));
+                    Optional.ofNullable(d.getString("image")),
+                    d.getList("details", Document.class, List.of()).stream().map(Game::read).toList()));
         } catch (RuntimeException unreadable) { return Optional.empty(); }
     }
 

@@ -12,7 +12,7 @@
 	<atom:link href="https://blog.playstation.com/feed/" rel="self" type="application/rss+xml" />
 	<link>https://blog.playstation.com</link>
 	<description>Official PlayStation Blog for news and video updates on PlayStation, PS5, PS4, PS VR, PlayStation Plus and more.</description>
-	<lastBuildDate>Wed, 25 Nov 2026 16:30:27 +0000</lastBuildDate>
+	<lastBuildDate>Thu, 26 Nov 2026 21:59:47 +0000</lastBuildDate>
 	<language>en-US</language>
 	<sy:updatePeriod>
 	hourly	</sy:updatePeriod>
@@ -74,73 +74,242 @@
 
 		<button class="ps-image-modal__close">
 				<svg class="icon icon--close icon--white" aria-hidden="true" viewBox="0 0 20 20" focusable="false" version="1.1">
-		]]></content:encoded>
+		<title>close</title><g class="icon-primary-color" fill="#DEDEDE" fill-rule="evenodd"><path d="M1.496 17L0 15.447l6.951-6.946L0 1.552 1.496 0 10 8.501z"/><path d="M15.504 0L17 1.553l-6.951 6.946L17 15.448 15.504 17 7 8.499z"/></g>	</svg>
+				<span class="screen-reader-text">Close</span>
+		</button>
+
+		<figure class="ps-image-modal__content">
+
+			<img
+				class="ps-image-modal__image ps-image-modal__image--hidden"
+				data-src="https://blog.playstation.com/tachyon/2026/11/393a7151bd4ebdcfaec45d08f6598f81ccc842af.jpg"
+				alt=""
+			 data-recalc-dims="1">
+
+			<div class="ps-image-modal__footer">
+				
+				<a href="https://blog.playstation.com/uploads/2026/11/393a7151bd4ebdcfaec45d08f6598f81ccc842af.jpg" class="ps-image-modal__download" download="">
+						<svg class="icon icon--download icon--white" aria-hidden="true" viewBox="0 0 20 20" focusable="false" version="1.1">
+		<path d="M8.43 1.3c0-.72.58-1.3 1.3-1.3.72 0 1.3.58 1.3 1.3 0 .72-.58 1.3-1.3 1.3-.72 0-1.3-.59-1.3-1.3zm0 5.19c0-.72.58-1.3 1.3-1.3.72 0 1.3.58 1.3 1.3 0 .72-.58 1.3-1.3 1.3-.72 0-1.3-.58-1.3-1.3zm3.74 5.55c-.78 1.35-1.78 3.08-2.55 4.42-.78-1.35-1.78-3.08-2.55-4.42h5.1zm1.53-1.76H4L9.61 20l5.61-9.72H13.7z" fill-rule="evenodd" class="icon-primary-color"/>	</svg>
+						Download this image				</a>
+			</div>
+		</figure>
+	</div>
+</div>
+
+
+
+<h2 class="wp-block-heading"><strong>Tony Hawk’s Pro Skater 3+4 &#8211; Cross-Gen Edition | PS5, PS4&nbsp;</strong></h2>
+
+
+
+<p class="wp-block-paragraph">Alert the neighborhood watch and grab your skate buddies because the shred’s not dead: the legendary franchise returns with Tony Hawk’s Pro Skater 3 + 4. Everything you loved is back, revamped with more skaters, new parks, gnarlier tricks, eardrum-shattering music and much more. Drop-in to new parks or tear it up across timeless locations from both Tony Hawk’s Pro Skater 3 and Tony Hawk’s Pro Skater 4, authentically remade in jaw-dropping 4K** resolution with streamlined goals and the epic 2-minute format. Define your own experience in the expanded Create-A-Skater and Create-A-Park modes, including the ability to create custom goals to share with friends for the first time.</p>
+
+
+<div class="ps-image-modal__wrapper ">
+	
+<figure class="wp-block-image size-large"><img width="1024" height="576" decoding="async" src="https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da-scaled.jpg?fit=1024%2C1024" alt="" class="wp-image-425958" srcset="https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da-scaled.jpg?fit=1024%2C576&amp;zoom=1 1024w, https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da-scaled.jpg?fit=1024%2C576&amp;zoom=0.75 768w, https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da-scaled.jpg?fit=1024%2C576&amp;zoom=0.57 584w, https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da-scaled.jpg?fit=1024%2C576&amp;zoom=0.46 471w, https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da-scaled.jpg?fit=1024%2C576&amp;zoom=0.37 379w, https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da-scaled.jpg?fit=1024%2C576&amp;zoom=0.31 317w, https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da-scaled.jpg?fit=1024%2C576&amp;zoom=0.24 246w, https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da-scaled.jpg?fit=1024%2C576&amp;zoom=0.19 195w" sizes="(min-width: 1170px) 936px, (min-width: 960px) 80vw, 100vw" /></figure>
+	<button
+		class="ps-image-modal__trigger"
+		type="button"
+	>
+		<span class="screen-reader-text">
+			View and download image		</span>
+	</button>
+</div>
+<div
+	class="ps-image-modal ps-image-modal--hidden"
+	role="dialog"
+	hidden
+	tabindex="-1"
+	aria-hidden="true"
+	aria-labelledby="ps-image-modal-heading-1"
+>
+	<div role="document">
+
+		<h2 class="screen-reader-text" id="ps-image-modal-heading-1">
+			Download the image		</h2>
+
+		<button class="ps-image-modal__close">
+				<svg class="icon icon--close icon--white" aria-hidden="true" viewBox="0 0 20 20" focusable="false" version="1.1">
+		<title>close</title><g class="icon-primary-color" fill="#DEDEDE" fill-rule="evenodd"><path d="M1.496 17L0 15.447l6.951-6.946L0 1.552 1.496 0 10 8.501z"/><path d="M15.504 0L17 1.553l-6.951 6.946L17 15.448 15.504 17 7 8.499z"/></g>	</svg>
+				<span class="screen-reader-text">Close</span>
+		</button>
+
+		<figure class="ps-image-modal__content">
+
+			<img
+				class="ps-image-modal__image ps-image-modal__image--hidden"
+				data-src="https://blog.playstation.com/tachyon/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da.jpg"
+				alt=""
+			 data-recalc-dims="1">
+
+			<div class="ps-image-modal__footer">
+				
+				<a href="https://blog.playstation.com/uploads/2026/11/31b101a1fe6a6fcebcb2cb8afb3e7a50013465da.jpg" class="ps-image-modal__download" download="">
+						<svg class="icon icon--download icon--white" aria-hidden="true" viewBox="0 0 20 20" focusable="false" version="1.1">
+		<path d="M8.43 1.3c0-.72.58-1.3 1.3-1.3.72 0 1.3.58 1.3 1.3 0 .72-.58 1.3-1.3 1.3-.72 0-1.3-.59-1.3-1.3zm0 5.19c0-.72.58-1.3 1.3-1.3.72 0 1.3.58 1.3 1.3 0 .72-.58 1.3-1.3 1.3-.72 0-1.3-.58-1.3-1.3zm3.74 5.55c-.78 1.35-1.78 3.08-2.55 4.42-.78-1.35-1.78-3.08-2.55-4.42h5.1zm1.53-1.76H4L9.61 20l5.61-9.72H13.7z" fill-rule="evenodd" class="icon-primary-color"/>	</svg>
+						Download this image				</a>
+			</div>
+		</figure>
+	</div>
+</div>
+
+
+
+<h2 class="wp-block-heading"><strong>Dragon Ball Xenoverse 2 | PS5, PS4&nbsp;</strong></h2>
+
+
+
+<p class="wp-block-paragraph">Dragon Ball Xenoverse 2 is the ultimate Dragon Ball gaming experience, packed with thrilling action, epic battles, and endless customization options. Create your own character, explore Conton City and team up with iconic characters from the series as a teacher to train and be ready to battle against formidable enemies to rescue the flow of History. Dragon Ball Xenoverse 2 also features online multiplayer modes, where you can battle against other players from around the world in epic showdowns or participate in Raid Battles to face gigantic foes with other players.</p>
+
+
+<div class="ps-image-modal__wrapper ">
+	
+<figure class="wp-block-image size-large"><img width="1024" height="576" decoding="async" src="https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19-scaled.jpg?fit=1024%2C1024" alt="" class="wp-image-425957" srcset="https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19-scaled.jpg?fit=1024%2C576&amp;zoom=1 1024w, https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19-scaled.jpg?fit=1024%2C576&amp;zoom=0.75 768w, https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19-scaled.jpg?fit=1024%2C576&amp;zoom=0.57 584w, https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19-scaled.jpg?fit=1024%2C576&amp;zoom=0.46 471w, https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19-scaled.jpg?fit=1024%2C576&amp;zoom=0.37 379w, https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19-scaled.jpg?fit=1024%2C576&amp;zoom=0.31 317w, https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19-scaled.jpg?fit=1024%2C576&amp;zoom=0.24 246w, https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19-scaled.jpg?fit=1024%2C576&amp;zoom=0.19 195w" sizes="(min-width: 1170px) 936px, (min-width: 960px) 80vw, 100vw" /></figure>
+	<button
+		class="ps-image-modal__trigger"
+		type="button"
+	>
+		<span class="screen-reader-text">
+			View and download image		</span>
+	</button>
+</div>
+<div
+	class="ps-image-modal ps-image-modal--hidden"
+	role="dialog"
+	hidden
+	tabindex="-1"
+	aria-hidden="true"
+	aria-labelledby="ps-image-modal-heading-1"
+>
+	<div role="document">
+
+		<h2 class="screen-reader-text" id="ps-image-modal-heading-1">
+			Download the image		</h2>
+
+		<button class="ps-image-modal__close">
+				<svg class="icon icon--close icon--white" aria-hidden="true" viewBox="0 0 20 20" focusable="false" version="1.1">
+		<title>close</title><g class="icon-primary-color" fill="#DEDEDE" fill-rule="evenodd"><path d="M1.496 17L0 15.447l6.951-6.946L0 1.552 1.496 0 10 8.501z"/><path d="M15.504 0L17 1.553l-6.951 6.946L17 15.448 15.504 17 7 8.499z"/></g>	</svg>
+				<span class="screen-reader-text">Close</span>
+		</button>
+
+		<figure class="ps-image-modal__content">
+
+			<img
+				class="ps-image-modal__image ps-image-modal__image--hidden"
+				data-src="https://blog.playstation.com/tachyon/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19.jpg"
+				alt=""
+			 data-recalc-dims="1">
+
+			<div class="ps-image-modal__footer">
+				
+				<a href="https://blog.playstation.com/uploads/2026/11/2bb62e662b96a987bd43c0d685c1f7fb65109a19.jpg" class="ps-image-modal__download" download="">
+						<svg class="icon icon--download icon--white" aria-hidden="true" viewBox="0 0 20 20" focusable="false" version="1.1">
+		<path d="M8.43 1.3c0-.72.58-1.3 1.3-1.3.72 0 1.3.58 1.3 1.3 0 .72-.58 1.3-1.3 1.3-.72 0-1.3-.59-1.3-1.3zm0 5.19c0-.72.58-1.3 1.3-1.3.72 0 1.3.58 1.3 1.3 0 .72-.58 1.3-1.3 1.3-.72 0-1.3-.58-1.3-1.3zm3.74 5.55c-.78 1.35-1.78 3.08-2.55 4.42-.78-1.35-1.78-3.08-2.55-4.42h5.1zm1.53-1.76H4L9.61 20l5.61-9.72H13.7z" fill-rule="evenodd" class="icon-primary-color"/>	</svg>
+						Download this image				</a>
+			</div>
+		</figure>
+	</div>
+</div>
+
+
+
+<h2 class="wp-block-heading"><strong>Amnesia: The Bunker | PS4&nbsp;</strong></h2>
+
+
+
+<p class="wp-block-paragraph">Amnesia: The Bunker is a first-person horror game from the makers of Soma and Amnesia. Left all alone in a desolate WW1 bunker with only one bullet remaining in the barrel, it’s up to you to face the oppressing terrors in the dark. Immerse yourself in the multiple ways of tackling survival. In the shoes of the French soldier Henri Clément, you are armed with a revolver gun, a noisy dynamo flashlight, and other scarce supplies to scavenge and craft along the way. With randomization and unpredictable behavior, no play-through is the same. Hunted by an ever-present threat reacting to your every move and sound, you must adapt your play-style to face hell. Every decision will change the outcome of how the game responds. Actions bear consequences.</p>
+
+
+<div class="ps-image-modal__wrapper ">
+	
+<figure class="wp-block-image size-large"><img loading="lazy" width="1024" height="576" decoding="async" src="https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg?fit=1024%2C1024" alt="" class="wp-image-425956" srcset="https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg?fit=1024%2C576&amp;zoom=1 1024w, https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg?fit=1024%2C576&amp;zoom=0.99 1014w, https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg?fit=1024%2C576&amp;zoom=0.75 768w, https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg?fit=1024%2C576&amp;zoom=0.61 625w, https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg?fit=1024%2C576&amp;zoom=0.49 502w, https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg?fit=1024%2C576&amp;zoom=0.41 420w, https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg?fit=1024%2C576&amp;zoom=0.32 328w, https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg?fit=1024%2C576&amp;zoom=0.25 256w" sizes="(min-width: 1170px) 936px, (min-width: 960px) 80vw, 100vw" /></figure>
+	<button
+		class="ps-image-modal__trigger"
+		type="button"
+	>
+		<span class="screen-reader-text">
+			View and download image		</span>
+	</button>
+</div>
+<div
+	class="ps-image-modal ps-image-modal--hidden"
+	role="dialog"
+	hidden
+	tabindex="-1"
+	aria-hidden="true"
+	aria-labelledby="ps-image-modal-heading-1"
+>
+	<div role="document">
+
+		<h2 class="screen-reader-text" id="ps-image-modal-heading-1">
+			Download the image		</h2>
+
+		<button class="ps-image-modal__close">
+				<svg class="icon icon--close icon--white" aria-hidden="true" viewBox="0 0 20 20" focusable="false" version="1.1">
+		<title>close</title><g class="icon-primary-color" fill="#DEDEDE" fill-rule="evenodd"><path d="M1.496 17L0 15.447l6.951-6.946L0 1.552 1.496 0 10 8.501z"/><path d="M15.504 0L17 1.553l-6.951 6.946L17 15.448 15.504 17 7 8.499z"/></g>	</svg>
+				<span class="screen-reader-text">Close</span>
+		</button>
+
+		<figure class="ps-image-modal__content">
+
+			<img
+				class="ps-image-modal__image ps-image-modal__image--hidden"
+				data-src="https://blog.playstation.com/tachyon/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg"
+				alt=""
+			 data-recalc-dims="1">
+
+			<div class="ps-image-modal__footer">
+				
+				<a href="https://blog.playstation.com/uploads/2026/11/17ebec33aa9ea824e18be602c8f8198c1750e445.jpg" class="ps-image-modal__download" download="">
+						<svg class="icon icon--download icon--white" aria-hidden="true" viewBox="0 0 20 20" focusable="false" version="1.1">
+		<path d="M8.43 1.3c0-.72.58-1.3 1.3-1.3.72 0 1.3.58 1.3 1.3 0 .72-.58 1.3-1.3 1.3-.72 0-1.3-.59-1.3-1.3zm0 5.19c0-.72.58-1.3 1.3-1.3.72 0 1.3.58 1.3 1.3 0 .72-.58 1.3-1.3 1.3-.72 0-1.3-.58-1.3-1.3zm3.74 5.55c-.78 1.35-1.78 3.08-2.55 4.42-.78-1.35-1.78-3.08-2.55-4.42h5.1zm1.53-1.76H4L9.61 20l5.61-9.72H13.7z" fill-rule="evenodd" class="icon-primary-color"/>	</svg>
+						Download this image				</a>
+			</div>
+		</figure>
+	</div>
+</div>
+
+
+
+<h2 class="wp-block-heading"><strong>Last chance to add the PlayStation Plus Monthly Games for November</strong></h2>
+
+
+
+<p class="wp-block-paragraph">PlayStation Plus members have until Monday November 30 to add the PlayStation Plus Monthly Games for November &#8211; Dead Island 2, Tomb Raider IV – VI Remastered, Monster Train 2 – to their library.</p>
+
+
+
+<p class="has-small-font-size wp-block-paragraph"><em>*PlayStation Plus lineup may differ by region. Please check the</em> <a href="http://playstation.com"><em>PlayStation.com</em></a> <em>for details.&nbsp;</em></p>
+
+
+
+<p class="has-small-font-size wp-block-paragraph"><em>**The PS5 version of the game will run native 4K at 60FPS in Fidelity Mode. 4K output requires a 4K compatible device or display.</em></p>
+]]></content:encoded>
 					
 					<wfw:commentRss>https://blog.playstation.com/2026/11/25/playstation-plus-monthly-games-for-december-tony-hawks-pro-skater-34-dragon-ball-xenoverse-2-amnesia-the-bunker/feed/</wfw:commentRss>
-			<slash:comments>26</slash:comments>
+			<slash:comments>27</slash:comments>
 		
 		
 			</item>
 <item>
-		<title>Thank you for making Grand Theft Auto VI the biggest launch in PlayStation history</title>
-		<link>https://blog.playstation.com/2026/11/23/thank-you-for-making-grand-theft-auto-vi-the-biggest-launch-in-playstation-history/</link>
-					<comments>https://blog.playstation.com/2026/11/23/thank-you-for-making-grand-theft-auto-vi-the-biggest-launch-in-playstation-history/#comments</comments>
+		<title>Infinity Nikki Version 3.0 “Of Yesterday and Tomorrow” update live today on PS5</title>
+		<link>https://blog.playstation.com/2026/11/26/infinity-nikki-version-3-0-of-yesterday-and-tomorrow-update-live-today-on-ps5/</link>
+					<comments>https://blog.playstation.com/2026/11/26/infinity-nikki-version-3-0-of-yesterday-and-tomorrow-update-live-today-on-ps5/#respond</comments>
 		
-		<dc:creator><![CDATA[Tim Turi (he/him)]]></dc:creator>
-		<pubDate>Mon, 23 Nov 2026 23:30:13 +0000</pubDate>
+		<dc:creator><![CDATA[Beth Hu]]></dc:creator>
+		<pubDate>Thu, 26 Nov 2026 21:59:37 +0000</pubDate>
 				<category><![CDATA[PS5]]></category>
-		<category><![CDATA[Grand Theft Auto VI]]></category>
-		<category><![CDATA[GTAVI]]></category>
-		<category><![CDATA[R*]]></category>
-		<category><![CDATA[Rockstar Games]]></category>
-		<guid isPermaLink="false">urn:uuid:ccc8395a-29a0-4e4c-970f-b51d2a36e843</guid>
+		<category><![CDATA[Infinity Nikki]]></category>
+		<category><![CDATA[Infold Games]]></category>
+		<guid isPermaLink="false">urn:uuid:31b9bc77-9bab-4c4f-874d-413ed00c3970</guid>
 
-					<description><![CDATA[After a long wait, players finally have had the chance to jump into Grand Theft Auto VI. It&#8217;s been amazing to see the PlayStation community around the world begin their adventures in the state of Leonida. Whether you&#8217;ve been counting down the days to return to the streets of Vice City or you&#8217;re experiencing the [&#8230;]]]></description>
-										<content:encoded><![CDATA[
-
-
-<p class="wp-block-paragraph">After a long wait, players finally have had the chance to jump into <a href="http://play.st/GTAVIPS5">Grand Theft Auto VI</a>. It&#8217;s been amazing to see the PlayStation community around the world begin their adventures in the state of Leonida.</p>
-
-
-
-<p class="wp-block-paragraph">Whether you&#8217;ve been counting down the days to return to the streets of Vice City or you&#8217;re experiencing the Grand Theft Auto series for the very first time, we want to take a moment to say: thank you. The excitement and passion of the community have made this a truly special moment for all of us.&nbsp;</p>
-
-
-
-<h2 class="wp-block-heading"><strong>Celebrating a historic launch&nbsp;</strong></h2>
-
-
-
-<p class="wp-block-paragraph">The launch of GTAVI marks an extraordinary moment for gaming and entertainment, becoming the biggest game launch in PlayStation history, across three decades and five console generations. More than <strong>39 million unique players</strong> have experienced Jason and Lucia’s story in Grand Theft Auto VI on PlayStation 5.</p>
-
-
-
-<p class="wp-block-paragraph">The PlayStation community came together in a big way to experience Grand Theft Auto VI during its launch and opening weekend. Here are a few highlights from the launch window ending November 22, 2026*:</p>
-
-
-
-<ul class="wp-block-list">
-<li>GTAVI set a new record for<strong> the highest number of concurrent players for any game on PlayStation</strong>, surpassing previous records across multiplayer, free-to-play, and single-player titles.<br></li>
-
-
-
-<li>Across PS5, players cumulatively logged an incredible <strong>683 million hours of gameplay in GTAVI</strong>, reflecting the enthusiasm of the PlayStation community. Each player has spent an average of<strong> 17.4 hours exploring the state of Leonida </strong>during the game’s opening days.<br></li>
-
-
-
-<li>The PlayStation community has grown, as we saw <strong>the largest number of newly connected PS5 consoles on a single day</strong> since the console’s launch, outside of end-of-year holidays. Since its launch, <strong>GTAVI was the first game played on</strong> <strong>70% of new PS5 consoles.</strong><br></li>
-</ul>
-
-
-
-<p class="wp-block-paragraph">These are just a few ways we&#8217;ve seen our PlayStation community come together around this incredible moment in gaming, and we&#8217;re excited to see how you continue to build and share new memories and experiences in the months ahead.&nbsp;</p>
-
-
-
-]]></content:encoded>
+					<description><![CDATA[Explore two new cities, experience nearly 10 hours of cinematic storytelling, discover new abilities and combat systems, and celebrate Nikki’s Birthday to enjoy 160 draws in total, plus 19 sets of clothes—all free. Today we announced Infinity Nikki Version 3.0, a major update that takes Nikki and Momo&#8217;s adventure to the Twin Cities of Art: [&#8230;]]]></description>
+										<content:encoded><![CDATA[<p>x</p>]]></content:encoded>
 					
-					<wfw:commentRss>https://blog.playstation.com/2026/11/23/thank-you-for-making-grand-theft-auto-vi-the-biggest-launch-in-playstation-history/feed/</wfw:commentRss>
-			<slash:comments>72</slash:comments>
+					<wfw:commentRss>https://blog.playstation.com/2026/11/26/infinity-nikki-version-3-0-of-yesterday-and-tomorrow-update-live-today-on-ps5/feed/</wfw:commentRss>
+			<slash:comments>0</slash:comments>
 		
 		
 			</item>
