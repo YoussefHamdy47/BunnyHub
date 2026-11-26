@@ -12,10 +12,10 @@ import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.*;
 
-/** The three hosts the console news reads, and nothing else. Blocking: call from the console news thread. */
+/** The hosts the console news reads, and nothing else. Blocking: call from the console news thread. */
 final class ConsoleFeeds implements ConsoleNews.Source, AutoCloseable {
     static final String PS_FEED = "https://" + PsPlusPost.HOST + "/feed/";
-    static final Set<String> HOSTS = Set.of(PsPlusPost.HOST, GamePass.SIGLS, GamePass.CATALOG);
+    static final Set<String> HOSTS = Set.of(PsPlusPost.HOST, GamePass.SIGLS, GamePass.CATALOG, FreeWeekend.HOST, ConsoleItem.HOST);
     static final int MAX_BYTES = 4 * 1024 * 1024;
     static final Duration TIMEOUT = Duration.ofSeconds(20);
 
@@ -32,10 +32,11 @@ final class ConsoleFeeds implements ConsoleNews.Source, AutoCloseable {
         return addresses;
     }
 
-    @Override public List<PsPlusPost> psPlus() throws IOException {
-        var posts = PsPlusPost.parse(get(PS_FEED));
-        return posts;
-    }
+    @Override public List<PsPlusPost> psPlus() throws IOException { return PsPlusPost.parse(get(PS_FEED)); }
+
+    @Override public List<FreeWeekend> freeWeekends() throws IOException { return FreeWeekend.parse(get(FreeWeekend.FEED)); }
+
+    @Override public List<ConsoleItem> items() throws IOException { return ConsoleItem.parse(get(ConsoleItem.FEED)); }
 
     @Override public List<String> shelf(GamePass.Shelf shelf) throws IOException {
         var ids = GamePass.ids(get(GamePass.siglUrl(shelf)));

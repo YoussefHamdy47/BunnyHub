@@ -80,6 +80,8 @@ class ConsoleNewsTest {
     final Map<GamePass.Shelf, List<String>> shelves = new EnumMap<>(GamePass.Shelf.class);
     final Map<String, GamePass.Game> catalog = new HashMap<>();
     List<PsPlusPost> feed = List.of();
+    List<FreeWeekend> weekends = List.of();
+    List<ConsoleItem> items = List.of();
     final Memory store = new Memory();
     final List<String> sent = new ArrayList<>();
     final Set<String> broken = new HashSet<>();
@@ -95,6 +97,8 @@ class ConsoleNewsTest {
             @Override public List<PsPlusPost> psPlus() { return feed; }
             @Override public List<String> shelf(GamePass.Shelf shelf) { return shelves.get(shelf); }
             @Override public List<GamePass.Game> games(List<String> ids) { return ids.stream().map(catalog::get).filter(Objects::nonNull).toList(); }
+            @Override public List<FreeWeekend> freeWeekends() { return weekends; }
+            @Override public List<ConsoleItem> items() { return items; }
         }, store, new ConsoleNews.Discord() {
             @Override public boolean ready() { return true; }
             @Override public Optional<String> send(String guildId, String channelId, MessageCreateData message) {
@@ -196,6 +200,78 @@ class ConsoleNewsTest {
         assertTrue(gp.plainText().contains("depends on your Game Pass plan"));
     }
 
+    @Test void readsFreePlayDaysFromPureXbox() throws IOException {
+        var weekends = FreeWeekend.parse(fixture("purexbox.xml"));
+        assertEquals(1, weekends.size(), "other news is skipped");
+        var w = weekends.getFirst();
+        assertEquals("November 26-29", w.dates());
+        assertEquals("www.purexbox.com", w.link().getHost());
+        assertEquals(Optional.of("https://images.purexbox.com/ef37e04b22d94/large.jpg"), w.image());
+        assertEquals(Instant.parse("2026-11-26T13:00:00Z"), w.published());
+        assertEquals(Optional.of(w), FreeWeekend.read(w.toDocument()));
+    }
+
+    @Test void readsConsoleItemsFromGamerPower() throws IOException {
+        var items = ConsoleItem.parse(fixture("gamerpower.json"));
+        assertEquals(4, items.size(), "full games and PC-only items are skipped");
+        var witcher = items.getFirst();
+        assertEquals("gamerpower:3793", witcher.id());
+        assertEquals("The Witcher 3: Wild Hunt Remastered - Scarlet Crest Armor", witcher.title(), "\"Giveaway\" dropped");
+        assertEquals(List.of("PlayStation", "Xbox", "Switch", "PC"), witcher.platforms());
+        assertEquals(Optional.empty(), witcher.ends());
+        var bond = items.stream().filter(i -> i.id().equals("gamerpower:3656")).findFirst().orElseThrow();
+        assertEquals(Optional.of(Instant.parse("2027-05-28T01:59:00Z")), bond.ends());
+        assertEquals(Optional.of(bond), ConsoleItem.fromSaved(bond.toDocument()));
+    }
+
+    @Test void freePlayDaysGoToGamePassChannelsOnce() {
+        subs.add(new Subscription("g", "xb", FreebieStore.GAME_PASS, Optional.empty()));
+        subs.add(new Subscription("g", "ps", FreebieStore.PS_PLUS, Optional.empty()));
+        weekends = List.of(new FreeWeekend("freeplay:/new", "November 26-29", URI.create("https://www.purexbox.com/a"), now.minus(Duration.ofHours(5)), Optional.empty()),
+                new FreeWeekend("freeplay:/old", "November 19-22", URI.create("https://www.purexbox.com/b"), now.minus(Duration.ofDays(7)), Optional.empty()));
+        news().run(now);
+        news().run(now.plus(Duration.ofHours(3)));
+        assertEquals(1, sent.size(), "the current weekend, once; last week's never");
+        assertTrue(sent.getFirst().startsWith("xb"));
+    }
+
+    @Test void inGameItemsStartSilentlySkipEndedOnesAndPostDaily() {
+        subs.add(new Subscription("g", "items", FreebieStore.CONSOLE_ITEMS, Optional.empty()));
+        var old = item(1, Optional.empty());
+        items = List.of(old);
+        news().run(now);
+        assertEquals(List.of(), sent, "what is already listed is only recorded");
+        var fresh = item(2, Optional.of(now.plus(Duration.ofDays(5))));
+        var ended = item(3, Optional.of(now.minus(Duration.ofHours(1))));
+        items = List.of(fresh, ended, old);
+        news().run(now.plus(Duration.ofHours(3)));
+        assertEquals(1, sent.size());
+        var post = store.posts.values().iterator().next();
+        assertEquals(List.of(fresh), post.items());
+        items = List.of(item(4, Optional.empty()), fresh, old);
+        news().run(now.plus(Duration.ofHours(6)));
+        assertEquals(1, sent.size(), "one post a day at most");
+        news().run(now.plus(Duration.ofHours(24)));
+        assertEquals(2, sent.size());
+    }
+
+    ConsoleItem item(int n, Optional<Instant> ends) {
+        return new ConsoleItem("gamerpower:" + n, "Item " + n, URI.create("https://www.gamerpower.com/i" + n), List.of("Xbox"), ends, Optional.empty());
+    }
+
+    @Test void weekendAndItemCardsSayWhatTheyAre() {
+        var weekend = ConsoleNewsCards.freeWeekendCard(new FreeWeekend("freeplay:/a", "November 26-29", URI.create("https://www.purexbox.com/a"),
+                now, Optional.empty()), Optional.of("9")).plainText();
+        assertTrue(weekend.contains("Free Play Days: November 26-29"));
+        assertTrue(weekend.contains("you don't keep them"));
+        List<ConsoleItem> many = new ArrayList<>();
+        for (int i = 0; i < 25; i++) many.add(item(i, Optional.of(now.plus(Duration.ofDays(1)))));
+        var card = ConsoleNewsCards.itemsCard(many, Optional.of("9"));
+        assertTrue(card.componentCount() <= 40 && card.textLength() <= 4000);
+        assertTrue(card.plainText().contains("keys can run out"));
+        assertTrue(card.plainText().contains("+ 15 more"));
+    }
+
     /** In memory, same rules as the MongoDB store. */
     static final class Memory implements ConsoleNews.Store {
         ConsoleNews.State state = ConsoleNews.State.EMPTY;
@@ -208,14 +284,14 @@ class ConsoleNewsTest {
             var p = posts.get(id);
             if (p.delivered().contains(channel)) return false;
             var d = new HashSet<>(p.delivered()); d.add(channel);
-            posts.put(id, new ConsoleNews.Post(p.id(), p.store(), p.createdAt(), p.psPlus(), p.gamePass(), d, p.failures()));
+            posts.put(id, p.with(d, p.failures()));
             return true;
         }
         @Override public void failed(String id, String channel) {
             var p = posts.get(id);
             var d = new HashSet<>(p.delivered()); d.remove(channel);
             var f = new HashMap<>(p.failures()); f.merge(channel, 1, Integer::sum);
-            posts.put(id, new ConsoleNews.Post(p.id(), p.store(), p.createdAt(), p.psPlus(), p.gamePass(), d, f));
+            posts.put(id, p.with(d, f));
         }
         @Override public void close(String id) { posts.remove(id); }
     }

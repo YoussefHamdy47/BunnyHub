@@ -72,6 +72,42 @@ final class ConsoleNewsCards {
         return card.build();
     }
 
+    static MessageCreateData freeWeekend(FreeWeekend weekend, Optional<String> role) { return freeWeekendCard(weekend, role).message(); }
+
+    static Card freeWeekendCard(FreeWeekend weekend, Optional<String> role) {
+        var card = Card.builder();
+        role.ifPresent(r -> card.above("<@&" + r + ">").mentionRoles(r));
+        card.text("### " + FreebieStore.GAME_PASS.badge() + " Xbox Free Play Days: " + text(weekend.dates(), 40)
+                + "\nA few Xbox games you can play for free this weekend. It's a trial: you don't keep them, and most need a"
+                + " Game Pass plan.\n-# The lineup is confirmed by Xbox during the week; the list linked below is kept up to date.");
+        weekend.image().ifPresent(card::image);
+        List<Button> buttons = new ArrayList<>(List.of(Button.link(weekend.link().toString(), "See this weekend's games")));
+        role.ifPresent(r -> buttons.add(roleButton(r)));
+        card.divider().text("-# From Pure Xbox").buttons(buttons);
+        return card.build();
+    }
+
+    static MessageCreateData items(List<ConsoleItem> items, Optional<String> role) { return itemsCard(items, role).message(); }
+
+    static Card itemsCard(List<ConsoleItem> items, Optional<String> role) {
+        var card = Card.builder();
+        role.ifPresent(r -> card.above("<@&" + r + ">").mentionRoles(r));
+        var block = new StringBuilder("### Free in-game items for console games");
+        for (ConsoleItem item : items.subList(0, Math.min(PER_SHELF, items.size()))) {
+            block.append("\n- [").append(text(item.title().replace('[', '(').replace(']', ')'), 80)).append("](").append(item.link())
+                    .append(") · ").append(String.join(", ", item.platforms()));
+            item.ends().ifPresent(end -> block.append(" · ends <t:").append(end.getEpochSecond()).append(":R>"));
+        }
+        if (items.size() > PER_SHELF) block.append("\n-# + ").append(items.size() - PER_SHELF).append(" more");
+        card.text(block + "\n-# Most are keys from partner sites: you may need an account there, and keys can run out.");
+        List<String> images = items.stream().flatMap(i -> i.image().stream()).limit(IMAGES).toList();
+        if (!images.isEmpty()) card.gallery(images);
+        List<Button> buttons = new ArrayList<>(List.of(Button.link("https://" + ConsoleItem.HOST + "/", "More on GamerPower")));
+        role.ifPresent(r -> buttons.add(roleButton(r)));
+        card.divider().text("-# From GamerPower").buttons(buttons);
+        return card.build();
+    }
+
     private static Button roleButton(String role) {
         return Button.secondary(FreebieSubscriptions.ROLE_BUTTON + ":" + role, FreebieSubscriptions.ROLE_BUTTON_LABEL);
     }

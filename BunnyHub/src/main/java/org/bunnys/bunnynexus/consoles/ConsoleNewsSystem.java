@@ -22,14 +22,17 @@ import java.util.concurrent.*;
 import java.util.function.Supplier;
 
 /**
- * PS Plus and Game Pass news for the Console section (see {@link ConsoleNews}): checked every {@link #EVERY} on one
+ * PS Plus, Game Pass, Free Play Days and in-game item news for the Console section (see {@link ConsoleNews}): checked every {@link #EVERY} on one
  * daemon thread. CONSOLE_NEWS_ENABLED=false turns it off. Respects the free-games kill switch.
  */
 public final class ConsoleNewsSystem {
     static final Duration FIRST = Duration.ofMinutes(2), EVERY = Duration.ofHours(3);
     static final String AGENT = "BunnyNexus-Console/1.0 (Discord bot)";
     private static final Permission[] POST = {Permission.VIEW_CHANNEL, Permission.MESSAGE_SEND, Permission.MESSAGE_EMBED_LINKS};
-    /** What existing Console channels get turned on for, once: PlayStation channels get PS Plus, Xbox channels Game Pass. */
+    /**
+     * What existing Console channels get turned on for, once: PlayStation channels get PS Plus, Xbox channels Game Pass
+     * and Free Play Days. In-game items stay off until a server ticks them.
+     */
     static final Map<FreebieStore, FreebieStore> TURN_ON = Map.of(FreebieStore.PLAYSTATION, FreebieStore.PS_PLUS,
             FreebieStore.XBOX, FreebieStore.GAME_PASS);
     private static volatile ConsoleNewsSystem instance;
@@ -65,7 +68,7 @@ public final class ConsoleNewsSystem {
                 if (subscriptions.find(s.guildId(), s.channelId(), entry.getValue()).isEmpty()
                         && subscriptions.save(new FreebieSubscriptions.Subscription(s.guildId(), s.channelId(), entry.getValue(), s.roleId()),
                         "console-news", now) != FreebieSubscriptions.SaveResult.LIMIT_REACHED) added++;
-        store.save(new ConsoleNews.State(state.psSeen(), state.seen(), state.pending(), state.lastGamePassPost(), state.seeded(), true));
+        store.save(state.withMigrated());
         BunnyLog.success("[Console] Turned on PS Plus / Game Pass news for " + added + " existing console setting(s)");
     }
 
@@ -80,7 +83,7 @@ public final class ConsoleNewsSystem {
             var store = new ConsoleNewsStore(DB.getDatabase());
             store.installIndexes();
             instance = new ConsoleNewsSystem(store, new FreebieSubscriptions(DB.getDatabase()), client::getJDA, Clock.systemUTC());
-            BunnyLog.success("[Console] Started. PS Plus and Game Pass news checked every 3 h.");
+            BunnyLog.success("[Console] Started. PS Plus, Game Pass, Free Play Days and in-game items checked every 3 h.");
         } catch (RuntimeException failure) {
             BunnyLog.warning("[Console] Not started | " + FailureDiagnostics.describe(failure));
         }

@@ -24,8 +24,10 @@ public enum FreebieStore {
     SWITCH("switch", "Nintendo Switch", List.of("nintendo switch", "switch"), FreebieSection.CONSOLE),
     /** Not a launcher: the PlayStation Plus monthly games and Game Catalog posts ({@code consoles.ConsoleNewsSystem}). */
     PS_PLUS("psplus", "PS Plus monthly games", List.of(), FreebieSection.CONSOLE),
-    /** Not a launcher: Xbox Game Pass additions, upcoming games and games leaving ({@code consoles.ConsoleNewsSystem}). */
-    GAME_PASS("gamepass", "Xbox Game Pass updates", List.of(), FreebieSection.CONSOLE),
+    /** Not a launcher: Xbox Game Pass additions, upcoming games, games leaving and Free Play Days ({@code consoles.ConsoleNewsSystem}). */
+    GAME_PASS("gamepass", "Xbox Game Pass & Free Play Days", List.of(), FreebieSection.CONSOLE),
+    /** Not a launcher: free in-game items for console games ({@code consoles.ConsoleNewsSystem}). Off until a server ticks it. */
+    CONSOLE_ITEMS("console-items", "Console in-game items", List.of(), FreebieSection.CONSOLE),
     ANDROID("android", "Android", List.of("android"), FreebieSection.MOBILE),
     IOS("ios", "iOS", List.of("ios"), FreebieSection.MOBILE),
     OTHER("other", "Other", List.of(), FreebieSection.OTHER_PC);
@@ -39,8 +41,11 @@ public enum FreebieStore {
         this.id = id; this.label = label; this.platformTags = platformTags; this.section = section;
     }
 
-    /** PS Plus and Game Pass: subscription news, never a free-game offer. */
-    public boolean news() { return this == PS_PLUS || this == GAME_PASS; }
+    /** PS Plus, Game Pass and console in-game items: console news, never a free-game offer. */
+    public boolean news() { return this == PS_PLUS || this == GAME_PASS || this == CONSOLE_ITEMS; }
+
+    /** Ticked when a server turns its section on; in-game items are opt-in. */
+    public boolean defaultOn() { return this != CONSOLE_ITEMS; }
 
     public String id() { return id; }
     public String label() { return label; }

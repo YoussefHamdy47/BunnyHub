@@ -38,7 +38,7 @@ final class FreebieCards {
             case SWITCH -> AppDesign.Emojis.SWITCH;
             case ANDROID -> AppDesign.Emojis.ANDROID;
             case IOS -> AppDesign.Emojis.IOS;
-            case OTHER -> "🎁";
+            case OTHER, CONSOLE_ITEMS -> "🎁";
         };
     }
 
