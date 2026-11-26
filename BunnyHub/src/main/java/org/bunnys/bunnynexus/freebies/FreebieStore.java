@@ -22,6 +22,10 @@ public enum FreebieStore {
     PLAYSTATION("playstation", "PlayStation", List.of("playstation 5", "playstation 4", "ps5", "ps4"), FreebieSection.CONSOLE),
     XBOX("xbox", "Xbox", List.of("xbox series x|s", "xbox one", "xbox 360", "xbox"), FreebieSection.CONSOLE),
     SWITCH("switch", "Nintendo Switch", List.of("nintendo switch", "switch"), FreebieSection.CONSOLE),
+    /** Not a launcher: the PlayStation Plus monthly games and Game Catalog posts ({@code consoles.ConsoleNewsSystem}). */
+    PS_PLUS("psplus", "PS Plus monthly games", List.of(), FreebieSection.CONSOLE),
+    /** Not a launcher: Xbox Game Pass additions, upcoming games and games leaving ({@code consoles.ConsoleNewsSystem}). */
+    GAME_PASS("gamepass", "Xbox Game Pass updates", List.of(), FreebieSection.CONSOLE),
     ANDROID("android", "Android", List.of("android"), FreebieSection.MOBILE),
     IOS("ios", "iOS", List.of("ios"), FreebieSection.MOBILE),
     OTHER("other", "Other", List.of(), FreebieSection.OTHER_PC);
@@ -34,6 +38,9 @@ public enum FreebieStore {
     FreebieStore(String id, String label, List<String> platformTags, FreebieSection section) {
         this.id = id; this.label = label; this.platformTags = platformTags; this.section = section;
     }
+
+    /** PS Plus and Game Pass: subscription news, never a free-game offer. */
+    public boolean news() { return this == PS_PLUS || this == GAME_PASS; }
 
     public String id() { return id; }
     public String label() { return label; }

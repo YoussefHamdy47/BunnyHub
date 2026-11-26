@@ -75,7 +75,7 @@ class FreebieDashboardTest {
         assertEquals("-", args[5]);
         var labels = FreebieDashboardForms.sectionForm(args).orElseThrow().getComponents().stream().map(c -> (Label) c).toList();
         assertTrue(labels.get(0).getChild().asEntitySelectMenu().getDefaultValues().isEmpty());
-        assertEquals(Set.of("playstation", "xbox", "switch"), ticked(labels.get(2).getChild().asStringSelectMenu().getOptions()));
+        assertEquals(Set.of("playstation", "psplus", "gamepass", "xbox", "switch"), ticked(labels.get(2).getChild().asStringSelectMenu().getOptions()));
     }
 
     @Test void malformedSectionIdsAreRefused() {

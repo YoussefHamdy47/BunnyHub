@@ -186,7 +186,7 @@ class FreebieUnitTest {
         var menu = rows.get(1).getComponents().getFirst();
         assertInstanceOf(StringSelectMenu.class, menu);
         var select = menu.asStringSelectMenu();
-        assertEquals(FreebieStore.values().length, select.getOptions().size());
+        assertEquals(java.util.Arrays.stream(FreebieStore.values()).filter(s -> !s.news()).count(), select.getOptions().size(), "PS Plus and Game Pass are not launchers");
         assertEquals(List.of("steam"), select.getOptions().stream().filter(SelectOption::isDefault).map(SelectOption::getValue).toList());
         var catchUp = FreebieMessages.catchUpAllControls("12345678901234567890", "12345678901234567890", 3);
         var button = catchUp.getFirst().getComponents().getFirst().asButton();

@@ -87,7 +87,7 @@ final class FreebieReviewDecisions {
     /** Owner fixes a wrongly detected launcher before approving; the confirmation then counts the new audience. */
     String changeStore(String actorId, String offerId, String storeId) {
         requireOwner(actorId);
-        var store = FreebieStore.byId(storeId).orElse(null);
+        var store = FreebieStore.byId(storeId).filter(s -> !s.news()).orElse(null);
         if (store == null) return "Unknown launcher.";
         var changed = repository.changeStore(offerId, store, clock.instant());
         if (changed.isEmpty()) return "Only offers still waiting for review can change launcher.";
