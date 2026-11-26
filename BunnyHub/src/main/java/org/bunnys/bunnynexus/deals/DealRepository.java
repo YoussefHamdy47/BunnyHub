@@ -84,6 +84,13 @@ public final class DealRepository implements DealRefresh.Store, DealBoard.Store 
         return Optional.ofNullable(boards.find(eq("_id", guildId)).first()).map(DealRepository::board);
     }
 
+    /** The servers whose board is on: IDs only, read through the {@code on} index. */
+    public Set<String> guildsWithBoardOn() {
+        Set<String> ids = new HashSet<>();
+        for (Document doc : boards.find(eq("on", true)).projection(new Document("_id", 1))) ids.add(doc.getString("_id"));
+        return ids;
+    }
+
     /** One page of boards that are on, after {@code afterId} in server ID order. */
     @Override public List<Board> boardsOn(String afterId, int limit) {
         List<Board> on = new ArrayList<>(Math.min(limit, 100));

@@ -36,6 +36,12 @@ class UpdatePrefsIT {
         prefs.promoShown("1", "deals-board", now);
         prefs.promoShown("1", "deals-board", now.plusSeconds(60));
         assertEquals(new UpdateAudience.PromoState(Optional.of(now.plusSeconds(60)), Map.of("deals-board", 2)), prefs.promoState("1"));
+        assertTrue(prefs.claimPromo("5", "deals", now, UpdateAudience.PROMO_EVERY, 2), "a new server is due");
+        assertFalse(prefs.claimPromo("5", "other", now.plusSeconds(1), UpdateAudience.PROMO_EVERY, 2), "a second alert at once gets none");
+        var later = now.plus(UpdateAudience.PROMO_EVERY);
+        assertTrue(prefs.claimPromo("5", "deals", later, UpdateAudience.PROMO_EVERY, 2));
+        assertFalse(prefs.claimPromo("5", "deals", later.plus(UpdateAudience.PROMO_EVERY), UpdateAudience.PROMO_EVERY, 2), "this ad's limit is reached");
+        assertTrue(prefs.claimPromo("5", "other", later.plus(UpdateAudience.PROMO_EVERY), UpdateAudience.PROMO_EVERY, 2), "another ad still can");
         prefs.forget("1");
         assertEquals(UpdateAudience.Prefs.NONE, prefs.get("1"));
     }

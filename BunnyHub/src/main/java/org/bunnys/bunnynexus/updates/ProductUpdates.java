@@ -77,8 +77,11 @@ public final class ProductUpdates {
     List<UpdateAudience.Server> servers() {
         var channels = FreebieSystem.current().map(FreebieSystem::mainChannels).orElse(Map.of());
         var saved = prefs.get(channels.keySet());
+        // One query for every server's board instead of one per server.
+        Set<String> boards = DealSystem.current().map(d -> d.repository().guildsWithBoardOn()).orElse(Set.of());
         List<UpdateAudience.Server> servers = new ArrayList<>();
-        channels.forEach((guild, channel) -> servers.add(new UpdateAudience.Server(guild, channel, uses(guild), saved.get(guild))));
+        channels.forEach((guild, channel) -> servers.add(new UpdateAudience.Server(guild, channel,
+                boards.contains(guild) ? EnumSet.of(ProductUpdate.Feature.DEALS_BOARD) : Set.of(), saved.get(guild))));
         return servers;
     }
 
@@ -90,12 +93,20 @@ public final class ProductUpdates {
         return uses;
     }
 
-    /** The ad card under this server's next free-game alert, counted as shown (docs/product-updates, "Ads in alerts"). */
+    /**
+     * The ad card under this server's next free-game alert, counted as shown (docs/product-updates, "Ads in alerts").
+     * Cheapest checks first: no active ads costs nothing, a server not yet due costs one read, and the board is only
+     * read when an ad's audience depends on it. The claim is atomic, so parallel alerts never double up.
+     */
     Optional<net.dv8tion.jda.api.components.container.Container> adFor(String guildId, Instant now) {
         var active = ads.active();
         if (active.isEmpty()) return Optional.empty();
-        var ad = UpdateAudience.ad(active, uses(guildId), prefs.promoState(guildId), now);
-        ad.ifPresent(chosen -> prefs.promoShown(guildId, chosen.id(), now));
+        var state = prefs.promoState(guildId);
+        if (state.lastAt().filter(last -> last.plus(UpdateAudience.PROMO_EVERY).isAfter(now)).isPresent()) return Optional.empty();
+        boolean needsBoard = active.stream().anyMatch(a -> a.audience() != Ad.Audience.ALL);
+        var ad = UpdateAudience.ad(active, needsBoard ? uses(guildId) : Set.of(), state, now);
+        if (ad.isEmpty() || !prefs.claimPromo(guildId, ad.get().id(), now, UpdateAudience.PROMO_EVERY, UpdateAudience.PROMO_TIMES))
+            return Optional.empty();
         return ad.map(AdCards::card);
     }
 

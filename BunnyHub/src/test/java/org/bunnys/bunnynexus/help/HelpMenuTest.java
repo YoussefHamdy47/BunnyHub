@@ -35,6 +35,12 @@ class HelpMenuTest {
         assertTrue(describe(HelpMenu.render(bot, commands, developer, HelpMenu.OVERVIEW)).contains("freebie-admin"));
     }
 
+    @Test void theOverviewLinksSupportAndTheInviteOnceKnown() {
+        assertEquals("[Support server](https://discord.gg/gGsdHYhTFv)", HelpMenu.links(java.util.Optional.empty()));
+        assertEquals("[Support server](https://discord.gg/gGsdHYhTFv) · [Add BunnyNexus to your server](https://discord.com/x)",
+                HelpMenu.links(java.util.Optional.of("https://discord.com/x")));
+    }
+
     @Test void everyViewRendersWithinDiscordLimits() {
         List<String> views = new ArrayList<>(List.of(HelpMenu.OVERVIEW, "c=Study", "c=Free Games", "c=Moderation", "c=Information", "c=Owner"));
         for (String path : HelpMenu.paths(commands, true)) views.add(HelpMenu.detailKey(path));
