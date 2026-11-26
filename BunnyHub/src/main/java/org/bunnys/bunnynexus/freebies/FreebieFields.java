@@ -51,6 +51,7 @@ final class FreebieFields {
             c.epicOffer().filter(o -> !identityKnown).ifPresent(o -> changes.add(set("epicOffer",
                     new Document("namespace", o.namespace()).append("offerId", o.offerId()))));
             c.productSlug().filter(s -> existing.getString("productSlug") == null).ifPresent(s -> changes.add(set("productSlug", s)));
+            c.seller().filter(s -> existing.getString("seller") == null).ifPresent(s -> changes.add(set("seller", s)));
             if (existing.getString("groupKey") == null)
                 groupKey(FreebieStore.byId(existing.getString("store")).orElse(FreebieStore.OTHER), c.startsAt())
                         .ifPresent(key -> changes.add(set("groupKey", key)));

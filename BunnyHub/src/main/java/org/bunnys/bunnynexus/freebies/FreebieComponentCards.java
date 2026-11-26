@@ -48,13 +48,23 @@ final class FreebieComponentCards {
 
     /** {@code ad}: the ad card shown under the game card while a game is claimable. */
     static MessageCreateData create(List<Member> members, List<String> pingRoles, boolean checkout, Instant now, Optional<Container> ad) {
+        return create(members, pingRoles, checkout, now, ad, Optional.empty());
+    }
+
+    /**
+     * {@code roleButton}: the channel's ping role, offered as a "Get pinged" button under the card. The mention line is
+     * the mentions alone: the card already says what was posted.
+     */
+    static MessageCreateData create(List<Member> members, List<String> pingRoles, boolean checkout, Instant now, Optional<Container> ad,
+                                    Optional<String> roleButton) {
         Optional<String> header = Optional.empty();
         if (!pingRoles.isEmpty()) {
             var mentions = new StringJoiner(" ");
             for (String role : pingRoles) mentions.add("<@&" + role + ">");
-            header = Optional.of(mentions + " " + FreebieAnnouncementCards.headline(members));
+            header = Optional.of(mentions.toString());
         }
-        var builder = new MessageCreateBuilder().useComponentsV2(true).setComponents(components(members, header, checkout, now, ad))
+        var builder = new MessageCreateBuilder().useComponentsV2(true)
+                .setComponents(components(members, header, checkout, now, ad, roleButton.map(FreebieComponentCards::roleRow)))
                 .setAllowedMentions(List.of()).mentionRepliedUser(false);
         if (!pingRoles.isEmpty()) builder.mentionRoles(pingRoles);
         return builder.build();
@@ -72,11 +82,36 @@ final class FreebieComponentCards {
 
     /** As above, keeping the posted ad card ({@link #ad}) while a game is claimable. */
     static MessageEditData edit(List<Member> members, boolean checkout, Instant now, Optional<String> postedHeader, Optional<Container> postedAd) {
+        return edit(members, checkout, now, postedHeader, postedAd, Optional.empty());
+    }
+
+    /** As above, also keeping the posted role button ({@link #roleRow(Message)}). Older posts recount their "N new free games". */
+    static MessageEditData edit(List<Member> members, boolean checkout, Instant now, Optional<String> postedHeader, Optional<Container> postedAd,
+                                Optional<ActionRow> postedRole) {
         boolean live = members.stream().anyMatch(m -> m.status() == Status.LIVE);
         Optional<String> header = live ? postedHeader.map(h -> HEADLINE.matcher(h).find()
                 ? HEADLINE.matcher(h).replaceFirst(FreebieAnnouncementCards.headline(members)) : h) : Optional.empty();
-        return new MessageEditBuilder().useComponentsV2(true).setComponents(components(members, header, checkout, now, postedAd))
+        return new MessageEditBuilder().useComponentsV2(true).setComponents(components(members, header, checkout, now, postedAd, postedRole))
                 .setAllowedMentions(List.of()).build();
+    }
+
+    /** The "Get pinged" button for the channel's ping role; a second press removes the role. */
+    static ActionRow roleRow(String roleId) {
+        return ActionRow.of(Button.secondary(FreebieSubscriptions.ROLE_BUTTON + ":" + roleId, FreebieSubscriptions.ROLE_BUTTON_LABEL));
+    }
+
+    /** The posted role button row of a V2 page, kept as posted on edits. */
+    static Optional<ActionRow> roleRow(Message message) {
+        if (!message.isUsingComponentsV2()) return Optional.empty();
+        return roleRow(message.getComponents());
+    }
+
+    static Optional<ActionRow> roleRow(List<? extends MessageTopLevelComponent> components) {
+        for (var c : components)
+            if (c instanceof ActionRow row && row.getComponents().stream().anyMatch(b -> b instanceof Button button
+                    && button.getCustomId() != null && button.getCustomId().startsWith(FreebieSubscriptions.ROLE_BUTTON + ":")))
+                return Optional.of(row);
+        return Optional.empty();
     }
 
     /** The mention line of a posted V2 page: a top-level text block above the card, when there is one. */
@@ -106,6 +141,11 @@ final class FreebieComponentCards {
 
     static List<MessageTopLevelComponent> components(List<Member> members, Optional<String> header, boolean checkout, Instant now,
                                                      Optional<Container> ad) {
+        return components(members, header, checkout, now, ad, Optional.empty());
+    }
+
+    static List<MessageTopLevelComponent> components(List<Member> members, Optional<String> header, boolean checkout, Instant now,
+                                                     Optional<Container> ad, Optional<ActionRow> role) {
         // The ad goes once no game is claimable, like the mention line.
         var shownAd = ad.filter(a -> members.stream().anyMatch(m -> m.status() == Status.LIVE));
         // Shrinking order when the text limit is reached: descriptions, region text, the links in titles and mobile
@@ -115,6 +155,12 @@ final class FreebieComponentCards {
             header.ifPresent(h -> top.add(TextDisplay.of(h)));
             top.add(members.size() == 1 ? single(members.getFirst(), checkout, now, detail) : several(members, checkout, now, detail));
             shownAd.ifPresent(top::add);
+            // Discord refuses more than 40 components: on a full ten-game page the role button gives way first, then the ad.
+            if (role.isPresent()) {
+                top.add(shownAd.isPresent() ? top.size() - 1 : top.size(), role.get());
+                if (componentCount(top) > MAX_COMPONENTS) top.remove(role.get());
+            }
+            if (shownAd.isPresent() && componentCount(top) > MAX_COMPONENTS) top.remove(shownAd.get());
             if (textLength(top) <= TEXT_LIMIT || detail == Detail.BARE) return top;
         }
         throw new IllegalStateException("unreachable");
@@ -139,6 +185,7 @@ final class FreebieComponentCards {
         // The labeled lines of the earlier featured card: the deal, the claim window, platforms and region.
         var facts = new StringJoiner("\n");
         facts.add("**The deal** " + price(offer));
+        m.facts().rating().ifPresent(r -> facts.add("**Players** " + r.line()));
         facts.add("**Claim window** " + offer.endsAt().map(e -> "Ends <t:" + e.getEpochSecond() + ":R> · <t:" + e.getEpochSecond() + ":f>"
                 + (offer.realEnd().isEmpty() ? " (estimated)" : "")).orElse("No end date listed"));
         facts.add("**Platforms** " + text(offer.platforms() == null || offer.platforms().isBlank() ? offer.store().label() : offer.platforms(), 120));
@@ -184,6 +231,7 @@ final class FreebieComponentCards {
             var body = new StringBuilder("### ").append(links
                     ? "[" + linkText(title(offer.title()), titleRoom) + "](" + offer.claimUrl() + ")"
                     : text(title(offer.title()), titleRoom)).append("\n").append(deal(offer, false));
+            m.facts().rating().ifPresent(r -> body.append("\n").append(r.line()));
             // Each extra line is subtext of its own: the store (mixed pages), a short description, the region
             // restriction as flags, then mobile versions.
             var line = new StringJoiner(" · ");

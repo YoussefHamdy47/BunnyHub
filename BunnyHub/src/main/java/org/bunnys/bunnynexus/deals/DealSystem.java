@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.function.Supplier;
 
@@ -50,19 +51,33 @@ public final class DealSystem {
         discord = new DiscordBoards(jda);
         boards = new DealBoard(repository, discord, clock, Duration.ofSeconds(1));
         var saved = repository.loadSnapshot();
-        snapshot = saved.orElse(DealSnapshot.EMPTY);
+        prices = repository.prices();
+        snapshot = saved.map(s -> s.withLowest(lowest(() -> DealPrices.current(prices, s.deals(), clock.instant())))).orElse(DealSnapshot.EMPTY);
         var refresh = new DealRefresh(new DealRefresh.Source() {
             @Override public DealFeed.Fetch steamSearch(String order) { return feed.steamSearch(order); }
             @Override public DealFeed.Fetch steamItems(List<Long> appIds) { return feed.steamItems(appIds); }
             @Override public DealFeed.Fetch gog() { return feed.gog(); }
         }, repository, clock, this::snapshot, published -> {
-            snapshot = published;
-            boards.updateAll(published);
+            // Each refresh records its prices; deals at the lowest price tracked for at least two weeks get a badge.
+            var marked = published.withLowest(lowest(() -> DealPrices.update(prices, published.deals(), clock.instant())));
+            snapshot = marked;
+            boards.updateAll(marked);
         });
         repeat(refresh::run, DealRefresh.firstDelay(saved, clock.instant()));
     }
 
     public static Optional<DealSystem> current() { return Optional.ofNullable(instance); }
+
+    private final DealPrices.Store prices;
+
+    /** Price history is a nice-to-have: if the database refuses it, deals still show, without badges. */
+    private static Set<String> lowest(java.util.function.Supplier<Set<String>> read) {
+        try { return read.get(); }
+        catch (RuntimeException failure) {
+            BunnyLog.warning("[Deals] Price history skipped | " + org.bunnys.utils.FailureDiagnostics.describe(failure));
+            return Set.of();
+        }
+    }
 
     /** Off, with a logged reason, when DEALS_ENABLED=false or there is no database. */
     public static synchronized void start(BunnyHub client) {

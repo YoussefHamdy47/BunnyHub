@@ -67,6 +67,7 @@ final class FreebieSourceStore {
                 .append("discoveredAt", Date.from(now)).append("lastSeenAt", Date.from(now)).append("missingPolls", 0)
                 .append("evidence", new Document(c.provider().id, new Document("missing", 0).append("seenAt", Date.from(now)).append("identity", c.identity())));
         c.productSlug().ifPresent(slug -> doc.append("productSlug", slug));
+        c.seller().ifPresent(seller -> doc.append("seller", seller));
         if (c.provider() == FreebieFeed.Provider.EPIC) {
             doc.append("official", new Document(FreebieFields.official(c)).append("observedAt", Date.from(now)));
             c.epicOffer().ifPresent(o -> doc.append("epicOffer", new Document("namespace", o.namespace()).append("offerId", o.offerId())));

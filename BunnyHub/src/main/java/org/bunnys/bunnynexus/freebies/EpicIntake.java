@@ -99,7 +99,7 @@ final class EpicIntake {
         return Optional.of(new FreebieFeed.Candidate(FreebieFeed.Provider.EPIC, identity + ":" + start + ":" + end, FreebieStore.EPIC,
                 "PC, Epic Games Store", text(row, "title", 256), text(row, "description", 8000), bonus ? FreebieOffer.BONUS_STEPS : "",
                 bonus ? Optional.empty() : Optional.of(usd(original)), image, page, page, Optional.of(start), Optional.of(end),
-                "US (en-US); availability elsewhere may differ"));
+                "US (en-US); availability elsewhere may differ", Optional.empty(), seller(row)));
     }
     /**
      * The games Epic lists as free in a promotion that has not started yet, soonest first. Read leniently: a row that
@@ -136,6 +136,15 @@ final class EpicIntake {
             games.sort(Comparator.comparing(FreebieUpcoming::start));
             return List.copyOf(games);
         } catch (RuntimeException unusable) { return List.of(); }
+    }
+
+    /** Epic's seller (usually the publisher), read leniently: it only confirms a rating match, never decides an offer. */
+    private static Optional<String> seller(Document row) {
+        try {
+            var seller = row.get("seller", Document.class);
+            String name = seller == null ? null : seller.getString("name");
+            return name == null || name.isBlank() || name.length() > 128 ? Optional.empty() : Optional.of(name.strip());
+        } catch (RuntimeException unreadable) { return Optional.empty(); }
     }
 
     private static void validatePromotion(Document promotion) {

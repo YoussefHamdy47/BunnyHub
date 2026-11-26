@@ -133,7 +133,7 @@ class FreebieDropsTest {
         assertTrue(message.isUsingComponentsV2());
         assertTrue(message.getEmbeds().isEmpty());
         var top = FreebieComponentCardsTest.top(message);
-        assertEquals("<@&" + ROLE + "> <@&" + ROLE_2 + "> 3 new free games",
+        assertEquals("<@&" + ROLE + "> <@&" + ROLE_2 + ">",
                 ((net.dv8tion.jda.api.components.textdisplay.TextDisplay) top.getFirst()).getContent());
         assertEquals(Set.of(ROLE, ROLE_2), message.getMentionedRoles());
         assertEquals(3, FreebieComponentCardsTest.children(FreebieComponentCardsTest.card(top),
@@ -154,7 +154,7 @@ class FreebieDropsTest {
         drain();
         var message = onlyMessage();
         assertEquals(List.of(3), FreebieAnnouncementCardsTest.gamesPerEmbed(message.getEmbeds()), "three Epic games share one embed");
-        assertEquals("<@&" + ROLE + "> 3 new free games", message.getContent());
+        assertEquals("<@&" + ROLE + ">", message.getContent());
         assertEquals(Set.of(ROLE), message.getMentionedRoles());
         assertTrue(message.getAllowedMentions().stream().noneMatch(t -> t == Message.MentionType.EVERYONE || t == Message.MentionType.HERE));
         var posted = mock(Message.class);
@@ -186,7 +186,7 @@ class FreebieDropsTest {
         assertTrue(start(first));
         drain();
         var message = onlyMessage();
-        assertEquals("<@&" + ROLE + "> <@&" + ROLE_2 + "> 5 new free games", message.getContent());
+        assertEquals("<@&" + ROLE + "> <@&" + ROLE_2 + ">", message.getContent());
         assertEquals(Set.of(ROLE, ROLE_2), message.getMentionedRoles());
         // Audit finding 5: each peer is checked with one small status read; no full offer read, no separate quiet count.
         verify(repository, never()).quiet(anyString());
@@ -386,7 +386,7 @@ class FreebieDropsTest {
         drain();
         var message = onlyMessage();
         assertEquals(Set.of(ROLE), message.getMentionedRoles());
-        assertEquals("<@&" + ROLE + "> 1 new free game", message.getContent());
+        assertEquals("<@&" + ROLE + ">", message.getContent());
     }
 
     /** Finding 6: a role whose only game fits on a later page is still mentioned once, on the first post. */

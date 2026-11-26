@@ -15,11 +15,19 @@ interface FreebieFeed extends AutoCloseable {
     record Candidate(Provider provider, String sourceId, FreebieStore store, String platforms, String title,
                      String description, String instructions, Optional<String> worth, Optional<URI> image,
                      URI claimPage, URI sourcePage, Optional<Instant> startsAt, Optional<Instant> endsAt,
-                     String region, Optional<URI> storePage) {
+                     String region, Optional<URI> storePage, Optional<String> seller) {
         public Candidate {
             Objects.requireNonNull(provider); Objects.requireNonNull(sourceId); Objects.requireNonNull(store);
             Objects.requireNonNull(startsAt); Objects.requireNonNull(endsAt); Objects.requireNonNull(region);
-            Objects.requireNonNull(storePage);
+            Objects.requireNonNull(storePage); Objects.requireNonNull(seller);
+        }
+        /** Without a known seller (the store's publisher name, used to confirm a Steam rating match). */
+        Candidate(Provider provider, String sourceId, FreebieStore store, String platforms, String title,
+                  String description, String instructions, Optional<String> worth, Optional<URI> image,
+                  URI claimPage, URI sourcePage, Optional<Instant> startsAt, Optional<Instant> endsAt,
+                  String region, Optional<URI> storePage) {
+            this(provider, sourceId, store, platforms, title, description, instructions, worth, image, claimPage, sourcePage,
+                    startsAt, endsAt, region, storePage, Optional.empty());
         }
         Candidate(Provider provider, String sourceId, FreebieStore store, String platforms, String title,
                   String description, String instructions, Optional<String> worth, Optional<URI> image,
@@ -31,7 +39,7 @@ interface FreebieFeed extends AutoCloseable {
         /** A copy carrying a resolved official store page (GamerPower's redirect target), the only verified link to a product. */
         Candidate withStorePage(URI page) {
             return new Candidate(provider, sourceId, store, platforms, title, description, instructions, worth, image,
-                    claimPage, sourcePage, startsAt, endsAt, region, Optional.of(page));
+                    claimPage, sourcePage, startsAt, endsAt, region, Optional.of(page), seller);
         }
         /** The normalized Epic product slug from an official product link, when this report has one. */
         Optional<String> productSlug() {

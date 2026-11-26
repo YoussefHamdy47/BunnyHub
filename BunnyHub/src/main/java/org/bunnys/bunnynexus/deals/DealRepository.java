@@ -30,9 +30,10 @@ public final class DealRepository implements DealRefresh.Store, DealBoard.Store 
     static final int FAILURES_BEFORE_OFF = 3;
     
     private final MongoCollection<Document> state, boards;
+    private final MongoDatabase db;
 
     public DealRepository(MongoDatabase db) {
-        state = db.getCollection(STATE); boards = db.getCollection(BOARDS);
+        this.db = db; state = db.getCollection(STATE); boards = db.getCollection(BOARDS);
     }
 
     /** Safe on every start. */
@@ -41,6 +42,9 @@ public final class DealRepository implements DealRefresh.Store, DealBoard.Store 
     }
 
     // ---- Snapshot -------------------------------------------------------------------------------------------------
+
+    /** Each listed game's lowest price seen ({@link DealPrices}). */
+    DealPrices.Store prices() { return new DealPrices.Mongo(db); }
 
     public Optional<DealSnapshot> loadSnapshot() {
         Document doc = state.find(eq("_id", "snapshot")).first();

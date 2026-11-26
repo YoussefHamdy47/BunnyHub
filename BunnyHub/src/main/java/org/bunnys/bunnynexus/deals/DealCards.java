@@ -19,7 +19,7 @@ public final class DealCards {
     public static final String PREFIX = "deals";
     static final String ALL = "all";
     /** Under every heading: what "good" means, and the order. */
-    static final String SUBTITLE = "-# 75% off or more · well reviewed · top deals first";
+    static final String SUBTITLE = "-# 75% off or more · best rated first (rating and how many people reviewed it), then biggest discount, then lowest price";
     /** Above every footer: the stores price by region, so a reader elsewhere may see another price or currency. */
     static final String REGIONAL = "-# Prices are US store prices in USD. Steam and GOG price by region, so yours may be different.";
     static final String CREDIT = "Prices from Steam and GOG";
@@ -40,7 +40,8 @@ public final class DealCards {
 
     static Card listCard(DealSnapshot snapshot, Optional<DealStore> store, int page) {
         List<Deal> deals = snapshot.forStore(store);
-        String heading = "### " + store.map(s -> "Good deals on " + s.badge()).orElse("Good deals right now");
+        String heading = "### " + (deals.isEmpty() ? store.map(s -> "Good deals on " + s.badge()).orElse("Good deals right now")
+                : count(deals.size()) + store.map(s -> " good deals on " + s.badge()).orElse(" good deals right now"));
         long fetched = snapshot.fetchedAt().getEpochSecond();
         if (deals.isEmpty()) {
             return Card.builder().text(heading + "\nNo deals" + store.map(s -> " on " + s.label).orElse("")
@@ -50,7 +51,7 @@ public final class DealCards {
         int pages = pages(snapshot, store);
         int shown = Math.clamp(page, 0, pages - 1);
         var card = Card.builder().text(heading + "\n" + SUBTITLE).divider();
-        for (Deal deal : deals.subList(shown * PER_PAGE, Math.min(deals.size(), (shown + 1) * PER_PAGE))) section(card, deal);
+        for (Deal deal : deals.subList(shown * PER_PAGE, Math.min(deals.size(), (shown + 1) * PER_PAGE))) section(card, deal, snapshot.lowest(deal));
         card.divider().text(REGIONAL + "\n-# Page " + (shown + 1) + " of " + pages + " · updated <t:" + fetched + ":R> · " + CREDIT);
         if (pages > 1) card.buttons(paging(store, shown, pages));
         return card.build();
@@ -90,45 +91,90 @@ public final class DealCards {
      * The deals board a server picks in setup: one block per launcher, and one button per launcher that shows anyone
      * that launcher's full list privately. Shared by everyone, so it has no paging of its own.
      */
-    public static MessageCreateData board(DealSnapshot snapshot, Notice notice) { return boardCard(snapshot, notice).message(); }
+    public static MessageCreateData board(DealSnapshot snapshot, Notice notice) { return board(snapshot, notice, Optional.empty()); }
+
+    /** {@code role}: the board's ping role, offered as a "Get pinged" button; a second press removes it. */
+    public static MessageCreateData board(DealSnapshot snapshot, Notice notice, Optional<String> role) {
+        return boardCard(snapshot, notice, role).message();
+    }
 
     /** Edits drop the "new deals" line: it belongs to the post that announced them. */
-    public static MessageEditData boardEdit(DealSnapshot snapshot) { return boardCard(snapshot, Notice.NONE).edit(); }
+    public static MessageEditData boardEdit(DealSnapshot snapshot) { return boardEdit(snapshot, Optional.empty()); }
 
-    static Card boardCard(DealSnapshot snapshot, Notice notice) {
+    public static MessageEditData boardEdit(DealSnapshot snapshot, Optional<String> role) { return boardCard(snapshot, Notice.NONE, role).edit(); }
+
+    static Card boardCard(DealSnapshot snapshot, Notice notice) { return boardCard(snapshot, notice, Optional.empty()); }
+
+    static Card boardCard(DealSnapshot snapshot, Notice notice, Optional<String> role) {
         var card = Card.builder();
         String names = newNames(notice.newDeals());
         if (notice.pingRole().isPresent() && !names.isEmpty())
             card.above("<@&" + notice.pingRole().get() + "> New deals: " + names).mentionRoles(notice.pingRole().get());
-        card.text("### Good deals right now\n" + SUBTITLE
+        int all = snapshot.deals().size();
+        card.text("### " + (all == 0 ? "Good deals right now" : count(all) + " good deals right now") + "\n" + SUBTITLE
                 + (notice.pingRole().isEmpty() && !names.isEmpty() ? "\n**New:** " + names : "")).divider();
         var shown = boardDeals(snapshot);
         if (shown.isEmpty()) card.text("No deals pass the bar right now. This board updates every few hours.");
-        String footer = REGIONAL + "\n-# Updated <t:" + snapshot.fetchedAt().getEpochSecond() + ":R> · " + CREDIT + " · Tap a launcher for all its deals";
+        String footer = REGIONAL + "\n-# Updated <t:" + snapshot.fetchedAt().getEpochSecond() + ":R> · " + CREDIT
+                + " · The buttons open every deal, only for you";
         List<Button> launchers = new ArrayList<>();
+        if (!shown.isEmpty()) launchers.add(Button.primary(PREFIX + ":store:" + ALL, "See all " + all + " deals"));
         for (var entry : shown.entrySet()) {
             int total = snapshot.forStore(Optional.of(entry.getKey())).size();
-            var block = new StringBuilder(entry.getKey().emoji.map(e -> e + " ").orElse("") + "**" + entry.getKey().label + "**");
+            var block = new StringBuilder(entry.getKey().emoji.map(e -> e + " ").orElse("") + "**" + entry.getKey().label + "**"
+                    + (total > entry.getValue().size() ? " · top " + entry.getValue().size() + " of " + total : ""));
+            int listed = 0;
             for (Deal deal : entry.getValue()) {
-                String line = "\n" + compactLine(deal);
-                // Keep room for the footer: the board must always fit Discord's 4000 characters.
-                if (card.remainingText() - block.length() - line.length() - footer.length() < 50) break;
+                String line = "\n" + compactLine(deal, snapshot.lowest(deal));
+                // Keep room for the "more" line and the footer: the board must always fit Discord's 4000 characters.
+                if (card.remainingText() - block.length() - line.length() - footer.length() < 120) break;
                 block.append(line);
+                listed++;
             }
+            if (total > listed)
+                block.append("\n-# + ").append(total - listed).append(" more on ").append(entry.getKey().label)
+                        .append(" · tap **").append(entry.getKey().label).append(" (").append(total).append(")** below");
             card.text(block.toString());
             var button = Button.secondary(PREFIX + ":store:" + entry.getKey().choice, entry.getKey().label + " (" + total + ")");
             launchers.add(entry.getKey().emoji.map(e -> button.withEmoji(Emoji.fromFormatted(e))).orElse(button));
         }
+        if (!shown.isEmpty()) role.ifPresent(r -> launchers.add(Button.secondary(
+                org.bunnys.bunnynexus.freebies.FreebieSubscriptions.ROLE_BUTTON + ":" + r,
+                org.bunnys.bunnynexus.freebies.FreebieSubscriptions.ROLE_BUTTON_LABEL)));
         card.divider().text(footer);
         for (int i = 0; i < launchers.size(); i += 5) card.buttons(launchers.subList(i, Math.min(launchers.size(), i + 5)));
         return card.build();
     }
 
-    /** "[Title](link) · **$1.99** ~~$39.99~~ · 95% off · ends <t:…:R>". */
-    static String compactLine(Deal deal) {
+    /** "[Title](link) · **$1.99** ~~$39.99~~ · 95% off · 96% positive (120K reviews) · ends <t:…:R>". */
+    static String compactLine(Deal deal) { return compactLine(deal, false); }
+
+    /** {@code low}: at the lowest price tracked for it ({@link DealPrices}). */
+    static String compactLine(Deal deal, boolean low) {
         return "[" + title(deal, 60) + "](" + deal.link() + ") · **" + money(deal.saleCents()) + "** ~~" + money(deal.normalCents())
-                + "~~ · " + deal.percentOff() + "% off" + deal.endsAt().map(end -> " · ends <t:" + end.getEpochSecond() + ":R>").orElse("");
+                + "~~ · " + deal.percentOff() + "% off" + (low ? " · " + LOWEST : "") + " · " + rating(deal)
+                + deal.endsAt().map(end -> " · ends <t:" + end.getEpochSecond() + ":R>").orElse("");
     }
+
+    /** The badge of a deal at the lowest price tracked for it. */
+    static final String LOWEST = "**Lowest price we've seen**";
+
+    /**
+     * Star emojis to the nearest quarter, then "96% positive (120K reviews)" / "rated 4.6/5 (1.2K reviews)": the
+     * rating and how many people it comes from. Without the emojis (just after a start) the text alone.
+     */
+    static String rating(Deal deal) {
+        String stars = org.bunnys.bunnynexus.ratings.Stars.of(stars(deal));
+        return (stars.isEmpty() ? "" : stars + " ") + deal.ratingText() + " (" + count(deal.reviews()) + " reviews)";
+    }
+
+    /** Steam's percent positive or GOG's stars, out of 5. */
+    static double stars(Deal deal) {
+        return deal.store() == DealStore.GOG ? deal.rating() / 10.0 : org.bunnys.bunnynexus.ratings.Stars.fromPercent(deal.rating());
+    }
+
+    /** 950, 1.2K, 12K, 120K, 1.3M: short enough for a deal line. */
+    static String count(long n) { return org.bunnys.bunnynexus.ratings.Stars.count(n); }
 
     /** "A, B, C and 2 more". */
     static String newNames(List<Deal> deals) {
@@ -140,15 +186,19 @@ public final class DealCards {
         return Card.builder().text("### Deals\nDeals aren't available right now. Try again in a little while.").build();
     }
 
-    private static void section(Card.Builder card, Deal deal) {
+    private static void section(Card.Builder card, Deal deal, boolean low) {
         String link = deal.link().toString();
-        card.section("**[" + title(deal, 100) + "](" + link + ")**\n" + line(deal), Button.link(link, "Open on " + deal.store().label));
+        card.section("**[" + title(deal, 100) + "](" + link + ")**\n" + line(deal, low), Button.link(link, "Open on " + deal.store().label));
     }
 
-    /** "<emoji> Steam · **$1.99** ~~$39.99~~ · 95% off · 86% positive · ends <t:…:R>". */
-    static String line(Deal deal) {
+    static String line(Deal deal) { return line(deal, false); }
+
+    /** "<emoji> Steam · **$1.99** ~~$39.99~~ · 95% off · ★★★★¾ 96% positive (12K reviews) · ends <t:…:R>". */
+    static String line(Deal deal, boolean low) {
         List<String> parts = new ArrayList<>(List.of(deal.store().badge(), "**" + money(deal.saleCents()) + "** ~~" + money(deal.normalCents()) + "~~",
-                deal.percentOff() + "% off", deal.ratingText()));
+                deal.percentOff() + "% off"));
+        if (low) parts.add(LOWEST);
+        parts.add(rating(deal));
         deal.endsAt().ifPresent(end -> parts.add("ends <t:" + end.getEpochSecond() + ":R>"));
         return String.join(" · ", parts);
     }

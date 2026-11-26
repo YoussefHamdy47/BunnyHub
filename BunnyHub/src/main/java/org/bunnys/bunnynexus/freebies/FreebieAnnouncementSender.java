@@ -198,7 +198,8 @@ final class FreebieAnnouncementSender {
                     } else {
                         var pings = pings(page, role, guild);
                         // pings() already gives an older page at most its one saved role, so both kinds share the V2 card.
-                        var data = features.componentsV2() ? FreebieComponentCards.create(members, pings, features.checkout(), at, FreebiePromos.cardFor(guild.getId(), at))
+                        var data = features.componentsV2() ? FreebieComponentCards.create(members, pings, features.checkout(), at, FreebiePromos.cardFor(guild.getId(), at),
+                                        role.filter(r -> guild.getRoleById(r) != null))
                                 : page.getBoolean("drop", false) ? FreebieAnnouncementCards.create(members, pings, features.checkout(), at)
                                 : FreebieAnnouncementCards.create(members, pings.stream().findFirst(), features.checkout(), at);
                         var request = channel.sendMessage(data)

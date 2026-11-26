@@ -41,7 +41,7 @@ final class FreebieAnnouncementCards {
     }
 
     /**
-     * A drop's message: with roles, the content is {@code <@&role> 3 new free games} and exactly those roles are
+     * A drop's message: with roles, the content is the role mentions alone and exactly those roles are
      * whitelisted (never everyone, here or users); without, no content at all.
      */
     static MessageCreateData create(List<Member> members, List<String> pingRoles, boolean checkout, Instant now) {
@@ -50,7 +50,7 @@ final class FreebieAnnouncementCards {
         if (!pingRoles.isEmpty()) {
             var mentions = new StringJoiner(" ");
             for (String role : pingRoles) mentions.add("<@&" + role + ">");
-            builder.setContent(mentions + " " + headline(members)).mentionRoles(pingRoles);
+            builder.setContent(mentions.toString()).mentionRoles(pingRoles);
         }
         return builder.build();
     }

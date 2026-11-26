@@ -142,7 +142,8 @@ final class FreebieAnnouncementWorker {
         // A page keeps the format it was posted in, whatever FREEBIE_COMPONENTS_V2 says now: Discord does not turn an
         // embed message into a Components V2 one or back.
         var data = message.isUsingComponentsV2()
-                ? FreebieComponentCards.edit(members, features.checkout(), now, FreebieComponentCards.header(message), FreebieComponentCards.ad(message))
+                ? FreebieComponentCards.edit(members, features.checkout(), now, FreebieComponentCards.header(message), FreebieComponentCards.ad(message),
+                        FreebieComponentCards.roleRow(message))
                 : FreebieAnnouncementCards.edit(members, features.checkout(), now, Optional.ofNullable(message.getContentRaw()));
         return message.editMessage(data).timeout(TIMEOUT.toSeconds(), TimeUnit.SECONDS).submit().thenApply(edited -> "edited");
     }

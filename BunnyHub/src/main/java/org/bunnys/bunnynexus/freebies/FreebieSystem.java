@@ -37,6 +37,8 @@ public final class FreebieSystem {
     private EpicFeed epicFeed;
     private FreebieDiscovery epicDiscovery;
     private ScheduledExecutorService epicThread;
+    private org.bunnys.bunnynexus.ratings.SteamRatings steamRatings;
+    private FreebieRatings ratings;
     private SteamFeed steamFeed;
     private FreebieDiscovery steamDiscovery;
     private final FreebieLifecyclePlanner lifecycle;
@@ -173,6 +175,14 @@ public final class FreebieSystem {
             system.egdataFeed = new EgDataFeed(system.clock);
             system.enrichment = new FreebieEnrichment(repository.offerCollection(), system.egdataFeed, system.clock);
         }
+        system.steamRatings = new org.bunnys.bunnynexus.ratings.SteamRatings("BunnyNexus-Freebies/1.0 (Discord bot)");
+        var steam = system.steamRatings;
+        system.ratings = new FreebieRatings(repository.offerCollection(), new FreebieRatings.Source() {
+            @Override public org.bunnys.bunnynexus.ratings.SteamRatings.Lookup forApp(long appId) { return steam.forApp(appId); }
+            @Override public org.bunnys.bunnynexus.ratings.SteamRatings.Lookup forTitle(String title, Optional<String> publisher) {
+                return steam.forTitle(title, publisher);
+            }
+        }, system.clock);
         offReason = null;
         instance = system;
         system.discoveryThread.scheduleWithFixedDelay(guarded("housekeeping", system::housekeepingTick), 20, 30, TimeUnit.SECONDS);
@@ -231,6 +241,7 @@ public final class FreebieSystem {
         if (epicFeed != null) epicFeed.close();
         if (steamFeed != null) steamFeed.close();
         if (egdataFeed != null) egdataFeed.close();
+        if (steamRatings != null) steamRatings.close();
     }
 
     // ------------------------------------------------------------------ housekeeping (discovery thread)
@@ -298,6 +309,11 @@ public final class FreebieSystem {
             var swept = cleanup().sweep(client, now);
             nextSweep = now.plus(SWEEP_EVERY);
             if (swept.channels() + swept.roles() > 0) notifier.wake(); // Each one may have queued a notice.
+        }
+        // Steam ratings for new PC games, before their review and first post (a few per run; a failure only skips it).
+        if (ratings != null) {
+            try { ratings.run(); }
+            catch (RuntimeException failure) { BunnyLog.warning("[Freebies] Steam ratings skipped | " + FailureDiagnostics.describe(failure)); }
         }
         // Held source reports are announced once with their decision buttons, so none is suppressed unnoticed.
         if (repository.sources() != null)

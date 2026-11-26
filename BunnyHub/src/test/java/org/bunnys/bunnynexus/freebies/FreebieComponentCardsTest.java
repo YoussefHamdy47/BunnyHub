@@ -57,7 +57,7 @@ class FreebieComponentCardsTest {
         assertTrue(data.isUsingComponentsV2());
         assertTrue(data.getEmbeds().isEmpty());
         var top = top(data);
-        assertEquals("<@&" + ROLE + "> 1 new free game", ((TextDisplay) top.getFirst()).getContent());
+        assertEquals("<@&" + ROLE + ">", ((TextDisplay) top.getFirst()).getContent());
         assertEquals(Set.of(ROLE), data.getMentionedRoles());
         assertTrue(data.getAllowedMentions().stream().noneMatch(t -> t == Message.MentionType.EVERYONE || t == Message.MentionType.HERE));
         var card = card(top);
@@ -80,7 +80,7 @@ class FreebieComponentCardsTest {
     @Test void severalGamesShareOneCardWithAClaimButtonEach() {
         var members = List.of(member("a", LIVE), member("b", LIVE));
         var data = FreebieComponentCards.create(members, List.of(ROLE), true, now);
-        assertEquals("<@&" + ROLE + "> 2 new free games", ((TextDisplay) top(data).getFirst()).getContent());
+        assertEquals("<@&" + ROLE + ">", ((TextDisplay) top(data).getFirst()).getContent());
         var card = card(top(data));
         assertEquals(1, top(data).stream().filter(c -> c instanceof Container).count(), "one card");
         assertEquals(2, children(card, MediaGallery.class).getFirst().getItems().size());
@@ -119,6 +119,47 @@ class FreebieComponentCardsTest {
         assertTrue(children(endedCard, MediaGallery.class).isEmpty(), "no art without a live game");
     }
 
+    @Test void aSteamRatingShowsUnderTheDealWhenOneWasFound() {
+        var rated = new FreebieFacts(Optional.empty(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), true,
+                Optional.of(new org.bunnys.bunnynexus.ratings.GameRating(1607680, 78, 4265, "Mostly Positive")));
+        var one = new FreebieAnnouncementCards.Member(epic("a", "Game a"), rated, "epic:a|" + CHANNEL, LIVE);
+        String single = String.join("\n", texts(card(new ArrayList<MessageTopLevelComponent>(
+                FreebieComponentCards.create(List.of(one), List.of(), false, now).getComponents()))));
+        assertTrue(single.contains("**Players** **Mostly Positive** · 78% of 4.2K Steam reviews"), single);
+        var data = FreebieComponentCards.create(List.of(one, member("b", LIVE)), List.of(), false, now);
+        assertTrue(data.toData().toString().contains("Mostly Positive"), "each game of a several-game card has its line");
+        assertFalse(String.join("\n", texts(card(new ArrayList<MessageTopLevelComponent>(FreebieComponentCards.create(List.of(member("b", LIVE)),
+                List.of(), false, now).getComponents())))).contains("Steam reviews"), "no rating found: no line");
+    }
+
+    @Test void aGetPingedButtonOffersTheChannelsRoleAndSurvivesEdits() {
+        var ad = Container.of(TextDisplay.of("### Deals Board\nBig discounts.\n-# From BunnyNexus"));
+        var data = FreebieComponentCards.create(List.of(member("a", LIVE)), List.of(ROLE), false, now, Optional.of(ad), Optional.of(ROLE));
+        var top = new ArrayList<MessageTopLevelComponent>(data.getComponents());
+        assertEquals("<@&" + ROLE + ">", ((TextDisplay) top.getFirst()).getContent(), "the ping alone, no \"1 new free game\"");
+        var row = FreebieComponentCards.roleRow(top).orElseThrow();
+        var button = (Button) row.getComponents().getFirst();
+        assertEquals(FreebieSubscriptions.ROLE_BUTTON + ":" + ROLE, button.getCustomId());
+        assertEquals("Get pinged", button.getLabel());
+        assertSame(ad, top.getLast(), "the ad stays last");
+        assertEquals(Optional.of(ad), FreebieComponentCards.adCard(top));
+
+        var edit = FreebieComponentCards.edit(List.of(member("a", LIVE), member("b", ENDED)), false, now,
+                FreebieComponentCards.topText(top, true), Optional.of(ad), Optional.of(row));
+        assertTrue(FreebieComponentCards.roleRow(new ArrayList<MessageTopLevelComponent>(edit.getComponents())).isPresent());
+        // A full ten-game page with an ad still fits Discord's 40 components: the button gives way first.
+        List<FreebieAnnouncementCards.Member> ten = new ArrayList<>();
+        for (int i = 0; i < 10; i++) ten.add(member("g" + i, LIVE));
+        var full = new ArrayList<MessageTopLevelComponent>(FreebieComponentCards.create(ten, List.of(ROLE), true, now, Optional.of(ad), Optional.of(ROLE)).getComponents());
+        assertTrue(FreebieComponentCards.componentCount(full) <= FreebieComponentCards.MAX_COMPONENTS, String.valueOf(FreebieComponentCards.componentCount(full)));
+        assertTrue(FreebieComponentCards.roleRow(full).isEmpty() && FreebieComponentCards.adCard(full).isEmpty(), "ten games leave no room for either");
+        var nine = new ArrayList<MessageTopLevelComponent>(FreebieComponentCards.create(ten.subList(0, 9), List.of(ROLE), true, now, Optional.of(ad), Optional.of(ROLE)).getComponents());
+        assertTrue(FreebieComponentCards.roleRow(nine).isPresent() && FreebieComponentCards.adCard(nine).isPresent(), "nine games keep both");
+        // Without a role there is no button.
+        assertTrue(FreebieComponentCards.roleRow(new ArrayList<MessageTopLevelComponent>(
+                FreebieComponentCards.create(List.of(member("a", LIVE)), List.of(), false, now, Optional.empty(), Optional.empty()).getComponents())).isEmpty());
+    }
+
     @Test void anAdCardSitsUnderTheGameCardSurvivesEditsAndGoesWhenNothingIsClaimable() {
         var ad = Container.of(TextDisplay.of("### Deals board\nBig discounts.\n-# From BunnyNexus"));
         var data = FreebieComponentCards.create(List.of(member("a", LIVE)), List.of(), false, now, Optional.of(ad));
@@ -131,7 +172,7 @@ class FreebieComponentCardsTest {
 
         var pinged = new ArrayList<MessageTopLevelComponent>(FreebieComponentCards.create(List.of(member("a", LIVE)), List.of(ROLE), false, now,
                 Optional.of(ad)).getComponents());
-        assertEquals(Optional.of("<@&" + ROLE + "> 1 new free game"), FreebieComponentCards.topText(pinged, true));
+        assertEquals(Optional.of("<@&" + ROLE + ">"), FreebieComponentCards.topText(pinged, true));
         assertEquals(Optional.of(ad), FreebieComponentCards.adCard(pinged));
 
         var kept = FreebieComponentCards.edit(List.of(member("a", LIVE), member("b", ENDED)), false, now, Optional.empty(), Optional.of(ad));
