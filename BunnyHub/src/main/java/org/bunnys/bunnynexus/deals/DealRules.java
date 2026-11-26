@@ -27,8 +27,8 @@ final class DealRules {
     }
 
     /**
-     * Qualifying rows, one per game per store (the store's own order decides which are kept; a later, cheaper row of
-     * the same game replaces the earlier one), at most {@link #MAX_KEPT}, then cheapest first.
+     * Qualifying rows, one per game per store (a later, cheaper row replaces the earlier one).
+     * Rank every candidate before keeping the best {@link #MAX_KEPT}.
      */
     static List<Deal> rank(List<Deal> rows) {
         Map<String, Deal> games = new LinkedHashMap<>();
@@ -36,16 +36,28 @@ final class DealRules {
             if (!qualifies(row)) continue;
             Deal shown = games.get(row.id());
             if (shown == null) {
-                if (games.size() < MAX_KEPT) games.put(row.id(), row);
+                games.put(row.id(), row);
             } else if (row.saleCents() < shown.saleCents()) {
                 games.put(row.id(), row);
             }
         }
-        return byPrice(List.copyOf(games.values()));
+        return byRelevance(List.copyOf(games.values())).stream().limit(MAX_KEPT).toList();
     }
 
-    /** Cheapest first; on equal price the bigger discount first, then the order they came in. */
-    static List<Deal> byPrice(List<Deal> deals) {
-        return deals.stream().sorted(Comparator.comparingLong(Deal::saleCents).thenComparing(d -> -d.percentOff())).toList();
+    /**
+     * Rating x review popularity x discount. Logarithmic review counts reward broad appeal without letting
+     * raw counts dominate. Normalize by each store's review floor because GOG has far fewer reviews.
+     * Price only breaks a relevance tie; IDs make equal deals stable across source ordering changes.
+     */
+    static double score(Deal deal) {
+        double rating = deal.rating() / (deal.store() == DealStore.STEAM ? 100.0 : 50.0);
+        double reviews = (double) deal.reviews() / (deal.store() == DealStore.STEAM ? MIN_STEAM_REVIEWS : MIN_GOG_REVIEWS);
+        return rating * Math.log1p(reviews) * deal.percentOff() / 100.0;
+    }
+
+    static List<Deal> byRelevance(List<Deal> deals) {
+        return deals.stream().sorted(Comparator.comparingDouble(DealRules::score).reversed()
+                .thenComparing(Comparator.comparingInt(Deal::percentOff).reversed())
+                .thenComparingLong(Deal::saleCents).thenComparing(Deal::id)).toList();
     }
 }

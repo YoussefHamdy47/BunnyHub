@@ -91,7 +91,7 @@ class DealBoardTest {
     DealSnapshot newGame(String gameId, DealStore launcher) {
         var deals = new ArrayList<>(snapshot.deals());
         var deal = DealFixtures.deal(launcher.choice + ":" + gameId, launcher, 9, 1999);
-        deals.addFirst(new Deal(deal.id(), launcher, "New Game " + gameId, deal.link(), 9, 1999, 99, deal.rating(), 5000, Optional.empty()));
+        deals.addFirst(new Deal(deal.id(), launcher, "New Game " + gameId, deal.link(), 9, 1999, 99, launcher == DealStore.STEAM ? 100 : 50, 10000000, Optional.empty()));
         return at(deals);
     }
 

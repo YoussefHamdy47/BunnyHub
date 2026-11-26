@@ -29,18 +29,17 @@ class DealCardsTest {
             assertTrue(Set.of("store.steampowered.com", "www.gog.com").contains(URI.create(b.getUrl()).getHost()), b.getUrl());
     }
 
-    @Test void theFirstPageShowsTheCheapestDealsWithStoreLinks() throws Exception {
+    @Test void theFirstPageShowsTopDealsWithStoreLinks() throws Exception {
         var card = DealCards.listCard(DealFixtures.snapshot(), Optional.empty(), 0);
         String text = card.plainText();
-        for (String part : List.of("Good deals right now", "cheapest first", "Peggle Deluxe",
-                "<:steam:705062577817780315> Steam · **$0.99** ~~$4.99~~ · 80% off · 97% positive · ends <t:1796320800:R>",
-                "**[Peggle Deluxe](https://store.steampowered.com/app/3480/)**",
-                "<:GOG:1572185523924115587> GOG · **$0.99** ~~$4.99~~ · 80% off · rated 4.8/5",
+        for (String part : List.of("Good deals right now", "top deals first",
                 "Steam and GOG price by region, so yours may be different.", "Prices from Steam and GOG", "Page 1 of 8"))
             assertTrue(text.contains(part), part);
+        assertFalse(text.contains("cheapest first"));
+        assertTrue(text.contains(DealFixtures.snapshot().deals().getFirst().title()));
         assertEquals(8, buttons(card).stream().filter(b -> b.getUrl() != null).count());
         assertTrue(buttons(card).stream().anyMatch(b -> "Open on Steam".equals(b.getLabel())));
-        assertTrue(buttons(card).stream().anyMatch(b -> "Open on GOG".equals(b.getLabel())));
+
         assertEquals(List.of("deals:page:all:prev-off (off)", "deals:page:all:1"), paging(card));
         onlyStoreLinks(card);
     }
@@ -87,10 +86,13 @@ class DealCardsTest {
         var snapshot = DealFixtures.snapshot();
         var card = DealCards.boardCard(snapshot, DealCards.Notice.NONE);
         String text = card.plainText();
-        assertTrue(text.contains("<:steam:705062577817780315> **Steam**\n[Peggle Deluxe](https://store.steampowered.com/app/3480/) · **$0.99** ~~$4.99~~ · 80% off · ends <t:1796320800:R>"));
-        assertTrue(text.contains("<:GOG:1572185523924115587> **GOG**\n[Total Annihilation: Commander Pack](https://www.gog.com/en/game/total_annihilation_commander_pack)"));
         assertTrue(text.contains("Prices from Steam and GOG") && text.contains("price by region"));
         var shown = DealCards.boardDeals(snapshot);
+        for (var store : List.of(DealStore.STEAM, DealStore.GOG)) {
+            var top = snapshot.forStore(Optional.of(store)).getFirst();
+            assertEquals(top, shown.get(store).getFirst());
+            assertTrue(text.contains(top.title()));
+        }
         assertTrue(shown.values().stream().allMatch(list -> list.size() == DealCards.PER_LAUNCHER));
         assertEquals(List.of("deals:store:steam", "deals:store:gog"), buttons(card).stream().map(Button::getCustomId).toList());
         assertEquals("Steam (25)", buttons(card).getFirst().getLabel());
@@ -106,7 +108,7 @@ class DealCardsTest {
         var fresh = snapshot.deals().subList(0, 5);
         var pinged = DealCards.board(snapshot, new DealCards.Notice(Optional.of("500000000000000001"), fresh));
         String json = pinged.toData().toString();
-        assertTrue(json.contains("<@&500000000000000001> New deals: **Peggle Deluxe**"), json);
+        assertTrue(json.contains("<@&500000000000000001> New deals: **" + fresh.getFirst().title() + "**"), json);
         assertTrue(json.contains(" and 2 more"));
         assertEquals(Set.of("500000000000000001"), pinged.getMentionedRoles());
         var quiet = DealCards.board(snapshot, new DealCards.Notice(Optional.empty(), fresh));

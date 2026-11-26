@@ -19,7 +19,7 @@ public final class DealCards {
     public static final String PREFIX = "deals";
     static final String ALL = "all";
     /** Under every heading: what "good" means, and the order. */
-    static final String SUBTITLE = "-# 75% off or more · well reviewed · cheapest first";
+    static final String SUBTITLE = "-# 75% off or more · well reviewed · top deals first";
     /** Above every footer: the stores price by region, so a reader elsewhere may see another price or currency. */
     static final String REGIONAL = "-# Prices are US store prices in USD. Steam and GOG price by region, so yours may be different.";
     static final String CREDIT = "Prices from Steam and GOG";
@@ -76,7 +76,7 @@ public final class DealCards {
         public static final Notice NONE = new Notice(Optional.empty(), List.of());
     }
 
-    /** What the board shows: the {@value #PER_LAUNCHER} cheapest of each launcher that has any, in board order. */
+    /** What the board shows: the {@value #PER_LAUNCHER} highest-ranked deals of each launcher that has any, in board order. */
     public static Map<DealStore, List<Deal>> boardDeals(DealSnapshot snapshot) {
         Map<DealStore, List<Deal>> shown = new LinkedHashMap<>();
         for (DealStore store : BOARD_ORDER) {

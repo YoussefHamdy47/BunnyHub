@@ -32,9 +32,10 @@ class DealRulesTest {
         var kept = DealRules.rank(rows);
         assertEquals(25, kept.stream().filter(d -> d.store() == DealStore.STEAM).count());
         assertEquals(33, kept.stream().filter(d -> d.store() == DealStore.GOG).count());
-        assertEquals(List.of("steam:3480", "steam:3390", "gog:1207658880", "gog:1207658918", "gog:1207658916", "gog:1207659230"),
-                kept.subList(0, 6).stream().map(Deal::id).toList(), "cheapest first; equal price keeps the bigger discount, then the order read");
-        for (int i = 1; i < kept.size(); i++) assertTrue(kept.get(i - 1).saleCents() <= kept.get(i).saleCents());
+        var steam = kept.stream().filter(d -> d.store() == DealStore.STEAM).toList();
+        var titles = steam.stream().map(Deal::title).toList();
+        assertTrue(titles.indexOf("Peggle Deluxe") > 0, "lowest price no longer leads the list");
+        assertTrue(steam.getFirst().reviews() > steam.stream().filter(d -> d.title().equals("Peggle Deluxe")).findFirst().orElseThrow().reviews());
         assertEquals(kept.size(), kept.stream().map(Deal::id).distinct().count(), "a game on both Steam pages appears once");
     }
 
@@ -43,9 +44,41 @@ class DealRulesTest {
         assertEquals(699, DealRules.rank(rows).getFirst().saleCents());
     }
 
-    @Test void byPriceIsCheapestFirstThenTheBiggerDiscount() {
-        var deals = List.of(DealFixtures.deal("steam:1", DealStore.STEAM, 500, 2000), DealFixtures.deal("steam:2", DealStore.STEAM, 199, 999),
-                DealFixtures.deal("gog:3", DealStore.GOG, 199, 3999));
-        assertEquals(List.of("gog:3", "steam:2", "steam:1"), DealRules.byPrice(deals).stream().map(Deal::id).toList());
+    static Deal candidate(String id, DealStore store, int rating, int reviews, int discount, long sale) {
+        return new Deal(id, store, id, URI.create("https://example.com/game"), sale,
+                sale * 100 / (100 - discount), discount, rating, reviews, Optional.empty());
+    }
+
+    @Test void ratingReviewCountAndDiscountEachImproveRanking() {
+        var base = candidate("base", DealStore.STEAM, 90, 10000, 80, 99);
+        for (var better : List.of(
+                candidate("rating", DealStore.STEAM, 98, 10000, 80, 999),
+                candidate("reviews", DealStore.STEAM, 90, 100000, 80, 999),
+                candidate("discount", DealStore.STEAM, 90, 10000, 90, 999))) {
+            assertEquals(better, DealRules.rank(List.of(base, better)).getFirst());
+        }
+    }
+
+    @Test void theBestCandidateIsKeptEvenWhenItArrivesAfterTheLimit() {
+        var rows = new java.util.ArrayList<Deal>();
+        for (int i = 0; i < 65; i++)
+            rows.add(candidate("ordinary:" + i, DealStore.STEAM, 85, 1000, 75, 99));
+        var best = candidate("best", DealStore.STEAM, 98, 100000, 90, 999);
+        rows.add(best);
+        var ranked = DealRules.rank(rows);
+        assertEquals(60, ranked.size());
+        assertEquals(best, ranked.getFirst());
+        java.util.Collections.reverse(rows);
+        assertEquals(ranked, DealRules.rank(rows), "source ordering must not choose the winners");
+    }
+
+    @Test void storesUseComparableRatingAndReviewScalesAndPriceOnlyBreaksTies() {
+        var steam = candidate("steam", DealStore.STEAM, 90, 10000, 80, 999);
+        var gog = candidate("gog", DealStore.GOG, 45, 1000, 80, 999);
+        assertEquals(DealRules.score(steam), DealRules.score(gog), 0.000001);
+        var cheap = candidate("cheap", DealStore.STEAM, 90, 10000, 80, 99);
+        assertEquals(cheap, DealRules.rank(List.of(steam, cheap)).getFirst());
+        assertEquals(cheap, new DealSnapshot(List.of(steam, cheap), DealFixtures.FETCHED, 2).deals().getFirst(),
+                "cached snapshots adopt the ranking immediately");
     }
 }
