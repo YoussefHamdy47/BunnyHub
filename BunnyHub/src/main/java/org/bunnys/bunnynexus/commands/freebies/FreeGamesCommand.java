@@ -33,7 +33,7 @@ public final class FreeGamesCommand {
             setDescription("See the games you can claim for free right now.");
             setExample("/free-games list launcher:epic");
             var launcher = new OptionData(OptionType.STRING, "launcher", "Only show one launcher", false);
-            for (FreebieStore store : FreebieStore.values()) launcher.addChoice(store.label(), store.id());
+            for (FreebieStore store : FreebieStore.values()) if (!store.news()) launcher.addChoice(store.label(), store.id());
             addOption(launcher);
         }
 
@@ -43,10 +43,10 @@ public final class FreeGamesCommand {
             String typed = ctx.getString("launcher");
             Optional<FreebieStore> store = Optional.empty();
             if (typed != null) {
-                store = FreebieStore.byId(typed.strip().toLowerCase(Locale.ROOT));
+                store = FreebieStore.byId(typed.strip().toLowerCase(Locale.ROOT)).filter(s -> !s.news());
                 if (store.isEmpty()) {
                     ctx.replyTransient(SystemEmbeds.error("Unknown launcher", "Try one of: " + String.join(", ",
-                            Arrays.stream(FreebieStore.values()).map(FreebieStore::id).toList()) + "."));
+                            Arrays.stream(FreebieStore.values()).filter(s -> !s.news()).map(FreebieStore::id).toList()) + "."));
                     return;
                 }
             }

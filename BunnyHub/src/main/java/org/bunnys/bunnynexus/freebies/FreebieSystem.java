@@ -51,6 +51,7 @@ public final class FreebieSystem {
     private final FreebieBroadcasts broadcasts;
     private final FreebieBroadcastWorker broadcastWorker;
     private EgDataFeed egdataFeed;
+    private ConsoleTips consoleTips;
     private FreebieEnrichment enrichment;
     private final FreebieReviewDecisions decisions;
     private Instant nextSweep = Instant.MIN; // Discovery thread only.
@@ -201,6 +202,10 @@ public final class FreebieSystem {
         system.epicDiscovery.start(system.epicThread, 0);
         if (system.steamDiscovery != null) system.steamDiscovery.start(system.discoveryThread, 35);
         if (system.enrichment != null) system.enrichment.start(system.discoveryThread, 45);
+        // Console giveaway tips from news headlines, hourly; the owner adds the real ones.
+        system.consoleTips = ConsoleTips.create(org.bunnys.handler.database.DB.getDatabase().getCollection(ConsoleTips.COLLECTION),
+                system.reviews::postTip, repository, runSoon, system.clock);
+        system.discoveryThread.scheduleWithFixedDelay(guarded("console tips", system.consoleTips::run), 60, 3600, TimeUnit.SECONDS);
         // Publications left open for a channel that is no longer enabled stop before the first tick can claim one.
         system.discoveryThread.execute(guarded("publishing clean-up", system.publisher::cleanUp));
         system.startSending(Duration.ofSeconds(10));
@@ -242,6 +247,7 @@ public final class FreebieSystem {
         if (steamFeed != null) steamFeed.close();
         if (egdataFeed != null) egdataFeed.close();
         if (steamRatings != null) steamRatings.close();
+        if (consoleTips != null) consoleTips.close();
     }
 
     // ------------------------------------------------------------------ housekeeping (discovery thread)
@@ -594,6 +600,26 @@ public final class FreebieSystem {
     public String stop(String actorId, String offerId) { return decisions.stop(actorId, offerId); }
     /** Owner fixes a wrongly detected launcher before approving; the confirmation then counts the new audience. */
     public String changeStore(String actorId, String offerId, String storeId) { return decisions.changeStore(actorId, offerId, storeId); }
+
+    /** The owner form that adds the game behind a console tip. */
+    public static net.dv8tion.jda.api.modals.Modal consoleTipForm(String tipId) { return ConsoleTips.form(tipId); }
+    public static final String CONSOLE_TIP_BUTTON = ConsoleTips.BUTTON, CONSOLE_TIP_MODAL = ConsoleTips.MODAL,
+            CONSOLE_TIP_LINK = ConsoleTips.LINK_FIELD, CONSOLE_TIP_TITLE = ConsoleTips.TITLE_FIELD, CONSOLE_TIP_ENDS = ConsoleTips.ENDS_FIELD;
+
+    /** Owner only. Checks the store link (Xbox: the Microsoft Store price) and queues the game for review. Blocking. */
+    public record TipResult(boolean added, String text) {}
+
+    public TipResult addConsoleGame(String actorId, String tipId, String link, String title, String ends) {
+        if (!config.isOwner(actorId)) return new TipResult(false, "Only the bot owner can add free games.");
+        if (consoleTips == null) return new TipResult(false, unavailable());
+        var added = consoleTips.add(tipId, link, title, ends);
+        return new TipResult(added.added(), added.text());
+    }
+
+    public String dismissConsoleTip(String actorId, String tipId) {
+        if (!config.isOwner(actorId)) return "Only the bot owner can do that.";
+        return consoleTips == null ? unavailable() : consoleTips.dismiss(tipId);
+    }
 
     /** Approved (or auto-sent) giveaways that a newly configured channel can still claim. */
     public List<FreebieOffer> liveFor(FreebieStore store) { return repository.liveApproved(store, clock.instant()); }

@@ -48,7 +48,7 @@ public class FreebieQuickModal extends BunnyModal {
         List<String> notices = new ArrayList<>();
         Set<FreebieStore> saved = EnumSet.noneOf(FreebieStore.class);
         for (FreebieSection section : sections) {
-            var result = FreebieServerSetup.saveSection(guild, section, channel, role, EnumSet.copyOf(section.stores()),
+            var result = FreebieServerSetup.saveSection(guild, section, channel, role, EnumSet.copyOf(section.stores().stream().filter(FreebieStore::defaultOn).toList()),
                     event.getUser().getId(), subscriptions);
             notices.add(result.notice());
             saved.addAll(result.stores());

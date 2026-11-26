@@ -33,12 +33,12 @@ final class FreebieCards {
             case BATTLENET -> AppDesign.Emojis.BATTLENET;
             case ITCHIO -> AppDesign.Emojis.ITCHIO;
             case DRM_FREE -> AppDesign.Emojis.DRM_FREE;
-            case PLAYSTATION -> AppDesign.Emojis.PLAYSTATION;
-            case XBOX -> AppDesign.Emojis.XBOX;
+            case PLAYSTATION, PS_PLUS -> AppDesign.Emojis.PLAYSTATION;
+            case XBOX, GAME_PASS -> AppDesign.Emojis.XBOX;
             case SWITCH -> AppDesign.Emojis.SWITCH;
             case ANDROID -> AppDesign.Emojis.ANDROID;
             case IOS -> AppDesign.Emojis.IOS;
-            case OTHER -> "🎁";
+            case OTHER, CONSOLE_ITEMS -> "🎁";
         };
     }
 

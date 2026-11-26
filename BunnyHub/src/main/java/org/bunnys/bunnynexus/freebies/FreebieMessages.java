@@ -158,7 +158,7 @@ public final class FreebieMessages {
     /** With other games of the same Epic release pending, one extra button approves them together (one first post). */
     static List<ActionRow> reviewControls(FreebieOffer offer, int groupPending) {
         var menu = StringSelectMenu.create(STORE_MENU_PREFIX + ":" + offer.id()).setPlaceholder("Wrong launcher? Change it here");
-        for (FreebieStore store : FreebieStore.values()) menu.addOption(store.label(), store.id(), Emoji.fromFormatted(FreebieCards.emoji(store)));
+        for (FreebieStore store : FreebieStore.values()) if (!store.news()) menu.addOption(store.label(), store.id(), Emoji.fromFormatted(FreebieCards.emoji(store)));
         menu.setDefaultValues(offer.store().id());
         List<Button> decisions = new ArrayList<>(List.of(Button.success(BUTTON_PREFIX + ":approve:" + offer.id(), "Approve"),
                 Button.danger(BUTTON_PREFIX + ":reject:" + offer.id(), "Reject"), clearButton()));

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+	<channel>
+		<title>Pure Xbox | Latest Updates</title>
+		<link>https://www.purexbox.com/feeds/latest</link>
+		<description></description>
+		<language>en</language>
+		<copyright>(c) 2026 Hookshot Media</copyright>
+		<lastBuildDate>Thu, 26 Nov 2026 21:29:59 GMT</lastBuildDate>
+		<docs>https://www.purexbox.com/feeds</docs>
+		<generator>dgpCMS/1.0 https://hookshot.media</generator>
+		<webMaster>help@purexbox.com (Pure Xbox)</webMaster>
+		<ttl>5</ttl>
+		<image>
+			<url>https://images.purexbox.com/site/icon/128x128.png</url>
+			<title>Pure Xbox</title>
+			<link>https://www.purexbox.com/</link>
+			<width>128</width>
+			<height>128</height>
+		</image>
+		<atom:link href="https://www.purexbox.com/feeds/latest" rel="self" type="application/rss+xml" />
+		<item>
+			<pubDate>Thu, 26 Nov 2026 13:00:00 GMT</pubDate>
+			<title>Free Play Days: Try These Xbox Games For Free (November 26-29)</title>
+			<description><![CDATA[<p><strong>Download and try these games for free this weekend.</strong></p><p>Welcome back to your Thursday roundup of all things Xbox Free Play Days!</p><p>So far, we know of <em>two</em> games in the lineup, thanks to some digging from Redditor <a href="https://www.reddit.com/r/xbox/comments/1y5ldk4/preofficial_free_play_days_warhammer_40000/">Oliomono</a>. They're usually on the money with this sort of thing, but only the official word from Xbox will reveal the proper lineup this week. We'll make sure to update this article once we know more.</p><p>Read the <a href="https://www.purexbox.com/news/2026/11/free-play-days-try-these-xbox-games-for-free-november-26-29">full article on purexbox.com</a></p>]]></description>
+			<guid isPermaLink="false">https://www.purexbox.com/#article-209653</guid>
+			<link>https://www.purexbox.com/news/2026/11/free-play-days-try-these-xbox-games-for-free-november-26-29</link>
+			<media:thumbnail url="https://images.purexbox.com/ef37e04b22d94/small.jpg" />
+			<media:content url="https://images.purexbox.com/ef37e04b22d94/large.jpg" medium="image" type="image/jpeg" />
+		</item>
+<item>
+			<pubDate>Thu, 26 Nov 2026 19:00:00 GMT</pubDate>
+			<title>&#039;The Results Are Very, Very Impressive&#039; - Digital Foundry Praises GTA 6 On Xbox One</title>
+			<description><![CDATA[<p><strong>"﻿Latency is also exceptional - at least in context.".</strong></p><p>The smartypants over at <a href="https://www.digitalfoundry.net/features/gta-6-on-xbox-one-tested-the-power-of-the-cloud-delivers-save-for-one-big-issue">Digital Foundry</a> are still putting in the work, this time going deep into the nitty gritty of how well <a href="https://www.purexbox.com/games/xbox-series-x/grand_theft_auto_6">GTA 6</a> performs when streamed through the Xbox Cloud Gaming app on Xbox One.</p><p>Following their rigorous testing on Xbox Series X and Series S, PS5 and PS5 Pro, the boffin boys have now spent a good week putting streamed performance, latency and image quality under the cosh.</p><p>Read the <a href="https://www.purexbox.com/news/2026/11/the-results-are-very-very-impressive-digital-foundry-praises-gta-6-on-xbox-one">full article on purexbox.com</a></p>]]></description>
+			<guid isPermaLink="false">https://www.purexbox.com/#article-209689</guid>
+			<link>https://www.purexbox.com/news/2026/11/the-results-are-very-very-impressive-digital-foundry-praises-gta-6-on-xbox-one</link>
+			<media:thumbnail url="https://images.purexbox.com/29d839fd208da/small.jpg" />
+			<media:content url="https://images.purexbox.com/29d839fd208da/large.jpg" medium="image" type="image/jpeg" />
+		</item>
+</channel></rss>

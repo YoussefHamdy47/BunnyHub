@@ -49,7 +49,10 @@ public record FreebieOffer(String id, String sourceId, FreebieStore store, Strin
     public static final String BONUS_STEPS = "The game is already free to play. Log in on its Epic Games Store page and claim the limited-time bonus bundle before it ends.";
     public boolean bonus() { return BONUS_STEPS.equals(instructions); }
 
-    public String sourceLabel() { return id.startsWith("epic:") ? "Epic Games" : id.startsWith("steam:") ? "Steam" : "GamerPower"; }
+    public String sourceLabel() {
+        if (id.startsWith("console:")) return store == FreebieStore.XBOX ? "Microsoft Store" : "PlayStation Store";
+        return id.startsWith("epic:") ? "Epic Games" : id.startsWith("steam:") ? "Steam" : "GamerPower";
+    }
     public String region() {
         return id.startsWith("epic:") ? "US (en-US); availability elsewhere may differ"
                 : id.startsWith("steam:") ? "US store; availability elsewhere may differ" : "Not specified by source";

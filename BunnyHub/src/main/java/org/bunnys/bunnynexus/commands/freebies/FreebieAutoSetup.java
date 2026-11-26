@@ -56,7 +56,7 @@ public final class FreebieAutoSetup {
 
         /** The section's launchers that still need the section's own channel. */
         List<FreebieStore> remaining(FreebieSection section) {
-            return section.stores().stream().filter(s -> !channels.containsKey(s)).toList();
+            return section.stores().stream().filter(FreebieStore::defaultOn).filter(s -> !channels.containsKey(s)).toList();
         }
     }
 

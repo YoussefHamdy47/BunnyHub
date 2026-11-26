@@ -52,7 +52,7 @@ public final class FreebieDashboardForms {
         var post = StringSelectMenu.create(FreebieDashboard.POST_FIELD).setRequiredRange(1, 1);
         for (FreebieCatchUp choice : FreebieCatchUp.values()) post.addOption(choice.option(), String.valueOf(choice.code()));
         post.setDefaultValues(String.valueOf(FreebieCatchUp.AUTO.code()));
-        var ticked = mask == 0 ? EnumSet.copyOf(section.stores()) : FreebieDashboard.unmask(section, mask);
+        var ticked = mask == 0 ? EnumSet.copyOf(section.stores().stream().filter(FreebieStore::defaultOn).toList()) : FreebieDashboard.unmask(section, mask);
         var launchers = StringSelectMenu.create(FreebieDashboard.LAUNCHERS_FIELD).setRequiredRange(0, section.stores().size()).setRequired(false)
                 .setPlaceholder("Nothing ticked = section off");
         for (FreebieStore store : section.stores()) launchers.addOption(store.label(), store.id());
@@ -95,7 +95,8 @@ public final class FreebieDashboardForms {
         var sections = StringSelectMenu.create(FreebieDashboard.SECTIONS_FIELD).setRequiredRange(1, FreebieSection.values().length);
         for (FreebieSection section : FreebieSection.values())
             sections.addOption(section.label(), String.valueOf(section.code()),
-                    String.join(", ", section.stores().stream().map(FreebieStore::label).toList()));
+                    String.join(", ", section.stores().stream().filter(s -> !s.news()).map(FreebieStore::label).toList())
+                            + (section.stores().stream().anyMatch(FreebieStore::news) ? " · PS Plus & Game Pass news" : ""));
         sections.setDefaultValues(String.valueOf(FreebieSection.MAJOR_PC.code()));
         var role = EntitySelectMenu.create(FreebieDashboard.ROLE_FIELD, SelectTarget.ROLE).setRequiredRange(0, 1).setRequired(false)
                 .setPlaceholder("No ping");

@@ -24,6 +24,7 @@ class FreebiePresentationTest {
     @Test void everyStoreGetsTheSameCardAndButton() {
         List<String> expected = List.of("Price", "Ends", "Launcher");
         for (var store : FreebieStore.values()) {
+            if (store.news()) continue; // PS Plus, Game Pass and in-game items are never free-game offers.
             var offer = FreebieUnitTest.offer("Example Giveaway", store);
             try (var message = FreebieMessages.alert(offer, Optional.empty(), "same-reference")) {
                 var card = message.getEmbeds().getFirst();

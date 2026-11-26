@@ -19,7 +19,7 @@ public final class DealCards {
     public static final String PREFIX = "deals";
     static final String ALL = "all";
     /** Under every heading: what "good" means, and the order. */
-    static final String SUBTITLE = "-# 75% off or more · best rated first (rating and how many people reviewed it), then biggest discount, then lowest price";
+    static final String SUBTITLE = "-# 75% off or more · most loved first (high ratings from lots of players), then biggest discount, then lowest price";
     /** Above every footer: the stores price by region, so a reader elsewhere may see another price or currency. */
     static final String REGIONAL = "-# Prices are US store prices in USD. Steam and GOG price by region, so yours may be different.";
     static final String CREDIT = "Prices from Steam and GOG";

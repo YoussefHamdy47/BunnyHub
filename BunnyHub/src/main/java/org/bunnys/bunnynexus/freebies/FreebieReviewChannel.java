@@ -176,6 +176,23 @@ final class FreebieReviewChannel {
         }
     }
 
+    /** Posts a console tip ({@link ConsoleTips}) where that console is reviewed. Blocking, on the discovery worker only. */
+    boolean postTip(FreebieStore store, net.dv8tion.jda.api.utils.messages.MessageCreateData card) {
+        var channel = channel(jda.get(), config.reviewChannelFor(store));
+        if (channel == null) channel = channel(jda.get(), config.reviewChannelId());
+        if (channel == null) return false;
+        try {
+            channel.sendMessage(card).timeout(45, TimeUnit.SECONDS).submit().get(50, TimeUnit.SECONDS);
+            return true;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (ExecutionException | TimeoutException | RuntimeException failure) {
+            BunnyLog.warning("[Freebies] Console tip not posted | " + FailureDiagnostics.describe(failure));
+            return false;
+        }
+    }
+
     void notifyOwners(String text) {
         var channel = channel(jda.get(), config.reviewChannelId());
         if (channel == null) { BunnyLog.warning("[Freebies] " + text); return; }

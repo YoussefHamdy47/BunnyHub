@@ -35,10 +35,11 @@ class DealRulesTest {
         var steam = kept.stream().filter(d -> d.store() == DealStore.STEAM).toList();
         var titles = steam.stream().map(Deal::title).toList();
         assertTrue(titles.indexOf("Peggle Deluxe") > 0, "lowest price no longer leads the list");
-        assertEquals("TOEM: A Photo Adventure", titles.getFirst(), "99% positive from 10K reviews, 90% off");
-        // Same rating point (97% from thousands of reviews): the bigger discount, then the lower price.
-        assertTrue(titles.indexOf("Peggle Deluxe") < titles.indexOf("Gorogoa"), "80% off before 75% off");
-        assertTrue(titles.indexOf("Euro Truck Simulator 2") < titles.indexOf("South Park™: The Stick of Truth™"), "$4.99 before $7.49");
+        assertEquals("Euro Truck Simulator 2", titles.getFirst(), "97% positive from hundreds of thousands of reviews");
+        assertTrue(titles.indexOf("Euro Truck Simulator 2") < titles.indexOf("TOEM: A Photo Adventure"), "loved by many before 99% from 10K");
+        // The same 97% with more players ranks higher.
+        assertTrue(titles.indexOf("Gorogoa") < titles.indexOf("Peggle Deluxe"), "19K reviews before 13K");
+        assertTrue(titles.indexOf("Euro Truck Simulator 2") < titles.indexOf("South Park™: The Stick of Truth™"));
         for (int i = 1; i < kept.size(); i++) assertTrue(DealRules.ORDER.compare(kept.get(i - 1), kept.get(i)) <= 0);
         assertEquals(kept.size(), kept.stream().map(Deal::id).distinct().count(), "a game on both Steam pages appears once");
     }
@@ -70,6 +71,21 @@ class DealRulesTest {
         assertTrue(DealRules.score(two) < 0.4, String.valueOf(DealRules.score(two)));
         assertEquals(93, DealRules.ratingPoints(many));
         assertEquals(List.of(many, two), DealRules.byRelevance(List.of(two, many)), "rating by review count comes before discount and price");
+    }
+
+    @Test void gamesLovedByMillionsLeadNicheOnesWithAHigherPercent() {
+        // Real Steam deals from 2026-11-26.
+        var rdr2 = candidate("rdr2", DealStore.STEAM, 92, 874972, 75, 1499);
+        var detroit = candidate("detroit", DealStore.STEAM, 96, 234044, 90, 399);
+        var hades = candidate("hades", DealStore.STEAM, 97, 288223, 75, 624);
+        var toem = candidate("toem", DealStore.STEAM, 99, 10397, 90, 199);
+        var kindergarten = candidate("kindergarten", DealStore.STEAM, 98, 5656, 75, 374);
+        var fewer = candidate("fewer", DealStore.STEAM, 98, 2235, 80, 299);
+        assertEquals(List.of(hades, rdr2, detroit, toem, kindergarten, fewer),
+                DealRules.byRelevance(List.of(fewer, toem, kindergarten, detroit, rdr2, hades)));
+        // Popularity does not carry a poorly rated game: 70% from a million reviews stays below 98% from 5,000.
+        var mixed = candidate("mixed", DealStore.STEAM, 70, 1000000, 90, 99);
+        assertTrue(DealRules.relevance(mixed) < DealRules.relevance(kindergarten));
     }
 
     @Test void thenTheBiggerDiscountThenTheLowerPrice() {

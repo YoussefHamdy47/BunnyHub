@@ -63,14 +63,30 @@ final class DealRules {
     static int ratingPoints(Deal deal) { return (int) Math.floor(score(deal) * 100 + 1e-9); }
 
     /**
-     * Best first: confidence-adjusted rating (by the point), then the bigger discount, then the lower price after the
-     * discount. The exact score and the ID only settle what is left, so the order is stable whatever order the stores
-     * list games in.
+     * Points a tenfold larger audience is worth: a game with ten times the reviews ranks like one rated
+     * {@value} points higher. Steam rounds percent positive, so past a few thousand reviews the rating alone cannot
+     * tell a 98% indie game from a 92% one that a million people played. With this, Red Dead Redemption 2 (92%,
+     * 875K reviews) leads TOEM (99%, 10K).
      */
-    static final Comparator<Deal> ORDER = Comparator.comparingInt(DealRules::ratingPoints).reversed()
+    static final double POPULARITY = 8;
+
+    /** {@link #score} in points plus {@link #POPULARITY} per tenfold reviews: well loved by many people ranks first. */
+    static double relevance(Deal deal) {
+        return score(deal) * 100 + POPULARITY * Math.log10(Math.max(1, deal.reviews()));
+    }
+
+    /** {@link #relevance} in whole points: games within a point of each other count as equal. */
+    static int relevancePoints(Deal deal) { return (int) Math.floor(relevance(deal) + 1e-9); }
+
+    /**
+     * Best first: relevance (rating, confidence in it and how many people played, by the point), then the bigger
+     * discount, then the lower price after the discount. The exact relevance and the ID only settle what is left, so
+     * the order is stable whatever order the stores list games in.
+     */
+    static final Comparator<Deal> ORDER = Comparator.comparingInt(DealRules::relevancePoints).reversed()
             .thenComparing(Comparator.comparingInt(Deal::percentOff).reversed())
             .thenComparingLong(Deal::saleCents)
-            .thenComparing(Comparator.comparingDouble(DealRules::score).reversed())
+            .thenComparing(Comparator.comparingDouble(DealRules::relevance).reversed())
             .thenComparing(Deal::id);
 
     static List<Deal> byRelevance(List<Deal> deals) {
