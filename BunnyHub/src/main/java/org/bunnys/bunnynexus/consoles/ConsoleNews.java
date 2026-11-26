@@ -28,15 +28,21 @@ import java.util.function.Function;
  */
 final class ConsoleNews {
     static final Duration RECENT = Duration.ofDays(7), DAILY = Duration.ofHours(20), OPEN = Duration.ofDays(3),
-            WEEKEND_MAX_AGE = Duration.ofDays(3), FORGET = Duration.ofDays(60);
+            WEEKEND_MAX_AGE = Duration.ofDays(3), FORGET = Duration.ofDays(60),
+            KEEP = Duration.ofDays(90);
     static final int TRIES = 3, SEEN_KEPT = 200;
 
+    /** The feeds. Empty: unchanged since the last committed read. */
     interface Source {
-        List<PsPlusPost> psPlus() throws IOException;
+        Optional<List<PsPlusPost>> psPlus() throws IOException;
         List<String> shelf(GamePass.Shelf shelf) throws IOException;
         List<GamePass.Game> games(List<String> ids) throws IOException;
-        List<FreeWeekend> freeWeekends() throws IOException;
-        List<ConsoleItem> items() throws IOException;
+        Optional<List<FreeWeekend>> freeWeekends() throws IOException;
+        Optional<List<ConsoleItem>> items() throws IOException;
+        /** What was read is stored: unchanged feeds may be skipped from now on. */
+        default void committed() {}
+        /** Storing failed: read everything again next time. */
+        default void rolledBack() {}
     }
 
     /**
@@ -108,6 +114,8 @@ final class ConsoleNews {
         /** The send failed: the channel is unclaimed and its failure counted. */
         void failed(String postId, String channelId);
         void close(String postId);
+        /** Deletes closed posts created before {@code before}: they only record who got them. */
+        default void forget(Instant before) {}
     }
 
     interface Discord {
@@ -135,8 +143,11 @@ final class ConsoleNews {
         state = step("Game Pass", this::gamePass, state, now);
         state = step("Free Play Days", this::freeWeekends, state, now);
         state = step("In-game items", this::items, state, now);
-        store.save(state);
+        try { store.save(state); }
+        catch (RuntimeException failure) { source.rolledBack(); throw failure; }
+        source.committed();
         deliver(now);
+        store.forget(now.minus(KEEP));
     }
 
     private static State step(String what, Step step, State state, Instant now) {
@@ -148,7 +159,9 @@ final class ConsoleNews {
     }
 
     State psPlus(State state, Instant now) throws IOException {
-        var seen = once(state.psSeen(), source.psPlus(), PsPlusPost::id, PsPlusPost::published, RECENT, now,
+        var feed = source.psPlus();
+        if (feed.isEmpty()) return state;
+        var seen = once(state.psSeen(), feed.get(), PsPlusPost::id, PsPlusPost::published, RECENT, now,
                 post -> {
                     store.create(Post.of(post.id(), FreebieStore.PS_PLUS, now, post));
                     BunnyLog.success("[Console] New: " + post.heading());
@@ -157,7 +170,9 @@ final class ConsoleNews {
     }
 
     State freeWeekends(State state, Instant now) throws IOException {
-        var seen = once(state.weekendsSeen(), source.freeWeekends(), FreeWeekend::id, FreeWeekend::published, WEEKEND_MAX_AGE, now,
+        var feed = source.freeWeekends();
+        if (feed.isEmpty()) return state;
+        var seen = once(state.weekendsSeen(), feed.get(), FreeWeekend::id, FreeWeekend::published, WEEKEND_MAX_AGE, now,
                 weekend -> {
                     store.create(Post.of(weekend.id(), FreebieStore.GAME_PASS, now, weekend));
                     BunnyLog.success("[Console] New: Free Play Days " + weekend.dates());
@@ -215,7 +230,9 @@ final class ConsoleNews {
     }
 
     State items(State state, Instant now) throws IOException {
-        var listed = source.items();
+        var feed = source.items();
+        if (feed.isEmpty()) return state;
+        var listed = feed.get();
         Map<String, ConsoleItem> byId = new LinkedHashMap<>();
         for (ConsoleItem item : listed) byId.putIfAbsent(item.id(), item);
         var diff = diff(state.itemsSeen(), state.itemsPending(), List.copyOf(byId.keySet()), state.itemsSeeded(), now);

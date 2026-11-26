@@ -94,11 +94,11 @@ class ConsoleNewsTest {
 
     ConsoleNews news() {
         return new ConsoleNews(new ConsoleNews.Source() {
-            @Override public List<PsPlusPost> psPlus() { return feed; }
+            @Override public Optional<List<PsPlusPost>> psPlus() { return Optional.of(feed); }
             @Override public List<String> shelf(GamePass.Shelf shelf) { return shelves.get(shelf); }
             @Override public List<GamePass.Game> games(List<String> ids) { return ids.stream().map(catalog::get).filter(Objects::nonNull).toList(); }
-            @Override public List<FreeWeekend> freeWeekends() { return weekends; }
-            @Override public List<ConsoleItem> items() { return items; }
+            @Override public Optional<List<FreeWeekend>> freeWeekends() { return Optional.of(weekends); }
+            @Override public Optional<List<ConsoleItem>> items() { return Optional.of(items); }
         }, store, new ConsoleNews.Discord() {
             @Override public boolean ready() { return true; }
             @Override public Optional<String> send(String guildId, String channelId, MessageCreateData message) {
@@ -272,8 +272,42 @@ class ConsoleNewsTest {
         assertTrue(card.plainText().contains("+ 15 more"));
     }
 
+    @Test void anUnchangedFeedChangesNothingAndReadsCountOnlyOnceStored() {
+        subs.add(new Subscription("g", "c1", FreebieStore.PS_PLUS, Optional.empty()));
+        List<String> calls = new ArrayList<>();
+        var unchanged = new ConsoleNews(new ConsoleNews.Source() {
+            @Override public Optional<List<PsPlusPost>> psPlus() { return Optional.empty(); }
+            @Override public List<String> shelf(GamePass.Shelf shelf) { return List.of(); }
+            @Override public List<GamePass.Game> games(List<String> ids) { return List.of(); }
+            @Override public Optional<List<FreeWeekend>> freeWeekends() { return Optional.empty(); }
+            @Override public Optional<List<ConsoleItem>> items() { return Optional.empty(); }
+            @Override public void committed() { calls.add("commit"); }
+            @Override public void rolledBack() { calls.add("rollback"); }
+        }, store, new ConsoleNews.Discord() {
+            @Override public boolean ready() { return true; }
+            @Override public Optional<String> send(String g, String c, MessageCreateData m) { sent.add(c); return Optional.empty(); }
+        }, s -> subs.stream().filter(x -> x.store() == s).toList(), () -> false);
+        unchanged.run(now);
+        assertEquals(List.of(), sent);
+        assertEquals(List.of(), store.state.psSeen());
+        assertEquals(List.of("commit"), calls);
+
+        var broken = new Memory() { @Override public void save(ConsoleNews.State s) { throw new IllegalStateException("db down"); } };
+        var failing = new ConsoleNews(new ConsoleNews.Source() {
+            @Override public Optional<List<PsPlusPost>> psPlus() { return Optional.of(List.of(ps("p", now))); }
+            @Override public List<String> shelf(GamePass.Shelf shelf) { return List.of(); }
+            @Override public List<GamePass.Game> games(List<String> ids) { return List.of(); }
+            @Override public Optional<List<FreeWeekend>> freeWeekends() { return Optional.empty(); }
+            @Override public Optional<List<ConsoleItem>> items() { return Optional.empty(); }
+            @Override public void committed() { calls.add("commit"); }
+            @Override public void rolledBack() { calls.add("rollback"); }
+        }, broken, (ConsoleNews.Discord) null, s -> List.of(), () -> false);
+        assertThrows(IllegalStateException.class, () -> failing.run(now));
+        assertEquals(List.of("commit", "rollback"), calls, "not stored: the feed is read again next time");
+    }
+
     /** In memory, same rules as the MongoDB store. */
-    static final class Memory implements ConsoleNews.Store {
+    static class Memory implements ConsoleNews.Store {
         ConsoleNews.State state = ConsoleNews.State.EMPTY;
         final Map<String, ConsoleNews.Post> posts = new LinkedHashMap<>();
         @Override public ConsoleNews.State state() { return state; }

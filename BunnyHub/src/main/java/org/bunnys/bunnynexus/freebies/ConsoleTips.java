@@ -11,7 +11,6 @@ import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 import okhttp3.Dns;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
 import org.bson.Document;
 import org.bunnys.handler.cards.Card;
 import org.bunnys.utils.BunnyLog;
@@ -38,12 +37,19 @@ import static com.mongodb.client.model.Updates.*;
 final class ConsoleTips implements AutoCloseable {
     static final String COLLECTION = "ConsoleTips", BUTTON = "console_tip", MODAL = "console_tip_form";
     static final String LINK_FIELD = "link", TITLE_FIELD = "title", ENDS_FIELD = "ends";
-    static final Duration MAX_AGE = Duration.ofDays(3);
+    static final Duration MAX_AGE = Duration.ofDays(3), KEEP = Duration.ofDays(30);
     static final int PER_RUN = 5, MAX_BYTES = 4 * 1024 * 1024;
     private static final Pattern PS_STORE = Pattern.compile("^/[a-z]{2}-[a-z]{2}/(product|concept)/([A-Za-z0-9_-]{1,64})/?$");
     private static final Set<String> HOSTS = Set.of(XboxStore.HOST, "blog.playstation.com", "www.pushsquare.com", "www.purexbox.com");
 
-    interface Http { byte[] get(URI url) throws IOException; }
+    /** {@link ConditionalFetch} in production. */
+    interface Http {
+        /** Empty: unchanged since the last committed read. */
+        Optional<byte[]> ifChanged(URI url) throws IOException;
+        byte[] get(URI url) throws IOException;
+        void commit();
+        void rollback();
+    }
     interface Review { boolean post(FreebieStore store, MessageCreateData message); }
 
     private final MongoCollection<Document> tips;
@@ -69,35 +75,47 @@ final class ConsoleTips implements AutoCloseable {
             return addresses;
         }, Duration.ofSeconds(20));
         var calls = new FreebieHttp.Calls();
-        Http http = url -> calls.execute(client, new Request.Builder().url(url.toString()).header("User-Agent", "BunnyNexus-Freebies/2.0").get().build(),
-                response -> {
-                    if (response.code() != 200) throw new IOException("HTTP " + response.code() + " from " + url.getHost());
-                    byte[] body = response.body().byteStream().readNBytes(MAX_BYTES + 1);
-                    if (body.length > MAX_BYTES) throw new IOException("response too large");
-                    return body;
-                });
+        var fetch = new ConditionalFetch(client, calls, "BunnyNexus-Freebies/2.0", MAX_BYTES);
+        Http http = new Http() {
+            @Override public Optional<byte[]> ifChanged(URI url) throws IOException { return fetch.ifChanged(url); }
+            @Override public byte[] get(URI url) throws IOException { return fetch.get(url); }
+            @Override public void commit() { fetch.commit(); }
+            @Override public void rollback() { fetch.rollback(); }
+        };
         return new ConsoleTips(tips, http, calls, review, repository, newGame, clock);
     }
 
     static String id(String link) { return FreebieMessages.nonce(link).substring(0, 16); }
 
-    /** Reads every news feed, then posts up to {@link #PER_RUN} new tips. Returns how many were posted. */
+    /**
+     * Reads every news feed (an unchanged one costs a 304 and is skipped), then posts up to {@link #PER_RUN} new tips.
+     * Returns how many were posted.
+     */
     int run() {
         Instant now = clock.instant();
-        for (var source : ConsoleHeadlines.SOURCES) {
-            List<ConsoleHeadlines.Headline> headlines;
-            try { headlines = ConsoleHeadlines.parse(http.get(source.feed()), source); }
-            catch (IOException | RuntimeException failure) {
-                BunnyLog.warning("[Freebies] Console tips: " + source.name() + " unreadable | " + FailureDiagnostics.describe(failure));
-                continue;
+        try {
+            for (var source : ConsoleHeadlines.SOURCES) {
+                Optional<byte[]> body;
+                try { body = http.ifChanged(source.feed()); }
+                catch (IOException | RuntimeException failure) {
+                    BunnyLog.warning("[Freebies] Console tips: " + source.name() + " unreadable | " + FailureDiagnostics.describe(failure));
+                    continue;
+                }
+                if (body.isEmpty()) continue;
+                for (var h : ConsoleHeadlines.parse(body.get(), source)) {
+                    if (!h.published().isAfter(now.minus(MAX_AGE)) || h.published().isAfter(now.plus(Duration.ofDays(1)))) continue;
+                    tips.updateOne(eq("_id", id(h.link())), new Document("$setOnInsert", new Document("link", h.link()).append("title", h.title())
+                            .append("source", h.source().name()).append("store", h.source().store().id()).append("published", Date.from(h.published()))
+                            .append("foundAt", Date.from(now)).append("state", "new")), new UpdateOptions().upsert(true));
+                }
             }
-            for (var h : headlines) {
-                if (!h.published().isAfter(now.minus(MAX_AGE)) || h.published().isAfter(now.plus(Duration.ofDays(1)))) continue;
-                tips.updateOne(eq("_id", id(h.link())), new Document("$setOnInsert", new Document("link", h.link()).append("title", h.title())
-                        .append("source", h.source().name()).append("store", h.source().store().id()).append("published", Date.from(h.published()))
-                        .append("foundAt", Date.from(now)).append("state", "new")), new UpdateOptions().upsert(true));
-            }
+            // Tips older than a month are only history.
+            tips.deleteMany(lt("foundAt", Date.from(now.minus(KEEP))));
+        } catch (RuntimeException failure) {
+            http.rollback();
+            throw failure;
         }
+        http.commit();
         int posted = 0;
         for (Document tip : tips.find(eq("state", "new")).sort(new Document("foundAt", 1)).limit(PER_RUN)) {
             var store = FreebieStore.byId(tip.getString("store")).orElse(FreebieStore.PLAYSTATION);

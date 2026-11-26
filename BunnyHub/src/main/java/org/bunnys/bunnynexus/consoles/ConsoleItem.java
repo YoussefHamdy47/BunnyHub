@@ -20,7 +20,8 @@ public record ConsoleItem(String id, String title, URI link, List<String> platfo
     public ConsoleItem { platforms = List.copyOf(platforms); }
 
     static final String HOST = "www.gamerpower.com";
-    static final String FEED = "https://" + HOST + "/api/giveaways";
+    /** Only console DLC ("loot"): 5 KB instead of the 20 KB full list. */
+    static final String FEED = "https://" + HOST + "/api/filter?platform=ps4.ps5.xbox-one.xbox-series-xs.switch&type=loot";
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss", Locale.ROOT);
     /** Console names in GamerPower's platform text, and how a post shows them. */
     private static final Map<String, String> CONSOLES = new LinkedHashMap<>();

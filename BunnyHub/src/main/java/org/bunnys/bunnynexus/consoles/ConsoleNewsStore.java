@@ -104,6 +104,8 @@ final class ConsoleNewsStore implements ConsoleNews.Store {
 
     @Override public void close(String postId) { posts.updateOne(eq("_id", postId), set("open", false)); }
 
+    @Override public void forget(Instant before) { posts.deleteMany(and(eq("open", false), lt("createdAt", Date.from(before)))); }
+
     private static List<String> strings(Document d, String field) { return List.copyOf(d.getList(field, String.class, List.of())); }
 
     private static Optional<Instant> instant(Document d, String field) { return Optional.ofNullable(d.getDate(field)).map(Date::toInstant); }

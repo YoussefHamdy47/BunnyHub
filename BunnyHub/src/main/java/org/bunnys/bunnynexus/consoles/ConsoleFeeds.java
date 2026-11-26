@@ -2,12 +2,13 @@ package org.bunnys.bunnynexus.consoles;
 
 import okhttp3.Dns;
 import okhttp3.OkHttpClient;
-import okhttp3.Request;
+import org.bunnys.bunnynexus.freebies.ConditionalFetch;
 import org.bunnys.bunnynexus.freebies.FreebieHttp;
 import org.bunnys.bunnynexus.freebies.GamerPowerFeed;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.*;
@@ -21,9 +22,10 @@ final class ConsoleFeeds implements ConsoleNews.Source, AutoCloseable {
 
     private final OkHttpClient client = FreebieHttp.client(ConsoleFeeds::lookup, TIMEOUT);
     private final FreebieHttp.Calls calls = new FreebieHttp.Calls();
-    private final String userAgent;
+    /** Feeds that have not changed answer 304 with no body (the PlayStation Blog feed is 128 KB uncompressed). */
+    private final ConditionalFetch fetch;
 
-    ConsoleFeeds(String userAgent) { this.userAgent = userAgent; }
+    ConsoleFeeds(String userAgent) { fetch = new ConditionalFetch(client, calls, userAgent, MAX_BYTES); }
 
     static List<InetAddress> lookup(String host) throws UnknownHostException {
         if (!HOSTS.contains(host)) throw new UnknownHostException("Unapproved console news host");
@@ -32,11 +34,22 @@ final class ConsoleFeeds implements ConsoleNews.Source, AutoCloseable {
         return addresses;
     }
 
-    @Override public List<PsPlusPost> psPlus() throws IOException { return PsPlusPost.parse(get(PS_FEED)); }
+    @Override public Optional<List<PsPlusPost>> psPlus() throws IOException {
+        return fetch.ifChanged(URI.create(PS_FEED)).map(PsPlusPost::parse);
+    }
 
-    @Override public List<FreeWeekend> freeWeekends() throws IOException { return FreeWeekend.parse(get(FreeWeekend.FEED)); }
+    @Override public Optional<List<FreeWeekend>> freeWeekends() throws IOException {
+        return fetch.ifChanged(URI.create(FreeWeekend.FEED)).map(FreeWeekend::parse);
+    }
 
-    @Override public List<ConsoleItem> items() throws IOException { return ConsoleItem.parse(get(ConsoleItem.FEED)); }
+    /** Always read (5 KB): an item waiting for its daily post is posted from this read. */
+    @Override public Optional<List<ConsoleItem>> items() throws IOException {
+        return Optional.of(ConsoleItem.parse(fetch.get(URI.create(ConsoleItem.FEED))));
+    }
+
+    @Override public void committed() { fetch.commit(); }
+
+    @Override public void rolledBack() { fetch.rollback(); }
 
     @Override public List<String> shelf(GamePass.Shelf shelf) throws IOException {
         var ids = GamePass.ids(get(GamePass.siglUrl(shelf)));
@@ -51,15 +64,7 @@ final class ConsoleFeeds implements ConsoleNews.Source, AutoCloseable {
         return games;
     }
 
-    private byte[] get(String url) throws IOException {
-        var request = new Request.Builder().url(url).header("User-Agent", userAgent).get().build();
-        return calls.execute(client, request, response -> {
-            if (response.code() != 200) throw new IOException("HTTP " + response.code() + " from " + response.request().url().host());
-            byte[] body = response.body().byteStream().readNBytes(MAX_BYTES + 1);
-            if (body.length > MAX_BYTES) throw new IOException("response too large");
-            return body;
-        });
-    }
+    private byte[] get(String url) throws IOException { return fetch.get(URI.create(url)); }
 
     @Override public void close() { calls.close(); }
 }

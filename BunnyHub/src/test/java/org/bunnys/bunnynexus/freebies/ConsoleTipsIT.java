@@ -35,10 +35,15 @@ class ConsoleTipsIT {
     }
 
     ConsoleTips tips() {
-        return new ConsoleTips(db.getCollection(ConsoleTips.COLLECTION), url -> {
-            byte[] body = responses.get(url.toString());
-            if (body == null) throw new java.io.IOException("no answer");
-            return body;
+        return new ConsoleTips(db.getCollection(ConsoleTips.COLLECTION), new ConsoleTips.Http() {
+            @Override public Optional<byte[]> ifChanged(URI url) throws java.io.IOException { return Optional.of(get(url)); }
+            @Override public byte[] get(URI url) throws java.io.IOException {
+                byte[] body = responses.get(url.toString());
+                if (body == null) throw new java.io.IOException("no answer");
+                return body;
+            }
+            @Override public void commit() {}
+            @Override public void rollback() {}
         }, () -> {}, (FreebieStore store, MessageCreateData card) -> posted.add(store.id() + " " + card.getComponents().size()),
                 repository, () -> newGames++, Clock.fixed(now, ZoneOffset.UTC));
     }
