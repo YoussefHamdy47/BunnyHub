@@ -386,23 +386,61 @@ public final class FreebieRepository {
      * each row joins its channel's open drop window ({@link FreebieDrops}) and waits for the window's end.
      */
     public int planDeliveries(FreebieOffer offer, Iterable<FreebieSubscriptions.Subscription> audience, Instant now) {
+        return plan(offer, audience, now).planned();
+    }
+
+    /** {@code due}: the latest time a planned row waits for (its drop's end), so the sender can be woken right then. */
+    record Plan(int planned, Instant due) {}
+
+    /**
+     * Games of one Epic release are approved in the same housekeeping pass, so a release row needs only a short window
+     * ({@link #RELEASE_WINDOW}) to share the post. A release game planned after its channel already has a post (or a
+     * queued drop) for that release joins that drop instead of opening a new one: it is added to the weekly post silently
+     * rather than posted (and possibly pinged) again.
+     */
+    Plan plan(FreebieOffer offer, Iterable<FreebieSubscriptions.Subscription> audience, Instant now) {
         int planned = 0;
+        Instant due = now;
         List<Document> batch = new ArrayList<>();
         var key = routes.announcementKey(offer.id());
-        var window = dropWindow;
+        boolean release = key.filter(k -> k.startsWith("epic|")).isPresent();
+        var window = dropWindow.map(w -> release && w.compareTo(RELEASE_WINDOW) > 0 ? RELEASE_WINDOW : w);
+        Map<String, String> earlier = window.isPresent() && release ? releaseDrops(key.get(), offer.id()) : Map.of();
+        Map<String, Instant> openUntil = earlier.isEmpty() ? Map.of() : drops.openUntil(earlier.values(), now);
         Map<String, FreebieDrops.Window> opened = new HashMap<>();
         for (var subscription : audience) {
             var row = withKey(delivery(offer, subscription, false, now), key, now);
             if (window.isPresent()) {
-                // A replayed fan-out may open a window without inserting anything; a later game then just joins it.
-                var drop = opened.computeIfAbsent(subscription.channelId(), channel -> drops.open(channel, window.get(), now));
-                inDrop(row, drop.key(), drop.until());
+                String joined = earlier.get(subscription.channelId());
+                if (joined != null) {
+                    // Still collecting: wait with the others. Already posted (or being posted): join it now.
+                    Instant at = openUntil.getOrDefault(joined, now.plus(ASSEMBLY));
+                    inDrop(row, joined, at);
+                } else {
+                    // A replayed fan-out may open a window without inserting anything; a later game then just joins it.
+                    var drop = opened.computeIfAbsent(subscription.channelId(), channel -> drops.open(channel, window.get(), now));
+                    inDrop(row, drop.key(), drop.until());
+                }
             }
+            Instant rowDue = row.getDate("nextAttemptAt").toInstant();
+            if (rowDue.isAfter(due)) due = rowDue;
             batch.add(row);
             if (batch.size() == INSERT_BATCH) { planned += insertIgnoringDuplicates(batch); batch.clear(); }
         }
         if (!batch.isEmpty()) planned += insertIgnoringDuplicates(batch);
-        return planned;
+        return new Plan(planned, due);
+    }
+
+    /** How long an Epic release's drop collects its games; later games of the release join the post silently. */
+    static final Duration RELEASE_WINDOW = Duration.ofSeconds(20);
+
+    /** Channel → the drop already holding another game of this release there (first post or catch-up). */
+    private Map<String, String> releaseDrops(String releaseKey, String offerId) {
+        Map<String, String> found = new HashMap<>();
+        for (Document d : deliveries.find(and(eq("announcementKey", releaseKey), exists("dropKey", true), ne("offerId", offerId)))
+                .projection(new Document("channelId", 1).append("dropKey", 1)))
+            found.putIfAbsent(d.getString("channelId"), d.getString("dropKey"));
+        return found;
     }
 
     /** Catch-up for one channel; false when it already has (or had) a delivery for this offer. */

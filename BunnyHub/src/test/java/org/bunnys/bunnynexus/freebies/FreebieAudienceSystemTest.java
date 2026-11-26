@@ -28,6 +28,7 @@ class FreebieAudienceSystemTest {
         when(repository.reviews()).thenReturn(mock(FreebieReviewStore.class));
         when(repository.summaries()).thenReturn(mock(FreebieSummaryStore.class));
         when(client.getStatus()).thenReturn(JDA.Status.CONNECTED);
+        when(repository.plan(any(), any(), any())).thenReturn(new FreebieRepository.Plan(0, now));
         system = new FreebieSystem(new FreebieConfig("100000000000000099", "100000000000000099", Set.of(OWNER), 10, 90, dmCap),
                 repository, subscriptions, () -> client, Clock.fixed(now, ZoneOffset.UTC), new GamerPowerFeed());
         return system;

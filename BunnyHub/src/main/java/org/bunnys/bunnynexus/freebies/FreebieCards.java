@@ -81,10 +81,10 @@ final class FreebieCards {
     static MessageEmbed embed(FreebieOffer offer, String footer, boolean steps) {
         String mark = emoji(offer.store());
         var card = Embeds.of(mark, text(title(offer.title()), 250 - mark.length()))
-                .setAuthor("BunnyNexus • FREE GAME • " + offer.store().label(), null, icon(offer.store()))
+                .setAuthor("BunnyNexus • " + (offer.bonus() ? "FREE BONUS" : "FREE GAME") + " • " + offer.store().label(), null, icon(offer.store()))
                 .setUrl(offer.claimUrl().toString())
                 .setDescription(text(offer.description(), 300))
-                .addField(PRICE, offer.worth().map(w -> "~~" + text(w, 40) + "~~ → **FREE**").orElse("**FREE**"), true)
+                .addField(PRICE, offer.bonus() ? "**FREE BONUS BUNDLE**" : offer.worth().map(w -> "~~" + text(w, 40) + "~~ → **FREE**").orElse("**FREE**"), true)
                 .addField(ENDS, deadline(offer), true)
                 .addField(LAUNCHER, offer.store().label(), true);
         if (offer.id().startsWith("epic:")) card.addField(REGION, text(offer.region(), 1000), false);

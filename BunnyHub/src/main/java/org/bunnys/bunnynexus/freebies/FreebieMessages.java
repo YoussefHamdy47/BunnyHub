@@ -355,7 +355,7 @@ public final class FreebieMessages {
             if (listed == LIVE_CARD_ROWS) break;
             String line = "**[" + text(title(offer.title()), 120) + "](" + offer.claimUrl() + ")**\n"
                     + FreebieCards.emoji(offer.store()) + " " + offer.store().label()
-                    + offer.worth().map(w -> " · ~~" + text(w, 20) + "~~").orElse("") + " · **Free**"
+                    + (offer.bonus() ? " · **Free bonus bundle**" : offer.worth().map(w -> " · ~~" + text(w, 20) + "~~").orElse("") + " · **Free**")
                     + offer.endsAt().map(end -> " · ends <t:" + end.getEpochSecond() + ":R>").orElse("");
             card.section(line, Button.link(offer.claimUrl().toString(), "Claim"));
             listed++;

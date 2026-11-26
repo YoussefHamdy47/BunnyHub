@@ -76,6 +76,31 @@ class FreebieDropsIT {
         assertNotEquals(first.getString("dropKey"), row(game(9), CHANNEL).getString("dropKey"));
     }
 
+    @Test void aReleaseCollectsBrieflyAndALateGameJoinsTheChannelsPostInsteadOfANewDrop() {
+        String release = "epic|m|1795795200";
+        for (int i = 1; i <= 3; i++)
+            db.getCollection(FreebieRepository.OFFERS).insertOne(new Document("_id", game(i).id()).append("route", "announcement")
+                    .append("announcementKey", release));
+        var first = repository.plan(game(1), List.of(in(CHANNEL)), now);
+        var row1 = row(game(1), CHANNEL);
+        Instant end = now.plus(FreebieRepository.RELEASE_WINDOW);
+        assertEquals(Date.from(end), row1.getDate("nextAttemptAt"), "games approved in the same pass need only a short window");
+        assertEquals(end, first.due(), "the sender is woken when the drop ends");
+        repository.plan(game(2), List.of(in(CHANNEL)), now.plusSeconds(5));
+        assertEquals(row1.getString("dropKey"), row(game(2), CHANNEL).getString("dropKey"));
+        assertEquals(row1.getDate("nextAttemptAt"), row(game(2), CHANNEL).getDate("nextAttemptAt"), "it waits with the others");
+
+        // An hour later the weekly post is out. A late game of the release joins that drop (and so that post, silently)
+        // where the channel has it; a channel without one opens its own.
+        Instant later = now.plus(Duration.ofHours(1));
+        var late = repository.plan(game(3), List.of(in(CHANNEL), in(OTHER)), later);
+        assertEquals(2, late.planned());
+        assertEquals(row1.getString("dropKey"), row(game(3), CHANNEL).getString("dropKey"));
+        assertEquals(Date.from(later.plus(FreebieRepository.ASSEMBLY)), row(game(3), CHANNEL).getDate("nextAttemptAt"));
+        assertNotEquals(row1.getString("dropKey"), row(game(3), OTHER).getString("dropKey"));
+        assertEquals(later.plus(FreebieRepository.RELEASE_WINDOW), late.due());
+    }
+
     @Test void onlyOneClaimCreatesTheDropsFirstPage() throws Exception {
         String key = FreebieDrops.key(CHANNEL, now);
         var store = repository.announcements();

@@ -27,6 +27,11 @@ class FreebieDiscoveryTest {
             delays.add(call.getArgument(1));
             return null;
         }).when(executor).schedule(any(Runnable.class), anyLong(), eq(TimeUnit.SECONDS));
+        doAnswer(call -> {
+            scheduled.add(call.getArgument(0));
+            delays.add(TimeUnit.MILLISECONDS.toSeconds(call.getArgument(1)));
+            return null;
+        }).when(executor).schedule(any(Runnable.class), anyLong(), eq(TimeUnit.MILLISECONDS));
         doAnswer(call -> { ((Runnable) call.getArgument(0)).run(); return null; })
                 .when(executor).execute(any(Runnable.class));
         discovery = new FreebieDiscovery(new FreebieConfig("123456789012345678", Set.of("223456789012345678"), 10),
@@ -36,6 +41,26 @@ class FreebieDiscoveryTest {
 
     private static FreebieFeed.Result empty() {
         return new FreebieFeed.Result(FreebieFeed.State.COMPLETE, List.of(), Optional.empty(), "");
+    }
+
+    @Test void epicSchedulesAtTheReleaseBoundaryWithMillisecondPrecision() {
+        when(feed.provider()).thenReturn(FreebieFeed.Provider.EPIC);
+        when(clock.instant()).thenReturn(Instant.parse("2026-11-26T15:59:59.750Z"));
+        discovery.start(executor, 25);
+        verify(executor).schedule(any(Runnable.class), eq(250L), eq(TimeUnit.MILLISECONDS));
+    }
+
+    @Test void epicReleaseChecksStillHonorExplicitProviderRetryAfter() {
+        when(feed.provider()).thenReturn(FreebieFeed.Provider.EPIC);
+        when(clock.instant()).thenReturn(Instant.parse("2026-11-26T15:59:00Z"));
+        when(feed.poll()).thenReturn(new FreebieFeed.Result(FreebieFeed.State.FAILED, List.of(),
+                Optional.of(Duration.ofMinutes(5)), "HTTP 429"));
+        scheduled.getFirst().run();
+        // Normal exponential backoff is shortened to the release boundary, but Retry-After wins.
+        verify(executor).schedule(any(Runnable.class), eq(300000L), eq(TimeUnit.MILLISECONDS));
+        when(clock.instant()).thenReturn(Instant.parse("2026-11-26T16:00:00Z"));
+        discovery.pollNow();
+        verify(feed, times(1)).poll();
     }
 
     @Test void failedPersistenceDoesNotReportSuccessOrResetBackoff() {

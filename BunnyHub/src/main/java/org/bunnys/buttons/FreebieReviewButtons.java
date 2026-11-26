@@ -25,7 +25,7 @@ public class FreebieReviewButtons extends BunnyButton {
     @Override
     public void execute(BunnyHub client, ButtonInteractionEvent event, String[] args) {
         var system = FreebieSystem.current().orElse(null);
-        if (system == null) { deny(event, "Free-game alerts are not running."); return; }
+        if (system == null) { deny(event, FreebieSystem.unavailable()); return; }
         var config = system.config();
         if (!config.isOwner(event.getUser().getId()) || !config.isReviewChannel(event.getChannelId())) {
             deny(event, "Only the bot owner can review free-game alerts.");

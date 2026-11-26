@@ -78,10 +78,10 @@ class FreebieStaleDestinationTest {
         var deleted = new FreebieSubscriptions.Subscription(GUILD, CHANNEL, FreebieStore.EPIC, Optional.empty());
         when(subscriptions.forStore(FreebieStore.EPIC)).thenReturn(List.of(kept, deleted));
         List<FreebieSubscriptions.Subscription> planned = new ArrayList<>();
-        when(repository.planDeliveries(eq(offer), any(), eq(now))).thenAnswer(call -> {
+        when(repository.plan(eq(offer), any(), eq(now))).thenAnswer(call -> {
             Iterable<FreebieSubscriptions.Subscription> audience = call.getArgument(1);
             StreamSupport.stream(audience.spliterator(), false).forEach(planned::add);
-            return planned.size();
+            return new FreebieRepository.Plan(planned.size(), now);
         });
         system.fanOut(offer);
         assertEquals(List.of(kept), planned);

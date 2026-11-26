@@ -27,6 +27,21 @@ class FreebieUnitTest {
                 Instant.parse("2026-09-25T00:00:00Z"), FreebieOffer.State.APPROVED, Optional.empty(), Optional.empty(), Optional.empty(), true, false, 1);
     }
 
+    @Test void aBonusBundleIsNeverShownAsAPaidGameTurnedFree() {
+        var bonus = new FreebieOffer("epic:ns:id:a:b", "ns:id:a:b", FreebieStore.EPIC, "PC, Epic Games Store", "Firestone", "An idle RPG",
+                FreebieOffer.BONUS_STEPS, Optional.empty(), Optional.empty(), URI.create("https://store.epicgames.com/en-US/p/firestone"),
+                URI.create("https://store.epicgames.com/en-US/p/firestone"), Optional.of(Instant.parse("2026-12-03T16:00:00Z")),
+                Instant.parse("2026-11-26T16:00:00Z"), FreebieOffer.State.APPROVED, Optional.empty(), Optional.empty(), Optional.empty(), true, false, 1);
+        assertTrue(bonus.bonus());
+        assertFalse(offer("Paid", FreebieStore.EPIC).bonus());
+        assertEquals("**Free bonus bundle** · the game is free to play", FreebieComponentCards.price(bonus));
+        assertEquals("~~$19.99~~ → **Free**", FreebieComponentCards.price(offer("Paid", FreebieStore.EPIC)));
+        var embed = FreebieCards.embed(bonus, "footer", true);
+        assertTrue(embed.getAuthor().getName().contains("FREE BONUS"));
+        assertTrue(embed.getFields().stream().anyMatch(f -> "**FREE BONUS BUNDLE**".equals(f.getValue())));
+        assertTrue(embed.getFields().stream().noneMatch(f -> String.valueOf(f.getValue()).contains("~~")));
+    }
+
     /** offer() and offersIn() project to FreebieOffer.FIELDS: every field read() looks at must be in that list. */
     @Test void theOfferProjectionCoversEveryFieldReadUses() throws IOException {
         String source = Files.readString(Path.of("src/main/java/org/bunnys/bunnynexus/freebies/FreebieOffer.java")).replace("\r\n", "\n");

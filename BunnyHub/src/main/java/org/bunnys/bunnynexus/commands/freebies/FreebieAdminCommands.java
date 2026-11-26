@@ -20,7 +20,7 @@ public final class FreebieAdminCommands {
             var system = FreebieSystem.current().orElse(null);
             String user = ctx.getUser().getId();
             String text;
-            if (system == null) text = "Free-game alerts are not running (check FREEBIE_* in .env and the startup log).";
+            if (system == null) text = FreebieSystem.unavailable();
             else if (!system.config().isOwner(user)) text = "Only freebie owners can use this.";
             else {
                 ctx.defer(true);
