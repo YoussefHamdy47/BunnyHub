@@ -61,6 +61,27 @@ public final class UpdatePrefs {
                 new UpdateOptions().upsert(true));
     }
 
+    /**
+     * Counts {@code adId} as shown only if the server is still due one (no ad since {@code every}, this ad under
+     * {@code times}). Atomic, so two alerts built at once for the same server never both carry an ad.
+     */
+    public boolean claimPromo(String guildId, String adId, Instant now, java.time.Duration every, int times) {
+        var due = com.mongodb.client.model.Filters.and(eq("_id", guildId),
+                com.mongodb.client.model.Filters.or(com.mongodb.client.model.Filters.exists("lastPromoAt", false),
+                        com.mongodb.client.model.Filters.lte("lastPromoAt", Date.from(now.minus(every)))),
+                com.mongodb.client.model.Filters.or(com.mongodb.client.model.Filters.exists("promos." + adId, false),
+                        com.mongodb.client.model.Filters.lt("promos." + adId, times)));
+        try {
+            var result = prefs.updateOne(due, Updates.combine(Updates.inc("promos." + adId, 1), Updates.set("lastPromoAt", Date.from(now))),
+                    new UpdateOptions().upsert(true));
+            return result.getModifiedCount() > 0 || result.getUpsertedId() != null;
+        } catch (com.mongodb.MongoWriteException taken) {
+            // The document exists but is not due: the upsert's insert hit the same _id. Someone else showed one.
+            if (taken.getError().getCategory() == com.mongodb.ErrorCategory.DUPLICATE_KEY) return false;
+            throw taken;
+        }
+    }
+
     /** The bot left the server. */
     public void forget(String guildId) { prefs.deleteOne(eq("_id", guildId)); }
 

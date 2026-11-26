@@ -40,7 +40,13 @@ public final class HelpMenu {
 
     static final int MAX_MENU_OPTIONS = 25;
 
-    private static final String TAGLINE = "Study timers, free-game alerts and moderation tools.";
+    private static final String TAGLINE = "Free-game alerts, a live Deals Board, study timers and moderation tools.";
+    static final String SUPPORT = "https://discord.gg/gGsdHYhTFv";
+
+    /** Where to get help and how to add the bot, under the overview's intro. */
+    static String links(java.util.Optional<String> invite) {
+        return "[Support server](" + SUPPORT + ")" + invite.map(url -> " · [Add BunnyNexus to your server](" + url + ")").orElse("");
+    }
 
     private HelpMenu() {}
 
@@ -134,7 +140,8 @@ public final class HelpMenu {
         StringBuilder intro = new StringBuilder();
         if (notice != null) intro.append(notice).append("\n\n");
         intro.append(TAGLINE).append("\n")
-                .append("Type `/` to run a command, or pick one from the menu below to see how it works.");
+                .append("Type `/` to run a command, or pick one from the menu below to see how it works.\n")
+                .append(links(org.bunnys.bunnynexus.freebies.FreebieInvite.url()));
         embed.description(intro.toString());
 
         if (catalog.isEmpty()) {

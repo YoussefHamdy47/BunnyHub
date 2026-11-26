@@ -11,6 +11,14 @@ class ClientReadyTest {
         assertEquals("> Database: GBF | Servers: 2", ClientReady.startupScope("GBF", List.of("A", "B"), false));
     }
 
+    @Test void theStatusSaysWhatTheBotDoesAndFitsDiscordsLimit() {
+        var lines = ClientReady.statusLines(58);
+        assertEquals(3, lines.size());
+        assertTrue(lines.contains("58 good Steam and GOG deals right now · /deals"));
+        assertTrue(ClientReady.statusLines(0).contains("Big Steam and GOG sales · /deals"), "no count before the first refresh");
+        assertTrue(lines.stream().allMatch(l -> l.length() <= 128));
+    }
+
     @Test void aTestInstanceAlsoNamesTheServersItCanReach() {
         assertEquals("> Database: GBF_test | Servers: 1 | TEST INSTANCE in: Bunny Test",
                 ClientReady.startupScope("GBF_test", List.of("Bunny Test"), true));

@@ -25,6 +25,9 @@ public final class FreebieInvite {
 
     static void set(String inviteUrl) { url = inviteUrl; }
 
+    /** The bot's invite link, once Discord reported the bot ready. */
+    public static java.util.Optional<String> url() { return java.util.Optional.ofNullable(url); }
+
     /** A subtext line for under a card's footer, or nothing before the bot is ready. */
     static String line() {
         String current = url;

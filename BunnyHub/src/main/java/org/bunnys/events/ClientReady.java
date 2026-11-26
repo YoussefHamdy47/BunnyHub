@@ -56,7 +56,35 @@ public class ClientReady extends BunnyEvent {
 
         BunnyLog.raw(BunnyLog.GREEN, "> Startup Time: " + String.format("%.2f", duration) + " seconds");
 
-        event.getJDA().getPresence().setActivity(Activity.playing("BunnyClient"));
+        rotateStatus(event.getJDA());
+    }
+
+    /** How often the custom status changes; Discord rate-limits presence updates, so this stays slow. */
+    static final long STATUS_EVERY_MINUTES = 15;
+
+    /**
+     * A custom status that says what the bot does, rotated every {@link #STATUS_EVERY_MINUTES} minutes on JDA's own
+     * scheduler. Only in-memory data (the deals snapshot), so it never blocks on the database.
+     */
+    private static void rotateStatus(net.dv8tion.jda.api.JDA jda) {
+        var turn = new java.util.concurrent.atomic.AtomicInteger();
+        Runnable next = () -> {
+            var lines = statusLines(org.bunnys.bunnynexus.deals.DealSystem.current().map(d -> d.snapshot().deals().size()).orElse(0));
+            jda.getPresence().setActivity(Activity.customStatus(lines.get(Math.floorMod(turn.getAndIncrement(), lines.size()))));
+        };
+        next.run();
+        jda.getGatewayPool().scheduleAtFixedRate(() -> {
+            try { next.run(); } catch (RuntimeException ignored) { /* the next turn tries again */ }
+        }, STATUS_EVERY_MINUTES, STATUS_EVERY_MINUTES, java.util.concurrent.TimeUnit.MINUTES);
+    }
+
+    /** The statuses in turn; the deals line only when there are deals to show. */
+    static java.util.List<String> statusLines(int deals) {
+        var lines = new java.util.ArrayList<>(java.util.List.of(
+                "Free games from Epic, Steam, GOG and more · /free-games",
+                "Set up free-game alerts with /free-games setup"));
+        lines.add(deals > 0 ? deals + " good Steam and GOG deals right now · /deals" : "Big Steam and GOG sales · /deals");
+        return lines;
     }
 
     /** "> Database: X | Servers: N", and on a test instance the server names (up to ten). */

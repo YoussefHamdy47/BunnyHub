@@ -57,6 +57,7 @@ class DealRepositoryIT {
         assertEquals(Optional.of("k2"), b.contentKey());
         assertEquals(Optional.of(now), b.postedAt());
         assertEquals(List.of(guild), repository.boardsOn("", 100).stream().map(DealRepository.Board::guildId).toList());
+        assertEquals(java.util.Set.of(guild), repository.guildsWithBoardOn());
     }
 
     @Test void pingSettingsAndTheLastPingAreKept() {
@@ -99,6 +100,7 @@ class DealRepositoryIT {
         assertEquals(Optional.of("I can't post in that channel"), off.offReason());
         assertTrue(off.messageId().isEmpty());
         assertTrue(repository.boardsOn("", 100).isEmpty());
+        assertTrue(repository.guildsWithBoardOn().isEmpty());
         repository.setBoard(guild, channel, DealRepository.Ping.NONE, admin, now);
         var back = repository.board(guild).orElseThrow();
         assertTrue(back.on());
