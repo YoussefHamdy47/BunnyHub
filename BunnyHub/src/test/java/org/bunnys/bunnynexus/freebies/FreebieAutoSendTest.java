@@ -33,6 +33,7 @@ class FreebieAutoSendTest {
         when(subscriptions.forStore(any())).thenReturn(List.of());
         when(subscriptions.audience(any())).thenReturn(new FreebieSubscriptions.Audience(3, 2));
         when(client.getStatus()).thenReturn(JDA.Status.CONNECTED);
+        when(repository.plan(any(), any(), any())).thenReturn(new FreebieRepository.Plan(0, now));
         system = new FreebieSystem(new FreebieConfig(CHANNEL, CHANNEL, Set.of(OWNER), 10, 90, 0, autoSend),
                 repository, subscriptions, () -> client, Clock.fixed(now, ZoneOffset.UTC), new GamerPowerFeed());
         return system;

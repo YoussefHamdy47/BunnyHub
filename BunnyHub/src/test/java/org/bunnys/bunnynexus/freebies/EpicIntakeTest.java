@@ -35,12 +35,44 @@ class EpicIntakeTest {
         assertEquals(1, decode(root).candidates().size());
     }
     @Test void discountsVouchersAndPermanentFreeGamesAreExcluded() throws Exception {
-        for (String field : List.of("discountPrice", "originalPrice", "voucherDiscount")) {
-            var root = root(); active(root).get("price", Document.class).get("totalPrice", Document.class).put(field, field.equals("originalPrice") ? 0 : 100);
+        for (String field : List.of("discountPrice", "voucherDiscount")) {
+            var root = root(); active(root).get("price", Document.class).get("totalPrice", Document.class).put(field, 100);
             assertEquals(1, decode(root).candidates().size());
         }
         var root = root(); promotion(active(root)).get("discountSetting", Document.class).put("discountPercentage", 50);
         assertEquals(1, decode(root).candidates().size());
+        // A free-to-play listing with no timed promotion of its own is just the store's free catalogue.
+        root = root(); active(root).get("price", Document.class).get("totalPrice", Document.class).put("originalPrice", 0);
+        active(root).get("promotions", Document.class).put("promotionalOffers", List.of());
+        assertEquals(1, decode(root).candidates().size());
+        // ...and a "promotion" running far longer than a giveaway is not one either.
+        root = root(); active(root).get("price", Document.class).get("totalPrice", Document.class).put("originalPrice", 0);
+        promotion(active(root)).put("endDate", "2027-01-15T15:00:00Z");
+        assertEquals(1, decode(root).candidates().size());
+    }
+
+    static final Instant RELEASE = Instant.parse("2026-11-26T16:00:30Z");
+    static byte[] november() throws Exception {
+        try (var input = EpicIntakeTest.class.getResourceAsStream("/epic/captured-2026-11-26-US.json")) { return input.readAllBytes(); }
+    }
+
+    @Test void aTimedBonusForAnAlreadyFreeGameIsPartOfTheRelease() throws Exception {
+        var result = new EpicIntake().decode(november(), RELEASE);
+        assertEquals(FreebieFeed.State.COMPLETE, result.state());
+        assertEquals(List.of("Firestone – Idle Clicker Online RPG", "Bread and Fred"), result.candidates().stream().map(FreebieFeed.Candidate::title).toList(),
+                "paid games still on sale, add-ons and bundles stay out");
+        var firestone = result.candidates().getFirst();
+        var bread = result.candidates().get(1);
+        // Labelled as the bonus it is, never as a paid game turned free.
+        assertEquals(Optional.empty(), firestone.worth());
+        assertEquals(FreebieOffer.BONUS_STEPS, firestone.instructions());
+        assertEquals(Optional.of("$14.99"), bread.worth());
+        assertEquals("", bread.instructions());
+        // Same promotion window, so the same release group: one post for both.
+        assertEquals(bread.startsAt(), firestone.startsAt());
+        assertEquals(FreebieFields.groupKey(FreebieStore.EPIC, bread.startsAt()), FreebieFields.groupKey(FreebieStore.EPIC, firestone.startsAt()));
+        assertNotEquals(bread.identity(), firestone.identity());
+        assertEquals(java.net.URI.create("https://store.epicgames.com/en-US/p/firestone-online-idle-rpg-bfd04b"), firestone.claimPage());
     }
     @Test void epicGamesCarryTheirListPrice() throws Exception {
         var candidates = decode(root()).candidates();

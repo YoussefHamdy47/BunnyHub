@@ -8,6 +8,8 @@ import java.util.*;
 
 /** Strict parser for the public en-US/US promotions response captured on 2026-10-13. */
 final class EpicIntake {
+    /** The longest timed bonus accepted for an already-free game; Epic's giveaways run one to two weeks. */
+    static final Duration BONUS_MAX = Duration.ofDays(31);
     static final URI ENDPOINT = URI.create("https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=US&allowCountries=US");
     private static final JsonFactory JSON = JsonFactory.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(24).maxStringLength(16384)
@@ -78,8 +80,14 @@ final class EpicIntake {
         }
         if (start == null) return Optional.empty();
         Document price = doc(doc(row, "price"), "totalPrice");
-        if (number(price, "discountPrice") != 0 || number(price, "originalPrice") <= 0 || number(price, "voucherDiscount") != 0)
+        long original = number(price, "originalPrice");
+        if (number(price, "discountPrice") != 0 || original < 0 || number(price, "voucherDiscount") != 0)
             return Optional.empty();
+        // A game that is already free to play is listed only for a timed giveaway of its own (Epic's 0% promotion), which is
+        // an in-game bonus bundle claimed through Epic. Ordinary free-to-play listings carry no active promotion and never
+        // get here; a promotion longer than a giveaway runs is not treated as one.
+        boolean bonus = original == 0;
+        if (bonus && Duration.between(start, end).compareTo(BONUS_MAX) > 0) return Optional.empty();
         if (!text(price, "currencyCode", 3).equals("USD")) throw new IllegalArgumentException();
         List<Document> mappings = list(row, "offerMappings");
         List<String> slugs = mappings.stream().filter(m -> "productHome".equals(m.getString("pageType")))
@@ -89,8 +97,8 @@ final class EpicIntake {
         Optional<URI> image = list(row, "keyImages").stream().filter(i -> "OfferImageWide".equals(i.getString("type")))
                 .map(i -> safeImage(i.getString("url"))).flatMap(Optional::stream).findFirst();
         return Optional.of(new FreebieFeed.Candidate(FreebieFeed.Provider.EPIC, identity + ":" + start + ":" + end, FreebieStore.EPIC,
-                "PC, Epic Games Store", text(row, "title", 256), text(row, "description", 8000), "",
-                Optional.of(usd(number(price, "originalPrice"))), image, page, page, Optional.of(start), Optional.of(end),
+                "PC, Epic Games Store", text(row, "title", 256), text(row, "description", 8000), bonus ? FreebieOffer.BONUS_STEPS : "",
+                bonus ? Optional.empty() : Optional.of(usd(original)), image, page, page, Optional.of(start), Optional.of(end),
                 "US (en-US); availability elsewhere may differ"));
     }
     /**

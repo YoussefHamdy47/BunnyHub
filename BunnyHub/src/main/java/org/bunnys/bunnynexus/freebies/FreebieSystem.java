@@ -36,6 +36,7 @@ public final class FreebieSystem {
     private final FreebieDiscovery discovery;
     private EpicFeed epicFeed;
     private FreebieDiscovery epicDiscovery;
+    private ScheduledExecutorService epicThread;
     private SteamFeed steamFeed;
     private FreebieDiscovery steamDiscovery;
     private final FreebieLifecyclePlanner lifecycle;
@@ -106,6 +107,19 @@ public final class FreebieSystem {
     public FreebieFeatures features() { return features; }
 
     public static Optional<FreebieSystem> current() { return Optional.ofNullable(instance); }
+
+    /** Set when start() decided to stay off; null while starting or running. */
+    private static volatile String offReason;
+
+    /**
+     * What to tell an owner while {@link #current()} is empty: off with the reason start() logged, or still starting
+     * (the bot connects to Discord before its services start, so commands can arrive a few seconds earlier).
+     */
+    public static String unavailable() {
+        String reason = offReason;
+        return reason != null ? "Free-game alerts are off: " + reason + ". Fix the FREEBIE_* settings and restart."
+                : "Free-game alerts are still starting after a restart. Try again in a few seconds.";
+    }
     public FreebieConfig config() { return config; }
     public FreebieRepository repository() { return repository; }
     public FreebieSubscriptions subscriptions() { return subscriptions; }
@@ -129,7 +143,8 @@ public final class FreebieSystem {
         List<String> problems = new ArrayList<>();
         var config = FreebieConfig.fromEnvironment(problems);
         if (config.isEmpty()) {
-            BunnyLog.warning("[Freebies] Disabled: " + String.join("; ", problems));
+            offReason = String.join("; ", problems);
+            BunnyLog.warning("[Freebies] Disabled: " + offReason);
             return;
         }
         FreebieRepository repository;
@@ -141,6 +156,7 @@ public final class FreebieSystem {
             subscriptions.installIndexes();
         } catch (RuntimeException failure) {
             // The rest of the bot keeps running; alerts stay off until the next restart.
+            offReason = "database setup failed";
             BunnyLog.error("[Freebies] Disabled: database setup failed | " + FailureDiagnostics.describe(failure));
             return;
         }
@@ -157,14 +173,22 @@ public final class FreebieSystem {
             system.egdataFeed = new EgDataFeed(system.clock);
             system.enrichment = new FreebieEnrichment(repository.offerCollection(), system.egdataFeed, system.clock);
         }
+        offReason = null;
         instance = system;
         system.discoveryThread.scheduleWithFixedDelay(guarded("housekeeping", system::housekeepingTick), 20, 30, TimeUnit.SECONDS);
-        Runnable runSoon = () -> system.housekeepingRequested = true;
+        // A new game is reviewed, approved and planned at once (on the discovery thread, like every housekeeping run)
+        // instead of on the next 30-second tick.
+        Runnable runSoon = () -> {
+            system.housekeepingRequested = true;
+            system.background("housekeeping", system::housekeepingTick);
+        };
         system.discovery.onNewGiveaways(runSoon);
         system.epicDiscovery.onNewGiveaways(runSoon);
         if (system.steamDiscovery != null) system.steamDiscovery.onNewGiveaways(runSoon);
         system.discovery.start(system.discoveryThread, 15);
-        system.epicDiscovery.start(system.discoveryThread, 25);
+        // Slow review/history calls and other feeds must not delay Epic's wall-clock release check.
+        system.epicThread = Executors.newSingleThreadScheduledExecutor(daemon("EpicDiscovery"));
+        system.epicDiscovery.start(system.epicThread, 0);
         if (system.steamDiscovery != null) system.steamDiscovery.start(system.discoveryThread, 35);
         if (system.enrichment != null) system.enrichment.start(system.discoveryThread, 45);
         // Publications left open for a channel that is no longer enabled stop before the first tick can claim one.
@@ -194,6 +218,7 @@ public final class FreebieSystem {
         publisher.close();
         notifier.close();
         discoveryThread.shutdownNow();
+        if (epicThread != null) epicThread.shutdownNow();
         sendingThread.shutdown();
         try {
             // Let in-flight sends record their outcome; anything left is recovered safely on next start.
@@ -306,7 +331,12 @@ public final class FreebieSystem {
             var counts = repository.counts(offer.id());
             if (counts.open() == 0)
                 repository.transition(offer.id(), FreebieOffer.State.APPROVED, FreebieOffer.State.COMPLETED, null, now)
-                        .ifPresent(reviews::summarize);
+                        .ifPresent(done -> {
+                            // Confirmed by Discord: "sent" rows have a message ID from a successful post or join.
+                            BunnyLog.success("[Freebies] Delivered " + done.title() + ": " + counts.sent() + " sent, "
+                                    + counts.failed() + " failed, " + counts.cancelled() + " cancelled.");
+                            reviews.summarize(done);
+                        });
             else reviews.progress(offer, counts, now);
         }
         var awaiting = repository.summaries().awaiting(now, 50);
@@ -331,7 +361,8 @@ public final class FreebieSystem {
             return;
         }
         // Channels known to be deleted are skipped; an uncached one is planned and judged by the sender later.
-        int planned = repository.planDeliveries(offer, FreebieCleanup.deliverable(jda.get(), subscriptions.forStore(offer.store())), now);
+        var plan = repository.plan(offer, FreebieCleanup.deliverable(jda.get(), subscriptions.forStore(offer.store())), now);
+        int planned = plan.planned();
         // DMs are planned before fan-out is recorded as done, so a crash in between replans them (idempotently).
         if (config.dmEnabled()) repository.dmJobs().plan(offer.id(), repository.dmSubscribers().following(offer.store().section()), now);
         repository.setFanoutDone(offer.id(), planned);
@@ -340,8 +371,10 @@ public final class FreebieSystem {
             repository.dmJobs().cancelForOffer(offer.id(), now);
             return;
         }
-        // Approval click or housekeeping: the rows (and DMs) just planned are sent without waiting for an idle poll.
+        // Approval click or housekeeping: the rows (and DMs) just planned are sent without waiting for an idle poll,
+        // and rows held for their drop window are sent when it ends rather than on a later idle poll.
         sender.wake();
+        if (plan.due().isAfter(now)) sender.wakeIn(Duration.between(now, plan.due()).plusMillis(250));
     }
 
     /** Recorded as the approver of auto-sent offers; never a real user ID, so it is never mentioned. */

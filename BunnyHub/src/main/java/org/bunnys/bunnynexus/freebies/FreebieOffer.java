@@ -41,6 +41,14 @@ public record FreebieOffer(String id, String sourceId, FreebieStore store, Strin
                 discoveredAt, state, reviewMessageId, reviewChannelId, decidedBy, fanoutDone, gone, revision, false);
     }
 
+    /**
+     * The claim steps Epic offers carry when the game is already free to play and the giveaway is a timed in-game bonus
+     * bundle. Cards then say "Free bonus bundle" instead of a crossed-out price, so the base game is never shown as a
+     * paid game turned free.
+     */
+    public static final String BONUS_STEPS = "The game is already free to play. Log in on its Epic Games Store page and claim the limited-time bonus bundle before it ends.";
+    public boolean bonus() { return BONUS_STEPS.equals(instructions); }
+
     public String sourceLabel() { return id.startsWith("epic:") ? "Epic Games" : id.startsWith("steam:") ? "Steam" : "GamerPower"; }
     public String region() {
         return id.startsWith("epic:") ? "US (en-US); availability elsewhere may differ"

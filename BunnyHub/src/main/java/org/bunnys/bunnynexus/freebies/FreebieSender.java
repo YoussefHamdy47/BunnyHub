@@ -74,6 +74,13 @@ final class FreebieSender {
         pacing.wake();
     }
 
+    /** Work becomes due after {@code delay} (a drop window ending): wake then instead of on a later idle poll. */
+    void wakeIn(Duration delay) {
+        if (closed) return;
+        try { executor.schedule(this::wake, Math.max(1, delay.toMillis()), TimeUnit.MILLISECONDS); }
+        catch (RejectedExecutionException shuttingDown) { /* The next start recovers queued rows. */ }
+    }
+
     FreebieSender withSubscriptions(FreebieSubscriptions value) { subscriptions = value; return this; }
     FreebieSender withLifecycle(FreebieLifecycleWorker value) { lifecycle = value; return this; }
     FreebieSender withDms(FreebieDmWorker value) { dms = value; return this; }

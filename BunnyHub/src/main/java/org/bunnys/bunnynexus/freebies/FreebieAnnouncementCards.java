@@ -171,7 +171,8 @@ final class FreebieAnnouncementCards {
         var offer = m.offer();
         String ends = offer.endsAt().map(e -> "Ends <t:" + e.getEpochSecond() + ":R> (<t:" + e.getEpochSecond() + ":f>)")
                 .orElse("No end date listed");
-        String deal = offer.worth().map(w -> "~~" + text(w, 40) + "~~ → **FREE** · ").orElse("**FREE** · ") + ends;
+        String deal = (offer.bonus() ? "**FREE BONUS BUNDLE** (the game is free to play) · "
+                : offer.worth().map(w -> "~~" + text(w, 40) + "~~ → **FREE** · ").orElse("**FREE** · ")) + ends;
         if (bare) return ends;
         var claim = new StringBuilder("[Claim on PC](" + offer.claimUrl().toASCIIString() + ")");
         for (var v : m.facts().publicVariants(now)) claim.append(" · [").append(v.label()).append("](").append(v.page()).append(")");

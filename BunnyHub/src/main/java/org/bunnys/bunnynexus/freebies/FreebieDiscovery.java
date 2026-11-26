@@ -39,7 +39,10 @@ final class FreebieDiscovery {
     private int failures;
     private boolean healthAlerted;
     private volatile Instant retryNotBefore = Instant.MIN;
+    private Instant providerRetryNotBefore = Instant.MIN;
     private volatile Instant lastPollAt, lastPollOk;
+    private volatile Instant nextPollAt;
+    private volatile int lastCandidateCount;
     private volatile String lastProblem = "not polled yet";
 
     FreebieDiscovery(FreebieConfig config, FreebieRepository repository, FreebieFeed feed, Clock clock,
@@ -57,7 +60,7 @@ final class FreebieDiscovery {
 
     void start(ScheduledExecutorService discoveryThread, long initialDelaySeconds) {
         executor = discoveryThread;
-        executor.schedule(this::pollAndReschedule, initialDelaySeconds, TimeUnit.SECONDS);
+        schedule(Duration.ofSeconds(initialDelaySeconds));
     }
 
     /** One extra check on the discovery thread, respecting failure backoff; the regular schedule is unchanged. */
@@ -69,14 +72,31 @@ final class FreebieDiscovery {
         return "Last " + feed.provider().label + " check: " + (lastPollAt == null ? "not yet" : "<t:" + lastPollAt.getEpochSecond() + ":R>")
                 + (lastProblem.isEmpty() ? " ✅" : " ⚠️ " + lastProblem) + "\n"
                 + "Last successful check: " + (lastPollOk == null ? "none since start" : "<t:" + lastPollOk.getEpochSecond() + ":R>")
-                + (clock.instant().isBefore(retryNotBefore) ? "\nDiscovery retry: <t:" + retryNotBefore.getEpochSecond() + ":R>" : "");
+                + (clock.instant().isBefore(retryNotBefore) ? "\nDiscovery retry: <t:" + retryNotBefore.getEpochSecond() + ":R>" : "")
+                + (feed.provider() == FreebieFeed.Provider.EPIC && nextPollAt != null
+                    ? "\nEpic next check: <t:" + nextPollAt.getEpochSecond() + ":T>; last feed: " + lastCandidateCount + " active offer(s). Daily release check: 18:00 Africa/Cairo." : "");
     }
 
     private void pollAndReschedule() {
         Duration next = attempt();
         try {
-            if (!executor.isShutdown()) executor.schedule(this::pollAndReschedule, Math.max(1, next.toSeconds()), TimeUnit.SECONDS);
+            if (!executor.isShutdown()) schedule(next);
         } catch (RejectedExecutionException shuttingDown) { /* Shutdown raced the reschedule. */ }
+    }
+
+    private void schedule(Duration delay) {
+        if (feed.provider() == FreebieFeed.Provider.EPIC) {
+            long millis = Math.max(1, epicDelay(delay).toMillis());
+            nextPollAt = clock.instant().plusMillis(millis);
+            executor.schedule(this::pollAndReschedule, millis, TimeUnit.MILLISECONDS);
+        } else executor.schedule(this::pollAndReschedule, Math.max(1, delay.toSeconds()), TimeUnit.SECONDS);
+    }
+
+    private Duration epicDelay(Duration normal) {
+        Instant now = clock.instant();
+        Duration next = EpicPollSchedule.nextDelay(now, normal);
+        Duration mandatory = Duration.between(now, providerRetryNotBefore);
+        return mandatory.compareTo(next) > 0 ? mandatory : next;
     }
 
     private Duration attempt() {
@@ -87,6 +107,7 @@ final class FreebieDiscovery {
         // Anything thrown must still reschedule, or discovery would silently stop for good.
         try { next = poll(); }
         catch (Throwable failure) { next = failed(failure); }
+        if (feed.provider() == FreebieFeed.Provider.EPIC) next = epicDelay(next);
         retryNotBefore = failures > 0 ? clock.instant().plus(next) : Instant.MIN;
         return next;
     }
@@ -96,6 +117,7 @@ final class FreebieDiscovery {
         Instant now = clock.instant();
         
         if (fetch.state() == FreebieFeed.State.FAILED) {
+            providerRetryNotBefore = fetch.retryAfter().map(now::plus).orElse(Instant.MIN);
             failures++;
             lastProblem = fetch.problem();
             BunnyLog.warning("[Freebies] " + feed.provider().label + " poll failed: " + fetch.problem());
@@ -104,6 +126,7 @@ final class FreebieDiscovery {
             return fetch.retryAfter().filter(wait -> wait.compareTo(backoff) > 0).orElse(backoff);
         }
         int fresh = 0;
+        lastCandidateCount = fetch.candidates().size();
         Set<String> present = new HashSet<>();
         int resolved = 0;
         for (var reported : fetch.candidates()) {
@@ -120,7 +143,7 @@ final class FreebieDiscovery {
         // Only a complete, valid feed may be used as evidence that an offer ended.
         if (fetch.complete()) for (var gone : repository.markMissing(feed.provider(), present)) ended.accept(gone, "no longer listed as active");
         if (fresh > 0) {
-            BunnyLog.info("[Freebies] " + fresh + " new giveaway(s) queued for review.");
+            BunnyLog.success("[Freebies] " + feed.provider().label + ": " + fresh + " new giveaway(s) queued for review.");
             onNewGiveaways.run();
         }
         try { afterPoll.run(); }
@@ -135,8 +158,11 @@ final class FreebieDiscovery {
         }
         // Fetching alone is not recovery: all accepted rows and absence checks must reach storage first.
         failures = 0;
+        providerRetryNotBefore = Instant.MIN;
         lastPollOk = clock.instant();
         lastProblem = "";
+        if (feed.provider() == FreebieFeed.Provider.EPIC)
+            BunnyLog.info("[Freebies] Epic check complete: " + fetch.candidates().size() + " active offer(s), " + fresh + " new.");
         checkHealth(lastPollOk);
         return Duration.ofMinutes(config.pollMinutes());
     }

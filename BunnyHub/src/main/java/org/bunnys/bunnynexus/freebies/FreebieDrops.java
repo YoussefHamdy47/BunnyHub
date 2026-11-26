@@ -69,6 +69,15 @@ final class FreebieDrops {
         throw new IllegalStateException("Could not open a drop window for channel " + channelId);
     }
 
+    /** Drop key → its end, for those of {@code keys} whose window is still collecting games. One query. */
+    java.util.Map<String, Instant> openUntil(java.util.Collection<String> keys, Instant now) {
+        java.util.Map<String, Instant> open = new java.util.HashMap<>();
+        if (keys.isEmpty()) return open;
+        for (Document d : windows.find(and(in("key", new java.util.HashSet<>(keys)), gt("until", Date.from(now)))))
+            open.put(d.getString("key"), d.getDate("until").toInstant());
+        return open;
+    }
+
     private static boolean duplicate(RuntimeException error) {
         if (error instanceof MongoWriteException write) return write.getError().getCategory() == ErrorCategory.DUPLICATE_KEY;
         return error instanceof MongoCommandException command && ErrorCategory.fromErrorCode(command.getErrorCode()) == ErrorCategory.DUPLICATE_KEY;

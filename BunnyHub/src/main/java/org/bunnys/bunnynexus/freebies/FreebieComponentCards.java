@@ -207,6 +207,7 @@ final class FreebieComponentCards {
     }
 
     static String price(FreebieOffer offer) {
+        if (offer.bonus()) return "**Free bonus bundle** · the game is free to play";
         return offer.worth().map(w -> "~~" + text(w, 40) + "~~ → **Free**").orElse("**Free**");
     }
 
