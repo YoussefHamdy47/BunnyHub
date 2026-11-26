@@ -39,6 +39,8 @@ final class ConsoleNews {
         List<GamePass.Game> games(List<String> ids) throws IOException;
         Optional<List<FreeWeekend>> freeWeekends() throws IOException;
         Optional<List<ConsoleItem>> items() throws IOException;
+        /** The Steam players' rating of the one Steam game with exactly this title, if any. */
+        default Optional<org.bunnys.bunnynexus.ratings.GameRating> steamRating(String title) { return Optional.empty(); }
         /** What was read is stored: unchanged feeds may be skipped from now on. */
         default void committed() {}
         /** Storing failed: read everything again next time. */
@@ -163,10 +165,17 @@ final class ConsoleNews {
         if (feed.isEmpty()) return state;
         var seen = once(state.psSeen(), feed.get(), PsPlusPost::id, PsPlusPost::published, RECENT, now,
                 post -> {
-                    store.create(Post.of(post.id(), FreebieStore.PS_PLUS, now, post));
+                    // Each game's Steam rating, looked up once when the post is new (two small requests per game).
+                    var rated = post.withDetails(post.details().stream().map(g -> g.withRating(rating(g.name()))).toList());
+                    store.create(Post.of(post.id(), FreebieStore.PS_PLUS, now, rated));
                     BunnyLog.success("[Console] New: " + post.heading());
                 });
         return state.withPsSeen(seen);
+    }
+
+    private Optional<org.bunnys.bunnynexus.ratings.GameRating> rating(String title) {
+        try { return source.steamRating(title); }
+        catch (RuntimeException failure) { return Optional.empty(); }
     }
 
     State freeWeekends(State state, Instant now) throws IOException {

@@ -23,23 +23,43 @@ final class ConsoleNewsCards {
 
     static MessageCreateData psPlus(PsPlusPost post, Optional<String> role) { return psPlusCard(post, role).message(); }
 
+    /** Games shown with their own picture, platforms, rating and blurb; any more are listed by name. */
+    static final int PS_DETAILED = 8;
+
     static Card psPlusCard(PsPlusPost post, Optional<String> role) {
         var card = Card.builder();
         role.ifPresent(r -> card.above("<@&" + r + ">").mentionRoles(r));
-        var games = new StringBuilder();
-        for (String game : post.games()) games.append("\n- ").append(text(game, 100));
-        if (post.more()) games.append("\n- and more");
         String when = post.from().map(from -> post.until().map(until -> "Claim from " + day(from) + " until " + day(until))
                 .orElse("Available from " + day(from))).orElse("Out now");
         String keep = post.kind() == PsPlusPost.Kind.MONTHLY
                 ? "Games you add to your library stay playable while you're a PS Plus member."
                 : "Catalog games are playable while they're in the catalog and you're a member.";
-        card.text("### " + FreebieStore.PS_PLUS.badge() + " " + text(post.heading(), 120) + games)
-                .text("**" + when + "** · needs " + post.tiers() + "\n-# " + keep);
-        post.image().ifPresent(card::image);
+        card.text("### " + FreebieStore.PS_PLUS.badge() + " " + text(post.heading(), 120) + "\n**" + when + "** · needs " + post.tiers())
+                .divider();
+        Map<String, PsPlusPost.Game> details = new HashMap<>();
+        for (var game : post.details()) details.putIfAbsent(game.name(), game);
+        var plain = new StringBuilder();
+        int detailed = 0;
+        boolean pictures = false;
+        for (String name : post.games()) {
+            var game = details.get(name);
+            if (game == null || detailed == PS_DETAILED) { plain.append("\n- ").append(text(name, 100)); continue; }
+            detailed++;
+            var lines = new StringBuilder("**[" + text(name.replace('[', '(').replace(']', ')'), 100) + "](" + game.storeSearch() + ")**");
+            if (!game.platforms().isEmpty()) lines.append(" · ").append(String.join(", ", game.platforms()));
+            game.rating().ifPresent(r -> lines.append("\n").append(r.line()));
+            game.blurb().ifPresent(b -> lines.append("\n-# ").append(text(b, PsPlusPost.MAX_BLURB + 5)));
+            if (game.image().isPresent()) { card.section(lines.toString(), game.image().get()); pictures = true; }
+            else card.text(lines.toString());
+        }
+        if (post.more()) plain.append("\n- and more");
+        if (!plain.isEmpty()) card.text((detailed > 0 ? "**Also**" : "**Games**") + plain);
+        // The post's banner only when the games have no pictures of their own.
+        if (!pictures) post.image().ifPresent(card::image);
         List<Button> buttons = new ArrayList<>(List.of(Button.link(post.link().toString(), "Read on PlayStation Blog")));
         role.ifPresent(r -> buttons.add(roleButton(r)));
-        card.divider().text("-# From the PlayStation Blog").buttons(buttons);
+        boolean rated = post.details().stream().anyMatch(g -> g.rating().isPresent());
+        card.divider().text("-# " + keep + (rated ? " Ratings are from Steam players." : "") + " From the PlayStation Blog.").buttons(buttons);
         return card.build();
     }
 
@@ -50,26 +70,51 @@ final class ConsoleNewsCards {
     static Card gamePassCard(Map<GamePass.Shelf, List<GamePass.Game>> shelves, Optional<String> role) {
         var card = Card.builder();
         role.ifPresent(r -> card.above("<@&" + r + ">").mentionRoles(r));
-        card.text("### " + FreebieStore.GAME_PASS.badge() + " Xbox Game Pass update");
+        int total = shelves.values().stream().mapToInt(List::size).sum();
+        card.text("### " + FreebieStore.GAME_PASS.badge() + " Xbox Game Pass update\n-# " + total + (total == 1 ? " game" : " games")
+                + " · best rated first on each list");
+        String footer = "-# Which games you get depends on your Game Pass plan. Ratings are from Microsoft Store players. "
+                + "From Microsoft's Game Pass catalog.";
         List<String> images = new ArrayList<>();
+        boolean rated = false;
         for (GamePass.Shelf shelf : GamePass.Shelf.values()) {
-            var games = shelves.getOrDefault(shelf, List.of());
+            var games = shelves.getOrDefault(shelf, List.of()).stream()
+                    .sorted(Comparator.comparingDouble((GamePass.Game g) -> g.ratings() > 0 ? g.stars() : -1).reversed()).toList();
             if (games.isEmpty()) continue;
-            var block = new StringBuilder("**" + shelf.heading + "**");
-            for (GamePass.Game game : games.subList(0, Math.min(PER_SHELF, games.size()))) {
-                block.append("\n- [").append(text(game.title().replace('[', '(').replace(']', ')'), 80)).append("](").append(game.link()).append(")");
-                if (shelf == GamePass.Shelf.COMING) game.release().filter(d -> d.isAfter(LocalDate.now(ZoneOffset.UTC)))
-                        .ifPresent(d -> block.append(" · ").append(day(d)));
+            var block = new StringBuilder("**" + shelf.heading + "** (" + games.size() + ")");
+            int listed = 0;
+            for (GamePass.Game game : games) {
+                if (listed == PER_SHELF) break;
+                String line = "\n" + gamePassLine(game, shelf);
+                // Room for the other lists and the footer: the post must fit Discord's 4000 characters.
+                if (card.remainingText() - block.length() - line.length() - footer.length() < 400) break;
+                block.append(line);
+                listed++;
+                rated |= game.ratings() > 0;
                 if (shelf != GamePass.Shelf.LEAVING && images.size() < IMAGES) game.image().ifPresent(images::add);
             }
-            if (games.size() > PER_SHELF) block.append("\n-# + ").append(games.size() - PER_SHELF).append(" more");
+            if (games.size() > listed) block.append("\n-# + ").append(games.size() - listed).append(" more");
             card.text(block.toString());
         }
         if (!images.isEmpty()) card.gallery(images);
         List<Button> buttons = new ArrayList<>(List.of(Button.link(GAME_PASS_PAGE, "Browse Game Pass")));
         role.ifPresent(r -> buttons.add(roleButton(r)));
-        card.divider().text("-# Which games you get depends on your Game Pass plan. From Microsoft's Game Pass catalog.").buttons(buttons);
+        card.divider().text(rated ? footer : footer.replace(" Ratings are from Microsoft Store players.", "")).buttons(buttons);
         return card.build();
+    }
+
+    /** "- [Title](link) · Shooter · ★★★★½ 4.6 (4.7K) · PC too · Series X|S optimized", plus the date for upcoming games. */
+    static String gamePassLine(GamePass.Game game, GamePass.Shelf shelf) {
+        List<String> parts = new ArrayList<>(List.of("- [" + text(game.title().replace('[', '(').replace(']', ')'), 70) + "](" + game.link() + ")"));
+        game.genre().ifPresent(g -> parts.add(text(g, 30)));
+        if (game.ratings() > 0) {
+            String stars = org.bunnys.bunnynexus.ratings.Stars.of(game.stars());
+            parts.add((stars.isEmpty() ? "" : stars + " ") + String.format(Locale.ROOT, "%.1f", game.stars())
+                    + " (" + org.bunnys.bunnynexus.ratings.Stars.count(game.ratings()) + ")");
+        }
+        parts.addAll(game.tags().subList(0, Math.min(2, game.tags().size()))); // Two at most: lines stay short.
+        if (shelf == GamePass.Shelf.COMING) game.release().filter(d -> d.isAfter(LocalDate.now(ZoneOffset.UTC))).ifPresent(d -> parts.add(day(d)));
+        return String.join(" · ", parts);
     }
 
     static MessageCreateData freeWeekend(FreeWeekend weekend, Optional<String> role) { return freeWeekendCard(weekend, role).message(); }

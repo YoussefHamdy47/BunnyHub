@@ -39,6 +39,46 @@ class ConsoleNewsTest {
         assertEquals(post, PsPlusPost.read(post.toDocument()).orElseThrow(), "saved and read back");
     }
 
+    @Test void eachPsPlusGameGetsItsPlatformsPictureAndBlurb() throws IOException {
+        var post = PsPlusPost.parse(fixture("playstation-blog.xml")).getFirst();
+        assertEquals(3, post.details().size());
+        var tony = post.details().getFirst();
+        assertEquals("Tony Hawk’s Pro Skater 3+4", tony.name(), "the title's name, matched to the heading \"… – Cross-Gen Edition\"");
+        assertEquals(List.of("PS5", "PS4"), tony.platforms());
+        assertTrue(tony.image().orElseThrow().startsWith("https://blog.playstation.com/"));
+        assertTrue(tony.blurb().orElseThrow().startsWith("Alert the neighborhood watch"), tony.blurb().toString());
+        assertTrue(tony.blurb().get().length() <= PsPlusPost.MAX_BLURB + 1);
+        assertEquals(List.of("PS4"), post.details().get(2).platforms(), "Amnesia: The Bunker is PS4 only");
+        assertNotEquals(post.details().get(0).image(), post.details().get(1).image(), "each game has its own picture");
+        assertEquals("https://store.playstation.com/en-us/search/Dragon%20Ball%20Xenoverse%202", post.details().get(1).storeSearch());
+
+        var rated = post.withDetails(post.details().stream().map(g -> g.withRating(Optional.of(new org.bunnys.bunnynexus.ratings.GameRating(1, 92, 12000, "Very Positive")))).toList());
+        assertEquals(rated, PsPlusPost.read(rated.toDocument()).orElseThrow(), "ratings are saved with the post");
+        var card = ConsoleNewsCards.psPlusCard(rated, Optional.empty());
+        String text = card.plainText();
+        assertTrue(text.contains("PS5, PS4"));
+        assertTrue(text.contains("92%"), text);
+        assertTrue(text.contains("Ratings are from Steam players"));
+        assertTrue(card.componentCount() <= 40 && card.textLength() <= 4000);
+    }
+
+    @Test void gamePassGamesGetGenreStoreRatingAndTags() throws IOException {
+        var games = GamePass.games(fixture("gamepass-2-games.json"));
+        var outlast = games.stream().filter(g -> g.title().equals("The Outlast Trials")).findFirst().orElseThrow();
+        assertEquals(Optional.of("Action & adventure"), outlast.genre());
+        assertEquals(4.6, outlast.stars());
+        assertEquals(4698, outlast.ratings());
+        assertEquals(List.of("PC too", "Series X|S optimized", "Online co-op"), outlast.tags());
+        assertEquals(Optional.of(outlast), GamePass.Game.read(outlast.toDocument()));
+        var sniper = games.stream().filter(g -> g.id().equals("9NV8BWGH15GN")).findFirst().orElseThrow();
+        assertEquals(Optional.of("Shooter"), sniper.genre());
+
+        var card = ConsoleNewsCards.gamePassCard(Map.of(GamePass.Shelf.ADDED, List.of(sniper, outlast)), Optional.empty()).plainText();
+        assertTrue(card.indexOf("The Outlast Trials") < card.indexOf("Sniper Ghost Warrior"), "best rated first: 4.6 before 3.6");
+        assertTrue(card.contains("4.6 (4.6K)"), card);
+        assertTrue(card.contains("New on Game Pass** (2)"));
+    }
+
     @Test void gameListsWithAndAndMore() {
         List<String> games = new ArrayList<>();
         assertTrue(PsPlusPost.games("Hogwarts Legacy, Persona 3 Reload, Stray and more", games));
