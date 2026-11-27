@@ -8,6 +8,10 @@ import java.util.*;
 interface FreebieFeed extends AutoCloseable {
     enum Provider {
         GAMERPOWER("gamerpower", "GamerPower"), EPIC("epic", "Epic Games"), STEAM("steam", "Steam"),
+        /** Store keys Fanatical gives away ({@link FanaticalFeed}). */
+        FANATICAL("fanatical", "Fanatical"),
+        /** GOG's home page giveaway ({@link GogFeed}). */
+        GOG("gog", "GOG"),
         /** Console games the owner added from a news tip ({@link ConsoleTips}); never polled, so never ended by absence. */
         CONSOLE("console", "Console store");
         final String id, label;

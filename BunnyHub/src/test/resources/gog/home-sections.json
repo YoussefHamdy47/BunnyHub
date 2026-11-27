@@ -1,0 +1,247 @@
+{
+ "config": {
+  "type": "landing_page",
+  "colors": [],
+  "pageId": "601d37e7-2381-4b4e-a042-a662eb52a706",
+  "endDate": "",
+  "pageUrl": "/",
+  "promoId": "",
+  "metaTags": [],
+  "pageTitle": null,
+  "particles": null,
+  "startDate": "2024-02-04T23:00:00.000Z",
+  "background": null,
+  "validators": null,
+  "alternateLinks": null
+ },
+ "sections": [
+  {
+   "sectionId": "530a9d97-d94f-48a8-891c-f69524d9c543",
+   "sectionType": "TAKEOVER_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "178f1717-a4fe-458a-a67e-e312d40d420f",
+   "sectionType": "BIG_SPOT_V2_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": true,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "dynamic",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "88c7ab02-d785-4e3f-b64a-90d5fcd5dba6",
+   "sectionType": "BIG_SPOT_V2_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "dynamic",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "0f1e2d3c-4b5a-4968-8776-655443322110",
+   "sectionType": "GIVEAWAY_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null
+  },
+  {
+   "sectionId": "85045e11-6016-4122-851f-59cef1d723d5",
+   "sectionType": "PRODUCTS_SECTION",
+   "isPersonalized": true,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "LOGGED_OUT"
+  },
+  {
+   "sectionId": "9681b212-3c2b-44de-960b-245fa76edbd3",
+   "sectionType": "PRODUCTS_SECTION",
+   "isPersonalized": true,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "dynamic",
+   "visibilityControl": "LOGGED_IN"
+  },
+  {
+   "sectionId": "10224066-30ca-408c-baa0-efed01aad9c9",
+   "sectionType": "PRODUCTS_SECTION",
+   "isPersonalized": true,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "dynamic",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "7698ebbf-91dc-4b7f-b45a-96c2d5e70f1a",
+   "sectionType": "TAGS_FOR_YOU_SECTION",
+   "isPersonalized": true,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "3e3b3cef-3b7e-459d-aacc-4794726430f2",
+   "sectionType": "UNIQUE_SELLING_PROPOSITION_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "470fd163-e983-4303-9e76-22f81ec8b9e1",
+   "sectionType": "PRODUCTS_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "1368a2ec-dcd6-4751-b5a6-c2b3c9f2f6a0",
+   "sectionType": "PRODUCTS_SECTION",
+   "isPersonalized": true,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "dynamic",
+   "visibilityControl": "LOGGED_IN"
+  },
+  {
+   "sectionId": "a8c194c0-d8b5-4993-849c-7d631478c8f5",
+   "sectionType": "PRODUCTS_SECTION",
+   "isPersonalized": true,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "LOGGED_OUT"
+  },
+  {
+   "sectionId": "cacd084a-5f48-40ac-b564-34239ead6035",
+   "sectionType": "MULTICOLUMNS_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "b45e7c95-debf-4b35-9aa9-c0a51885e19e",
+   "sectionType": "PERSONAL_BANNER_SECTION",
+   "isPersonalized": true,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "c1afb305-032e-4e65-a092-b8cb2cbff9db",
+   "sectionType": "PRODUCTS_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "dynamic",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "b60beaac-f99f-49f6-b33f-61f0119d1882",
+   "sectionType": "PRODUCTS_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "cac6e2bb-1745-4307-bd70-dd526ef7aaef",
+   "sectionType": "DISCOVER_GAMES_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "eb695022-7864-472e-87f7-f61270ba90b1",
+   "sectionType": "PROMO_BANNER_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "918bbf35-b165-49c6-b6f8-b57b2d9486fd",
+   "sectionType": "RANKING_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "baea6b89-4fcc-46f8-9b3d-44874dde2e51",
+   "sectionType": "PRODUCTS_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "3253383d-32fb-42bc-99fb-61f52f2ecd3b",
+   "sectionType": "NEWS_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "51ed2700-2675-414e-b34a-7f5202f946d9",
+   "sectionType": "EXPLORE_CATALOG_SECTION",
+   "isPersonalized": false,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  },
+  {
+   "sectionId": "4eec206b-5675-4d70-8679-afc0d9d3066e",
+   "sectionType": "WELCOME_OFFER_SECTION",
+   "isPersonalized": true,
+   "hideOnLoad": false,
+   "loadOnEmbed": true,
+   "ignoreOs": null,
+   "contentSourceType": "static",
+   "visibilityControl": "ALL"
+  }
+ ]
+}

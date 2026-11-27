@@ -93,7 +93,7 @@ public final class DealCards {
      */
     public static MessageCreateData board(DealSnapshot snapshot, Notice notice) { return board(snapshot, notice, Optional.empty()); }
 
-    /** {@code role}: the board's ping role, offered as a "Get pinged" button; a second press removes it. */
+    /** {@code role}: the board's ping role, offered as a "Ping Me for Deals" button; a second press removes it. */
     public static MessageCreateData board(DealSnapshot snapshot, Notice notice, Optional<String> role) {
         return boardCard(snapshot, notice, role).message();
     }
@@ -118,7 +118,7 @@ public final class DealCards {
         String footer = REGIONAL + "\n-# Updated <t:" + snapshot.fetchedAt().getEpochSecond() + ":R> · " + CREDIT
                 + " · The buttons open every deal, only for you";
         List<Button> launchers = new ArrayList<>();
-        if (!shown.isEmpty()) launchers.add(Button.primary(PREFIX + ":store:" + ALL, "See all " + all + " deals"));
+        if (!shown.isEmpty()) launchers.add(Button.primary(PREFIX + ":store:" + ALL, "See All " + all + " Deals"));
         for (var entry : shown.entrySet()) {
             int total = snapshot.forStore(Optional.of(entry.getKey())).size();
             var block = new StringBuilder(entry.getKey().emoji.map(e -> e + " ").orElse("") + "**" + entry.getKey().label + "**"
@@ -140,7 +140,7 @@ public final class DealCards {
         }
         if (!shown.isEmpty()) role.ifPresent(r -> launchers.add(Button.secondary(
                 org.bunnys.bunnynexus.freebies.FreebieSubscriptions.ROLE_BUTTON + ":" + r,
-                org.bunnys.bunnynexus.freebies.FreebieSubscriptions.ROLE_BUTTON_LABEL)));
+                org.bunnys.bunnynexus.freebies.FreebieSubscriptions.DEALS_ROLE_BUTTON_LABEL)));
         card.divider().text(footer);
         for (int i = 0; i < launchers.size(); i += 5) card.buttons(launchers.subList(i, Math.min(launchers.size(), i + 5)));
         return card.build();

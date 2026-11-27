@@ -156,13 +156,13 @@ class FreebieExistingSetupTest {
         Map<Role, Set<FreebieStore>> roles = new LinkedHashMap<>();
         roles.put(all, EnumSet.copyOf(FreebieSection.MAJOR_PC.stores()));
         var card = FreebieServerSetup.rolePanelCard(roles, Optional.of(deals));
-        assertTrue(card.plainText().contains("Free game and deal pings"));
+        assertTrue(card.plainText().contains("Free Game and Deal Pings"));
         assertTrue(card.plainText().contains("**Game deals**\n<:steam:705062577817780315> <:GOG:1572185523924115587> 75% off"));
         assertTrue(card.plainText().contains("<:Epic:824679104220626954> <:steam:705062577817780315>"), "launcher emojis, not names");
         var ids = net.dv8tion.jda.api.components.tree.MessageComponentTree.of(card.components())
                 .findAll(net.dv8tion.jda.api.components.buttons.Button.class).stream().map(b -> b.getCustomId()).toList();
         assertEquals(List.of(FreebieServerSetup.ROLE_PREFIX + ":8", FreebieServerSetup.ROLE_PREFIX + ":9"), ids);
-        assertTrue(FreebieServerSetup.rolePanelCard(roles, Optional.empty()).plainText().contains("Free game pings"));
+        assertTrue(FreebieServerSetup.rolePanelCard(roles, Optional.empty()).plainText().contains("Free Game Pings"));
         Map<Role, Set<FreebieStore>> many = new LinkedHashMap<>();
         for (int i = 0; i < 25; i++) { var r = mock(Role.class); when(r.getId()).thenReturn("7" + i); many.put(r, EnumSet.of(FreebieStore.STEAM)); }
         var big = FreebieServerSetup.rolePanelCard(many, Optional.of(deals));

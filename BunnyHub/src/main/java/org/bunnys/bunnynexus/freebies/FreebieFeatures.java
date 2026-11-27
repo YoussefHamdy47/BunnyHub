@@ -23,6 +23,8 @@ import java.util.function.Function;
  *       page for automatic duplicate joining. Off: the redirect returned HTTP 520 when validated on 2026-10-24.</li>
  *   <li>{@code FREEBIE_STEAM_ENABLED} (default true): Steam's own store as a source of free-to-keep games
  *       ({@link SteamFeed}); false leaves Steam games to GamerPower.</li>
+ *   <li>{@code FREEBIE_FANATICAL_ENABLED} and {@code FREEBIE_GOG_ENABLED} (default true): Fanatical's key giveaways
+ *       ({@link FanaticalFeed}) and GOG's home page giveaway ({@link GogFeed}); false leaves them to GamerPower.</li>
  *   <li>{@code FREEBIE_DROP_WINDOW_SECONDS} (default 120, 10-600): how long a channel's drop collects new games after
  *       its first one before the one shared message is posted ({@link FreebieDrops}). Only used while grouped.</li>
  *   <li>{@code FREEBIE_PING_COOLDOWN_MINUTES} (default 60, 0-1440; 0 is off): a post that would mention a role in a
@@ -133,6 +135,9 @@ public record FreebieFeatures(boolean grouped, boolean publishEnabled, Set<Strin
     }
 
     static FreebieFeatures fromEnvironment(Consumer<String> warn) { return load(TokenLoader::getEnvQuietly, warn); }
+
+    /** A store's own giveaway source (FREEBIE_FANATICAL_ENABLED, FREEBIE_GOG_ENABLED): on unless set to false. */
+    static boolean source(String key, Consumer<String> warn) { return flag(TokenLoader::getEnvQuietly, key, true, warn); }
 
     private static boolean flag(Function<String, String> env, String key, boolean fallback, Consumer<String> warn) {
         String value = env.apply(key);

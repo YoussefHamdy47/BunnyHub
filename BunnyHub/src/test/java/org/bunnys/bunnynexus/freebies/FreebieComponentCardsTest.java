@@ -93,7 +93,7 @@ class FreebieComponentCardsTest {
             assertEquals(members.get(i).offer().claimUrl().toString(), button.getUrl());
         }
         var rows = children(card, ActionRow.class);
-        assertEquals("Claim all PC games (2)", ((Button) rows.getFirst().getComponents().getFirst()).getLabel());
+        assertEquals("Claim All PC Games (2)", ((Button) rows.getFirst().getComponents().getFirst()).getLabel());
         assertTrue(FreebieMessages.carriesReference(posted(data), members.getFirst().reference()));
     }
 
@@ -140,7 +140,18 @@ class FreebieComponentCardsTest {
         var row = FreebieComponentCards.roleRow(top).orElseThrow();
         var button = (Button) row.getComponents().getFirst();
         assertEquals(FreebieSubscriptions.ROLE_BUTTON + ":" + ROLE, button.getCustomId());
-        assertEquals("Get pinged", button.getLabel());
+        assertEquals("Ping Me for Free Games", button.getLabel());
+        assertTrue(top.stream().noneMatch(c -> c instanceof net.dv8tion.jda.api.components.actionrow.ActionRow), "the button is inside the card");
+        var claimRow = ((Container) top.get(1)).getComponents().stream()
+                .filter(c -> c instanceof net.dv8tion.jda.api.components.actionrow.ActionRow).findFirst().orElseThrow();
+        assertTrue(claimRow.toString().contains(FreebieSubscriptions.ROLE_BUTTON + ":" + ROLE), "beside the Claim button");
+        // An older post with the button under the card and the earlier label: the edit moves it in and relabels it.
+        var old = FreebieComponentCards.roleRow(List.of(net.dv8tion.jda.api.components.actionrow.ActionRow.of(
+                Button.secondary(FreebieSubscriptions.ROLE_BUTTON + ":" + ROLE, "Get pinged")))).orElseThrow();
+        var moved = new ArrayList<MessageTopLevelComponent>(FreebieComponentCards.edit(List.of(member("a", LIVE)), false, now,
+                Optional.empty(), Optional.empty(), Optional.of(old)).getComponents());
+        assertTrue(moved.stream().noneMatch(c -> c instanceof net.dv8tion.jda.api.components.actionrow.ActionRow));
+        assertEquals("Ping Me for Free Games", ((Button) FreebieComponentCards.roleRow(moved).orElseThrow().getComponents().getFirst()).getLabel());
         assertSame(ad, top.getLast(), "the ad stays last");
         assertEquals(Optional.of(ad), FreebieComponentCards.adCard(top));
 

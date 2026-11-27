@@ -192,8 +192,8 @@ public final class FreebieServerSetup {
                         + " 75% off or more on well-reviewed games", org.bunnys.utils.AppDesign.Emojis.STEAM)));
 
         var card = org.bunnys.handler.cards.Card.builder()
-                .title(deals.isPresent() ? "Free game and deal pings" : "Free game pings")
-                .text("Get pinged for what you play. Tap again to remove the role.");
+                .title(deals.isPresent() ? "Free Game and Deal Pings" : "Free Game Pings")
+                .text("Pick what you want to be pinged for. Tap a button again to remove that role.");
         List<Button> buttons = new ArrayList<>();
         for (Choice choice : choices) {
             if (buttons.size() == 25) break;

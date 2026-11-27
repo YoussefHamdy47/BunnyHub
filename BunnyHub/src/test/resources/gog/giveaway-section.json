@@ -1,0 +1,13 @@
+{
+ "sectionId": "0f1e2d3c-4b5a-4968-8776-655443322110",
+ "sectionType": "GIVEAWAY_SECTION",
+ "colors": {},
+ "properties": {
+  "endDate": "2026-11-30T23:59:00+00:00",
+  "product": {
+   "title": "Dead Age 2",
+   "slug": "dead_age_2",
+   "coverHorizontal": "https://images.gog-statics.com/11df9d69f6815d8fdd74ab99f316ea31a3c9cb86e7d564eee661db1ce9a591e1.png"
+  }
+ }
+}

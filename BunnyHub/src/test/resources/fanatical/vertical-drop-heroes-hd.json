@@ -1,0 +1,165 @@
+{
+ "name": "Vertical Drop Heroes HD",
+ "slug": "vertical-drop-heroes-hd",
+ "type": "game",
+ "giveaway": true,
+ "giveaway_newsletter": true,
+ "availability": {
+  "valid_from": "2026-11-27T11:00:00.000Z",
+  "valid_until": "2026-11-28T23:59:00.000Z"
+ },
+ "price": {
+  "GBP": 499,
+  "USD": 699,
+  "EUR": 699,
+  "CAD": 779,
+  "AUD": 949,
+  "RUB": 44900,
+  "JPY": 69800
+ },
+ "currentPrice": {
+  "GBP": 0,
+  "USD": 0,
+  "EUR": 0,
+  "CAD": 0,
+  "AUD": 0,
+  "RUB": 0,
+  "JPY": 0
+ },
+ "drm": {
+  "drm_free": false,
+  "steam": true,
+  "origin": false,
+  "rockstar": false,
+  "esonline": false,
+  "uplay": false,
+  "oculus": false,
+  "bethesda": false,
+  "epicgames": false,
+  "switch": false,
+  "threeds": false,
+  "gog": false,
+  "magix": false,
+  "zenva": false,
+  "utalk": false,
+  "redeem": false,
+  "voucher": false,
+  "playstation": false,
+  "roblox": false,
+  "xbox": false,
+  "eaplay": false,
+  "runescape": false,
+  "razer": false,
+  "microsoft": false,
+  "drivethrurpg": false,
+  "idw": false,
+  "arenanet": false
+ },
+ "cover": "868948c3-c2b1-4c0a-ac4a-9d1e785da298.jpeg",
+ "sdesc": null,
+ "publishers": [
+  {
+   "name": "Digerati Distribution"
+  }
+ ],
+ "regions_excluded": [
+  {
+   "code": "AR",
+   "name": "Argentina"
+  },
+  {
+   "code": "BD",
+   "name": "Bangladesh"
+  },
+  {
+   "code": "BR",
+   "name": "Brazil"
+  },
+  {
+   "code": "BG",
+   "name": "Bulgaria"
+  },
+  {
+   "code": "CN",
+   "name": "China"
+  },
+  {
+   "code": "HK",
+   "name": "Hong Kong"
+  },
+  {
+   "code": "IN",
+   "name": "India"
+  },
+  {
+   "code": "KZ",
+   "name": "Kazakhstan"
+  },
+  {
+   "code": "KP",
+   "name": "Korea, Democratic People's Republic of"
+  },
+  {
+   "code": "KR",
+   "name": "Korea, Republic of"
+  },
+  {
+   "code": "MK",
+   "name": "Macedonia, the Former Yugoslav Republic of"
+  },
+  {
+   "code": "MA",
+   "name": "Morocco"
+  },
+  {
+   "code": "MM",
+   "name": "Myanmar"
+  },
+  {
+   "code": "NG",
+   "name": "Nigeria"
+  },
+  {
+   "code": "PK",
+   "name": "Pakistan"
+  },
+  {
+   "code": "PE",
+   "name": "Peru"
+  },
+  {
+   "code": "RU",
+   "name": "Russian Federation"
+  },
+  {
+   "code": "TW",
+   "name": "Taiwan, Province of China"
+  },
+  {
+   "code": "TH",
+   "name": "Thailand"
+  },
+  {
+   "code": "TN",
+   "name": "Tunisia"
+  },
+  {
+   "code": "TR",
+   "name": "Turkey"
+  },
+  {
+   "code": "UY",
+   "name": "Uruguay"
+  },
+  {
+   "code": "VN",
+   "name": "Viet Nam"
+  }
+ ],
+ "regions_included": [],
+ "steam": {
+  "type": "app",
+  "id": 311480
+ },
+ "desc": "<p>A roguelike platformer.</p>"
+}

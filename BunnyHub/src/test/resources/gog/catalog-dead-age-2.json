@@ -1,0 +1,101 @@
+{
+ "productCount": 4,
+ "products": [
+  {
+   "id": "1211776926",
+   "slug": "dead_age_1_2_bundle",
+   "title": "Dead Age 1 + 2 Bundle",
+   "productType": "pack",
+   "coverHorizontal": "https://images.gog-statics.com/5a4a5c397cdce1d6336ff3676f7f0272200c2b7beb2682a4650538994ccba82d.png",
+   "publishers": [
+    "Headup"
+   ],
+   "price": {
+    "final": "$1.49",
+    "base": "$29.59",
+    "discount": "-95%",
+    "finalMoney": {
+     "amount": "1.49",
+     "currency": "USD",
+     "discount": "28.10"
+    },
+    "baseMoney": {
+     "amount": "29.59",
+     "currency": "USD"
+    }
+   }
+  },
+  {
+   "id": "1979865595",
+   "slug": "dead_age_2",
+   "title": "Dead Age 2",
+   "productType": "game",
+   "coverHorizontal": "https://images.gog-statics.com/11df9d69f6815d8fdd74ab99f316ea31a3c9cb86e7d564eee661db1ce9a591e1.png",
+   "publishers": [
+    "Headup"
+   ],
+   "price": {
+    "final": "$1.79",
+    "base": "$17.99",
+    "discount": "-90%",
+    "finalMoney": {
+     "amount": "1.79",
+     "currency": "USD",
+     "discount": "16.20"
+    },
+    "baseMoney": {
+     "amount": "17.99",
+     "currency": "USD"
+    }
+   }
+  },
+  {
+   "id": "1729200496",
+   "slug": "children_of_morta_complete_edition",
+   "title": "Children of Morta: Complete Edition",
+   "productType": "pack",
+   "coverHorizontal": "https://images.gog-statics.com/1689435d826d3449365eab352a952866bcfcce4df85c9d0953520990141cd480.png",
+   "publishers": [
+    "11 bit studios"
+   ],
+   "price": {
+    "final": "$5.15",
+    "base": "$26.99",
+    "discount": "-81%",
+    "finalMoney": {
+     "amount": "5.15",
+     "currency": "USD",
+     "discount": "21.84"
+    },
+    "baseMoney": {
+     "amount": "26.99",
+     "currency": "USD"
+    }
+   }
+  },
+  {
+   "id": "1774901766",
+   "slug": "children_of_morta",
+   "title": "Children of Morta",
+   "productType": "game",
+   "coverHorizontal": "https://images.gog-statics.com/4fd862d5be9c7c67faf58f11328919c355f44db0305cdde77e80770e653b9175.png",
+   "publishers": [
+    "11 bit studios"
+   ],
+   "price": {
+    "final": "$3.29",
+    "base": "$21.99",
+    "discount": "-85%",
+    "finalMoney": {
+     "amount": "3.29",
+     "currency": "USD",
+     "discount": "18.70"
+    },
+    "baseMoney": {
+     "amount": "21.99",
+     "currency": "USD"
+    }
+   }
+  }
+ ]
+}

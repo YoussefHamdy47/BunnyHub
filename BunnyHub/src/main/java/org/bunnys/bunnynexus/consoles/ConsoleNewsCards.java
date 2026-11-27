@@ -126,7 +126,7 @@ final class ConsoleNewsCards {
                 + "\nA few Xbox games you can play for free this weekend. It's a trial: you don't keep them, and most need a"
                 + " Game Pass plan.\n-# The lineup is confirmed by Xbox during the week; the list linked below is kept up to date.");
         weekend.image().ifPresent(card::image);
-        List<Button> buttons = new ArrayList<>(List.of(Button.link(weekend.link().toString(), "See this weekend's games")));
+        List<Button> buttons = new ArrayList<>(List.of(Button.link(weekend.link().toString(), "See This Weekend's Games")));
         role.ifPresent(r -> buttons.add(roleButton(r)));
         card.divider().text("-# From Pure Xbox").buttons(buttons);
         return card.build();

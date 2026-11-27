@@ -478,7 +478,7 @@ class FreebieDropsTest {
         assertTrue(rows.size() <= 5);
         var labels = FreebieAnnouncementCardsTest.labels(rows);
         assertEquals(11, labels.size(), "a claim per game plus the combined checkout");
-        assertEquals("Claim all PC games (10)", labels.getFirst());
+        assertEquals("Claim All PC Games (10)", labels.getFirst());
         assertTrue(rows.stream().flatMap(r -> r.getComponents().stream()).allMatch(c -> ((Button) c).getUrl() != null));
     }
 

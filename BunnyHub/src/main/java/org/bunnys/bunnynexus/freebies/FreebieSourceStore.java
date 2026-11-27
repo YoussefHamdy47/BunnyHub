@@ -79,7 +79,7 @@ final class FreebieSourceStore {
     static String matchKey(Document d) {
         if (d.getString("title") == null || d.getDate("endsAt") == null) return null;
         String title = FreebieMessages.title(d.getString("title"));
-        title = title.replaceFirst("(?i)\\s*\\((?:Epic Games(?: Store)?|Steam|GOG)\\)$", "").strip();
+        title = title.replaceFirst("(?i)\\s*(?:\\((?:Epic Games(?: Store)?|Steam|GOG)\\)|\\b(?:Steam|GOG) Key)$", "").strip();
         title = Normalizer.normalize(title, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").strip();
         // Do not discard edition words, punctuation or accents. Day precision only proposes a match.
         Instant end = d.getDate("endsAt").toInstant();

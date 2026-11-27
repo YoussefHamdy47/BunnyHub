@@ -84,7 +84,7 @@ class FreebieAnnouncementCardsTest {
         assertEquals(List.of("Game a", "Game b", "Game c"), data.getEmbeds().getFirst().getFields().stream().map(MessageEmbed.Field::getName).toList());
         assertTrue(data.getEmbeds().getFirst().getTitle().contains("3 free games on Epic Games Store"));
         var labels = labels(data.getComponents().stream().map(c -> (ActionRow) c).toList());
-        assertEquals("Claim all PC games (5)", labels.getFirst());
+        assertEquals("Claim All PC Games (5)", labels.getFirst());
         assertEquals(6, labels.size());
     }
 
@@ -92,7 +92,7 @@ class FreebieAnnouncementCardsTest {
         var members = List.of(member("a", LIVE), member("b", ENDED), member("c", LIVE));
         var edit = FreebieAnnouncementCards.edit(members, true, now);
         var labels = labels(edit.getComponents().stream().map(c -> (ActionRow) c).toList());
-        assertEquals(List.of("Claim eligible PC games (2)", "Claim Game a", "Claim Game c"), labels);
+        assertEquals(List.of("Claim Eligible PC Games (2)", "Claim Game a", "Claim Game c"), labels);
         var group = edit.getEmbeds().getFirst();
         assertTrue(group.getFields().get(1).getName().startsWith("Ended: "));
         assertTrue(group.getFields().get(0).getValue().contains("Claim on PC"));
@@ -192,8 +192,8 @@ class FreebieAnnouncementCardsTest {
                 facts("pc1", List.of(android, unreviewed), Optional.empty()), "epic:home|" + CHANNEL, LIVE);
         var data = FreebieAnnouncementCards.create(List.of(m), Optional.empty(), false, now);
         var labels = labels(data.getComponents().stream().map(c -> (ActionRow) c).toList());
-        assertTrue(labels.contains("Claim Android version"));
-        assertFalse(labels.contains("Claim iOS version"), "a variant found after approval is not added automatically");
+        assertTrue(labels.contains("Claim Android Version"));
+        assertFalse(labels.contains("Claim iOS Version"), "a variant found after approval is not added automatically");
         String mobile = data.getEmbeds().getFirst().getFields().stream().filter(f -> f.getName().equals("Mobile")).findFirst().orElseThrow().getValue();
         assertTrue(mobile.contains("a PC claim does not include mobile") && mobile.contains("Saudi Arabia, Taiwan"));
         assertEquals("", data.getContent(), "no ping without a saved role");
