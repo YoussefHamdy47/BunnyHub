@@ -52,7 +52,7 @@ final class FreebieComponentCards {
     }
 
     /**
-     * {@code roleButton}: the channel's ping role, offered as a "Get pinged" button under the card. The mention line is
+     * {@code roleButton}: the channel's ping role, offered as a "Ping Me for Free Games" button inside the card. The mention line is
      * the mentions alone: the card already says what was posted.
      */
     static MessageCreateData create(List<Member> members, List<String> pingRoles, boolean checkout, Instant now, Optional<Container> ad,
@@ -95,7 +95,7 @@ final class FreebieComponentCards {
                 .setAllowedMentions(List.of()).build();
     }
 
-    /** The "Get pinged" button for the channel's ping role; a second press removes the role. */
+    /** The role button for the channel's ping role; a second press removes the role. */
     static ActionRow roleRow(String roleId) {
         return ActionRow.of(Button.secondary(FreebieSubscriptions.ROLE_BUTTON + ":" + roleId, FreebieSubscriptions.ROLE_BUTTON_LABEL));
     }
@@ -106,12 +106,48 @@ final class FreebieComponentCards {
         return roleRow(message.getComponents());
     }
 
+    /**
+     * The posted role button as a row of its own: inside the card on current posts, a row under the card on older ones
+     * (which move it into the card on their next edit).
+     */
     static Optional<ActionRow> roleRow(List<? extends MessageTopLevelComponent> components) {
-        for (var c : components)
-            if (c instanceof ActionRow row && row.getComponents().stream().anyMatch(b -> b instanceof Button button
-                    && button.getCustomId() != null && button.getCustomId().startsWith(FreebieSubscriptions.ROLE_BUTTON + ":")))
-                return Optional.of(row);
+        for (var c : components) {
+            List<ActionRow> rows = new ArrayList<>();
+            if (c instanceof ActionRow row) rows.add(row);
+            else if (c instanceof Container container)
+                for (var child : container.getComponents()) if (child instanceof ActionRow row) rows.add(row);
+            for (var row : rows)
+                for (var b : row.getComponents())
+                    if (b instanceof Button button && isRoleButton(button)) return Optional.of(ActionRow.of(button));
+        }
         return Optional.empty();
+    }
+
+    private static boolean isRoleButton(Button button) {
+        return button.getCustomId() != null && button.getCustomId().startsWith(FreebieSubscriptions.ROLE_BUTTON + ":");
+    }
+
+    private static Optional<Button> roleButton(ActionRow row) {
+        return row.getComponents().stream().filter(b -> b instanceof Button button && isRoleButton(button)).map(b -> (Button) b).findFirst()
+                // Older posts carry the earlier label; every edit shows the current one.
+                .map(b -> b.withLabel(FreebieSubscriptions.ROLE_BUTTON_LABEL));
+    }
+
+    /**
+     * The card with the role button at the end of its last button row (when that row has room), else in a row of its
+     * own above the footer.
+     */
+    static Container withRole(Container card, Button role) {
+        List<ContainerChildComponent> parts = new ArrayList<>(card.getComponents());
+        int footer = parts.size() - 1;
+        if (footer > 0 && parts.get(footer - 1) instanceof ActionRow row && row.getComponents().size() < 5) {
+            List<net.dv8tion.jda.api.components.actionrow.ActionRowChildComponent> buttons = new ArrayList<>(row.getComponents());
+            buttons.add(role);
+            parts.set(footer - 1, ActionRow.of(buttons));
+        } else {
+            parts.add(footer, ActionRow.of(role));
+        }
+        return Container.of(parts);
     }
 
     /** The mention line of a posted V2 page: a top-level text block above the card, when there is one. */
@@ -153,12 +189,15 @@ final class FreebieComponentCards {
         for (Detail detail : Detail.values()) {
             List<MessageTopLevelComponent> top = new ArrayList<>();
             header.ifPresent(h -> top.add(TextDisplay.of(h)));
-            top.add(members.size() == 1 ? single(members.getFirst(), checkout, now, detail) : several(members, checkout, now, detail));
+            Container card = members.size() == 1 ? single(members.getFirst(), checkout, now, detail) : several(members, checkout, now, detail);
+            top.add(card);
             shownAd.ifPresent(top::add);
             // Discord refuses more than 40 components: on a full ten-game page the role button gives way first, then the ad.
-            if (role.isPresent()) {
-                top.add(shownAd.isPresent() ? top.size() - 1 : top.size(), role.get());
-                if (componentCount(top) > MAX_COMPONENTS) top.remove(role.get());
+            var roleButton = role.flatMap(FreebieComponentCards::roleButton);
+            if (roleButton.isPresent()) {
+                int at = top.indexOf(card);
+                top.set(at, withRole(card, roleButton.get()));
+                if (componentCount(top) > MAX_COMPONENTS) top.set(at, card);
             }
             if (shownAd.isPresent() && componentCount(top) > MAX_COMPONENTS) top.remove(shownAd.get());
             if (textLength(top) <= TEXT_LIMIT || detail == Detail.BARE) return top;

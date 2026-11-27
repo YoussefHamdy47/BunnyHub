@@ -27,8 +27,10 @@ public final class FreebieSubscriptions {
      * picker, free-game posts and the Deals Board.
      */
     public static final String ROLE_BUTTON = "freebie_role";
-    /** The label of the role button on free-game posts and the Deals Board; pressing it again removes the role. */
-    public static final String ROLE_BUTTON_LABEL = "Get pinged";
+    /** The label of the role button on free-game and console posts; pressing it again removes the role. */
+    public static final String ROLE_BUTTON_LABEL = "Ping Me for Free Games";
+    /** The same button on the Deals Board. */
+    public static final String DEALS_ROLE_BUTTON_LABEL = "Ping Me for Deals";
     public static final int MAX_CHANNELS_PER_GUILD = 5;
     /** Every launcher in every allowed channel; bounds per-server reads. */
     public static final int MAX_PER_GUILD = MAX_CHANNELS_PER_GUILD * FreebieStore.values().length;

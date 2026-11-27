@@ -263,7 +263,7 @@ final class FreebieAnnouncementCards {
             if (m.status() == Status.LIVE) {
                 buttons.add(FreebieCards.claimButton(m.offer()));
                 if (checkout) combined(members, now).ifPresent(buttons::add);
-                for (var v : m.facts().publicVariants(now)) buttons.add(Button.link(v.page().toString(), "Claim " + v.label() + " version")
+                for (var v : m.facts().publicVariants(now)) buttons.add(Button.link(v.page().toString(), "Claim " + v.label() + " Version")
                         .withEmoji(net.dv8tion.jda.api.entities.emoji.Emoji.fromFormatted(FreebieCards.emoji(
                                 v.platform() == EgDataIntake.Platform.ANDROID ? FreebieStore.ANDROID : FreebieStore.IOS))));
             }
@@ -287,6 +287,6 @@ final class FreebieAnnouncementCards {
         if (eligible.size() == 1) return Optional.of(Button.link(url.get().toString(), members.size() == 1 ? "Instant Checkout"
                 : label("Instant Checkout: " + title(eligible.getFirst().offer().title()))));
         boolean all = eligible.size() == members.size();
-        return Optional.of(Button.link(url.get().toString(), (all ? "Claim all PC games (" : "Claim eligible PC games (") + eligible.size() + ")"));
+        return Optional.of(Button.link(url.get().toString(), (all ? "Claim All PC Games (" : "Claim Eligible PC Games (") + eligible.size() + ")"));
     }
 }

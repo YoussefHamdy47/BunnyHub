@@ -81,7 +81,7 @@ class DealCardsTest {
         var card = DealCards.boardCard(snapshot, DealCards.Notice.NONE, Optional.of("500000000000000001"));
         var last = buttons(card).getLast();
         assertEquals("freebie_role:500000000000000001", last.getCustomId());
-        assertEquals("Get pinged", last.getLabel());
+        assertEquals("Ping Me for Deals", last.getLabel());
         assertEquals(4, buttons(card).size(), "See all, Steam, GOG, Get pinged");
         assertTrue(buttons(DealCards.boardCard(snapshot, DealCards.Notice.NONE)).stream().noneMatch(b -> b.getCustomId().startsWith("freebie_role")));
     }
@@ -114,7 +114,7 @@ class DealCardsTest {
         }
         assertTrue(shown.values().stream().allMatch(list -> list.size() == DealCards.PER_LAUNCHER));
         assertEquals(List.of("deals:store:all", "deals:store:steam", "deals:store:gog"), buttons(card).stream().map(Button::getCustomId).toList());
-        assertEquals("See all 58 deals", buttons(card).getFirst().getLabel());
+        assertEquals("See All 58 Deals", buttons(card).getFirst().getLabel());
         assertEquals("Steam (25)", buttons(card).get(1).getLabel());
         assertTrue(buttons(card).stream().skip(1).allMatch(b -> b.getEmoji() != null), "every launcher button has its emoji");
         // Nobody should think the four shown are all there is.

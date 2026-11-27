@@ -21,7 +21,8 @@ final class FreebieIdentity {
     private static final Pattern EDITION = Pattern.compile(
             "\\b(deluxe|gold|ultimate|complete|definitive|premium|collector'?s|goty|game of the year|digital|enhanced|"
                     + "remastered|director'?s cut|bundle|pack|season pass|dlc|expansion|edition|soundtrack|demo)\\b");
-    private static final Pattern SUFFIX = Pattern.compile("(?i)\\s*\\((?:epic games(?: store)?|steam|gog|android|ios|mobile)\\)$");
+    /** A launcher in brackets, or GamerPower's "Steam Key" ("Vertical Drop Heroes HD Steam Key" is the game itself). */
+    private static final Pattern SUFFIX = Pattern.compile("(?i)\\s*(?:\\((?:epic games(?: store)?|steam|gog|android|ios|mobile)\\)|\\b(?:steam|gog) key)$");
 
     static String normalized(String raw) {
         String title = FreebieMessages.title(raw == null ? "" : raw);

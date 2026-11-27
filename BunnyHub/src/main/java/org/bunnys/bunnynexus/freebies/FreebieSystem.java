@@ -41,6 +41,9 @@ public final class FreebieSystem {
     private FreebieRatings ratings;
     private SteamFeed steamFeed;
     private FreebieDiscovery steamDiscovery;
+    /** Store sources polled like Steam: Fanatical and GOG ({@code FREEBIE_FANATICAL_ENABLED}, {@code FREEBIE_GOG_ENABLED}). */
+    private final List<FreebieFeed> storeFeeds = new ArrayList<>();
+    private final List<FreebieDiscovery> storeDiscoveries = new ArrayList<>();
     private final FreebieLifecyclePlanner lifecycle;
     private final FreebieLifecycleWorker lifecycleWorker;
     private final FreebieDmWorker dmWorker;
@@ -171,6 +174,10 @@ public final class FreebieSystem {
             system.steamFeed = new SteamFeed(system.clock);
             system.steamDiscovery = new FreebieDiscovery(config.get(), repository, system.steamFeed, system.clock, system.reviews, system::ended);
         }
+        if (FreebieFeatures.source("FREEBIE_FANATICAL_ENABLED", BunnyLog::warning)) system.storeFeeds.add(new FanaticalFeed(system.clock));
+        if (FreebieFeatures.source("FREEBIE_GOG_ENABLED", BunnyLog::warning)) system.storeFeeds.add(new GogFeed(system.clock));
+        for (var storeFeed : system.storeFeeds)
+            system.storeDiscoveries.add(new FreebieDiscovery(config.get(), repository, storeFeed, system.clock, system.reviews, system::ended));
         if (features.resolveGamerPowerLinks()) system.discovery.withLinkResolver(new FreebieStorePages(new GamerPowerLinks()));
         if (features.egdata()) {
             system.egdataFeed = new EgDataFeed(system.clock);
@@ -196,11 +203,13 @@ public final class FreebieSystem {
         system.discovery.onNewGiveaways(runSoon);
         system.epicDiscovery.onNewGiveaways(runSoon);
         if (system.steamDiscovery != null) system.steamDiscovery.onNewGiveaways(runSoon);
+        for (var store : system.storeDiscoveries) store.onNewGiveaways(runSoon);
         system.discovery.start(system.discoveryThread, 15);
         // Slow review/history calls and other feeds must not delay Epic's wall-clock release check.
         system.epicThread = Executors.newSingleThreadScheduledExecutor(daemon("EpicDiscovery"));
         system.epicDiscovery.start(system.epicThread, 0);
         if (system.steamDiscovery != null) system.steamDiscovery.start(system.discoveryThread, 35);
+        for (int i = 0; i < system.storeDiscoveries.size(); i++) system.storeDiscoveries.get(i).start(system.discoveryThread, 40 + 5 * i);
         if (system.enrichment != null) system.enrichment.start(system.discoveryThread, 45);
         // Console giveaway tips from news headlines, hourly; the owner adds the real ones.
         system.consoleTips = ConsoleTips.create(org.bunnys.handler.database.DB.getDatabase().getCollection(ConsoleTips.COLLECTION),
@@ -245,6 +254,7 @@ public final class FreebieSystem {
         feed.close();
         if (epicFeed != null) epicFeed.close();
         if (steamFeed != null) steamFeed.close();
+        storeFeeds.forEach(FreebieFeed::close);
         if (egdataFeed != null) egdataFeed.close();
         if (steamRatings != null) steamRatings.close();
         if (consoleTips != null) consoleTips.close();
@@ -678,6 +688,7 @@ public final class FreebieSystem {
         requireOwner(actorId);
         return FreebieStatusText.render(repository, config, discovery.status() + (epicDiscovery == null ? "" : "\n" + epicDiscovery.status())
                 + (steamDiscovery == null ? "" : "\n" + steamDiscovery.status())
+                + storeDiscoveries.stream().map(d -> "\n" + d.status()).collect(java.util.stream.Collectors.joining())
                 + (enrichment == null ? "" : "\n" + enrichment.status()) + "\nHeld source reports awaiting a decision: " + (repository.sources() == null ? 0 : repository.sources().openQuestions()) + " (/freebie-admin sources)"
                 + "\n" + broadcasts.status() + (repository.publications() == null ? "" : "\n" + FreebieStatusText.publishing(features, repository.publications().counts())),
                 sender.inFlight(), jda.get(), clock.instant());
@@ -703,6 +714,7 @@ public final class FreebieSystem {
         discovery.pollNow();
         if (epicDiscovery != null) epicDiscovery.pollNow();
         if (steamDiscovery != null) steamDiscovery.pollNow();
+        storeDiscoveries.forEach(FreebieDiscovery::pollNow);
         return "Source checks requested; any active failure backoff is respected. New giveaways will appear in the review channel.";
     }
 

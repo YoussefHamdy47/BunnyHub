@@ -56,6 +56,25 @@ public final class FreebieDeliveryAdmin {
         text.append("\nUse history with channel and audit-page to inspect other pages (five records per page).");
         return text(text.toString());
     }
+    /** Short button forms of offer ids: GamerPower's number, or a provider letter and the 16-hex hash of the others. */
+    private static final Map<String, String> LETTERS = Map.of("epic", "e", "steam", "s", "fanatical", "f", "gog", "g", "console", "c");
+
+    static String token(String offerId) {
+        if (offerId.startsWith("gamerpower:")) return offerId.substring("gamerpower:".length());
+        int colon = offerId.indexOf(':');
+        String letter = colon < 0 ? null : LETTERS.get(offerId.substring(0, colon));
+        if (letter == null) throw new IllegalArgumentException("Unknown offer source: " + offerId);
+        return letter + offerId.substring(colon + 1);
+    }
+
+    /** The offer id of a {@link #token}; empty for anything else. */
+    public static Optional<String> offer(String token) {
+        if (token.matches("[0-9]{1,20}")) return Optional.of("gamerpower:" + token);
+        if (!token.matches("[a-z][0-9a-f]{16}")) return Optional.empty();
+        String letter = token.substring(0, 1);
+        return LETTERS.entrySet().stream().filter(e -> e.getValue().equals(letter)).map(e -> e.getKey() + ":" + token.substring(1)).findFirst();
+    }
+
     public View history(String actor, String offerId, String after) {
         authorize(actor);
         var page = repository.deliveries().page(offerId, after);
@@ -86,7 +105,7 @@ public final class FreebieDeliveryAdmin {
         }
         if (page.isEmpty()) text.append("No destinations on this page.");
         var rows = page.size() > FreebieDeliveryStore.PAGE_SIZE
-                ? List.of(ActionRow.of(Button.secondary("freebie_delivery:page:" + (offerId.startsWith("gamerpower:") ? offerId.substring(11) : "e" + offerId.substring(5))
+                ? List.of(ActionRow.of(Button.secondary("freebie_delivery:page:" + token(offerId)
                     + ":" + page.get(FreebieDeliveryStore.PAGE_SIZE - 1).getString("channelId"), "Next page"))) : List.<ActionRow>of();
         return new View(text.toString(), rows);
     }
@@ -102,7 +121,7 @@ public final class FreebieDeliveryAdmin {
                 + "**. Saved ping role: " + Optional.ofNullable(d.getString("roleId")).orElse("none") + ". Attempts so far: " + d.getInteger("attempts", 0)
                 + ".\nUncertain acceptance requires history verification; the same destination, reference and nonce are retained."
                 + "\nConfirmation expires in five minutes. Results appear in delivery history; an existing summary is not reposted.",
-                List.of(ActionRow.of(Button.danger("freebie_delivery:retry:" + (offerId.startsWith("gamerpower:") ? offerId.substring(11) : "e" + offerId.substring(5))
+                List.of(ActionRow.of(Button.danger("freebie_delivery:retry:" + token(offerId)
                         + ":" + channel + ":" + token.get(), "Confirm this retry"))));
     }
     public View confirm(String actor, String offerId, String channel, String token) {

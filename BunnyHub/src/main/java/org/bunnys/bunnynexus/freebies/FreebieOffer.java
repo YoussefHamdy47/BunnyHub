@@ -51,11 +51,13 @@ public record FreebieOffer(String id, String sourceId, FreebieStore store, Strin
 
     public String sourceLabel() {
         if (id.startsWith("console:")) return store == FreebieStore.XBOX ? "Microsoft Store" : "PlayStation Store";
-        return id.startsWith("epic:") ? "Epic Games" : id.startsWith("steam:") ? "Steam" : "GamerPower";
+        return id.startsWith("epic:") ? "Epic Games" : id.startsWith("steam:") ? "Steam" : id.startsWith("fanatical:") ? "Fanatical"
+                : id.startsWith("gog:") ? "GOG" : "GamerPower";
     }
     public String region() {
         return id.startsWith("epic:") ? "US (en-US); availability elsewhere may differ"
-                : id.startsWith("steam:") ? "US store; availability elsewhere may differ" : "Not specified by source";
+                : id.startsWith("steam:") ? "US store; availability elsewhere may differ"
+                : id.startsWith("fanatical:") ? "Some countries may be excluded; Fanatical's page lists them" : "Not specified by source";
     }
 
     public static String idFor(String sourceItemId) { return "gamerpower:" + sourceItemId; }
