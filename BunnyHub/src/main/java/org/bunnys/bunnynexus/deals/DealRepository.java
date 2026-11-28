@@ -26,7 +26,8 @@ import static com.mongodb.client.model.Filters.eq;
 public final class DealRepository implements DealRefresh.Store, DealBoard.Store {
     static final String STATE = "DealState", BOARDS = "DealBoards";
     /** A saved deal's link must still point at the store itself. */
-    private static final Set<String> STORE_HOSTS = Set.of("store.steampowered.com", "www.gog.com");
+    private static final Set<String> STORE_HOSTS = Set.of("store.steampowered.com", "www.gog.com", "www.xbox.com",
+            "store.playstation.com", "www.nintendo.com");
     static final int FAILURES_BEFORE_OFF = 3;
     
     private final MongoCollection<Document> state, boards;
@@ -66,7 +67,30 @@ public final class DealRepository implements DealRefresh.Store, DealBoard.Store 
      */
     public record Board(String guildId, String channelId, boolean on, Optional<String> messageId, List<String> shownGames,
                         Optional<String> contentKey, Optional<Instant> postedAt, int failures, Optional<String> offReason,
-                        Ping ping, Optional<Instant> lastPingAt) {}
+                        Ping ping, Optional<Instant> lastPingAt, Style style) {
+        public Board { Objects.requireNonNull(style); }
+        /** A board in the original style: one message kept up to date. */
+        public Board(String guildId, String channelId, boolean on, Optional<String> messageId, List<String> shownGames,
+                     Optional<String> contentKey, Optional<Instant> postedAt, int failures, Optional<String> offReason,
+                     Ping ping, Optional<Instant> lastPingAt) {
+            this(guildId, channelId, on, messageId, shownGames, contentKey, postedAt, failures, offReason, ping, lastPingAt, Style.BOARD);
+        }
+    }
+
+    /**
+     * How deals appear in the channel. {@code BOARD} (the original, and the default): one message with the best deals,
+     * edited as prices change and reposted when new deals arrive. {@code POSTS}: new deals each get a message of their
+     * own, like a feed, never more often than {@link DealBoard#POST_GAP}; nothing is edited.
+     */
+    public enum Style {
+        BOARD("board", "One board, kept up to date"), POSTS("posts", "A new post for new deals");
+        public final String id, label;
+        Style(String id, String label) { this.id = id; this.label = label; }
+        public static Style byId(String id) {
+            for (Style s : values()) if (s.id.equals(id)) return s;
+            return BOARD;
+        }
+    }
 
     /**
      * Who the board pings when new deals arrive: an optional role, only for new deals on {@code stores} (all when
@@ -105,15 +129,23 @@ public final class DealRepository implements DealRefresh.Store, DealBoard.Store 
 
     /** Turns the board on in {@code channelId}. A new channel starts a new message; returns the board as it was. */
     public Optional<Board> setBoard(String guildId, String channelId, Ping ping, String userId, Instant now) {
+        return setBoard(guildId, channelId, ping, Style.BOARD, userId, now);
+    }
+
+    /** As above, in {@code style}; a new style starts fresh too (the caller removes an old board message). */
+    public Optional<Board> setBoard(String guildId, String channelId, Ping ping, Style style, String userId, Instant now) {
         var before = board(guildId);
-        boolean sameChannel = before.map(b -> b.channelId().equals(channelId)).orElse(false);
+        boolean sameChannel = before.map(b -> b.channelId().equals(channelId) && b.style() == style).orElse(false);
         List<Bson> updates = new ArrayList<>(List.of(Updates.set("channelId", channelId), Updates.set("on", true),
                 Updates.set("setBy", userId), Updates.set("setAt", Date.from(now)), Updates.set("failures", 0),
                 Updates.set("offReason", null), Updates.set("pingRole", ping.roleId().orElse(null)),
                 Updates.set("pingStores", ping.stores().stream().map(store -> store.choice).toList()),
-                Updates.set("pingEveryHours", ping.everyHours())));
-        if (!sameChannel) updates.addAll(List.of(Updates.set("messageId", null), Updates.set("shownGames", List.of()),
-                Updates.set("contentKey", null), Updates.set("postedAt", null)));
+                Updates.set("pingEveryHours", ping.everyHours()), Updates.set("style", style.id)));
+        // A new channel starts over. A new style in the same channel keeps the games already shown there, so switching
+        // to posts does not announce them again as new.
+        boolean sameChannelOnly = before.map(b -> b.channelId().equals(channelId)).orElse(false);
+        if (!sameChannel) updates.addAll(List.of(Updates.set("messageId", null), Updates.set("contentKey", null), Updates.set("postedAt", null)));
+        if (!sameChannelOnly) updates.add(Updates.set("shownGames", List.of()));
         boards.updateOne(eq("_id", guildId), Updates.combine(updates), new UpdateOptions().upsert(true));
         return before;
     }
@@ -165,7 +197,8 @@ public final class DealRepository implements DealRefresh.Store, DealBoard.Store 
         return new Board(doc.getString("_id"), doc.getString("channelId"), Boolean.TRUE.equals(doc.getBoolean("on")),
                 Optional.ofNullable(doc.getString("messageId")), List.copyOf(doc.getList("shownGames", String.class, List.of())),
                 Optional.ofNullable(doc.getString("contentKey")), Optional.ofNullable(posted).map(Date::toInstant),
-                doc.getInteger("failures", 0), Optional.ofNullable(doc.getString("offReason")), ping, Optional.ofNullable(pinged).map(Date::toInstant));
+                doc.getInteger("failures", 0), Optional.ofNullable(doc.getString("offReason")), ping, Optional.ofNullable(pinged).map(Date::toInstant),
+                Style.byId(Objects.requireNonNullElse(doc.getString("style"), Style.BOARD.id)));
     }
 
     // ---- Entries ------------------------------------------------------------------------------------------------

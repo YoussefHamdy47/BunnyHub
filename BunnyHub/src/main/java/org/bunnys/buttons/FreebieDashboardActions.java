@@ -50,6 +50,17 @@ public class FreebieDashboardActions extends BunnyButton {
             var result = autoSetup(event, args, subscriptions);
             if (result.isEmpty()) return; // Asked which existing channels and roles to use.
             notice = result.get();
+        } else if (FreebieDashboard.EVERYTHING.equals(args[1])) {
+            // "Set Up Everything": every section in one shared channel, the games free now posted, then the Deals Board.
+            String[] all = {args[0], FreebieDashboard.ONE_CHANNEL, args[2],
+                    FreebieCatchUp.token(java.util.EnumSet.allOf(FreebieSection.class), FreebieCatchUp.AUTO)};
+            var result = autoSetup(event, all, subscriptions);
+            if (result.isEmpty()) return; // Asked which existing channels and roles to use; Deals stay a dashboard button.
+            notice = result.get();
+            boolean saved = !subscriptions.forGuild(guild.getId()).isEmpty();
+            var deals = org.bunnys.bunnynexus.deals.DealSystem.current().orElse(null);
+            if (saved && deals != null && deals.repository().board(guild.getId()).filter(org.bunnys.bunnynexus.deals.DealRepository.Board::on).isEmpty())
+                notice += "\n" + DealBoardSetup.autoSetup(guild, event.getMember(), deals);
         } else notice = switch (args[1]) {
             case FreebieDashboard.UPDATES -> org.bunnys.bunnynexus.updates.ProductUpdates.current().map(updates -> {
                 boolean off = args.length == 4 && "off".equals(args[3]);

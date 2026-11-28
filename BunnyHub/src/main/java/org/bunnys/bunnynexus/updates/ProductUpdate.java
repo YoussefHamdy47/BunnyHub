@@ -10,7 +10,7 @@ import java.util.Set;
  */
 public enum ProductUpdate {
     DEALS_BOARD("deals-board", "New: a live game Deals Board",
-            "One message with the best current deals on Steam and GOG: 75% off or more on well-reviewed games, cheapest "
+            "One message with the best current deals on PC and console: 75% off or more on well-reviewed games, cheapest "
                     + "first, kept up to date. It can ping a role when new deals arrive, at most once every 6, 12 or 24 hours.",
             "Run `/free-games setup` and press **Create Deals Board**.",
             Feature.DEALS_BOARD);

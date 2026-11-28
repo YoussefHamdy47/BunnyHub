@@ -23,12 +23,14 @@ import java.util.concurrent.*;
 import java.util.function.Supplier;
 
 /**
- * The deals area (docs/deals): refreshes good deals from Steam and GOG every 3 hours and keeps each server's deals board
+ * The deals area (docs/deals): refreshes good deals from Steam, GOG, PlayStation, Xbox and Nintendo every 3 hours and keeps each server's deals board
  * current, all on one daemon thread. Commands and menus only read {@link #snapshot()}, which never blocks. Runs
  * whether or not the free-games system is on.
  */
 public final class DealSystem {
     static final Duration AFTER_ERROR = Duration.ofMinutes(30);
+    /** The least time between two posts of a posts-style board, for setup's description. */
+    public static final long POST_GAP_HOURS = DealBoard.POST_GAP.toHours();
     /** The bot needs these in a channel to keep a board there. */
     public static final Permission[] BOARD_PERMISSIONS = {Permission.VIEW_CHANNEL, Permission.MESSAGE_SEND, Permission.MESSAGE_EMBED_LINKS};
     private static volatile DealSystem instance;
@@ -37,6 +39,8 @@ public final class DealSystem {
     private final DealRepository repository;
     private final ScheduledExecutorService executor;
     private final DealFeed feed;
+    /** Steam ratings for Nintendo deals (the eShop has none of its own). */
+    private final org.bunnys.bunnynexus.ratings.SteamRatings steamRatings;
     private final Clock clock;
     private final DealBoard boards;
     private final DiscordBoards discord;
@@ -48,6 +52,7 @@ public final class DealSystem {
         this.clock = clock;
         executor = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().name("BunnyDeals").daemon().factory());
         feed = new DealFeed(clock, config.userAgent());
+        steamRatings = new org.bunnys.bunnynexus.ratings.SteamRatings(config.userAgent());
         discord = new DiscordBoards(jda);
         boards = new DealBoard(repository, discord, clock, Duration.ofSeconds(1));
         var saved = repository.loadSnapshot();
@@ -57,6 +62,18 @@ public final class DealSystem {
             @Override public DealFeed.Fetch steamSearch(String order) { return feed.steamSearch(order); }
             @Override public DealFeed.Fetch steamItems(List<Long> appIds) { return feed.steamItems(appIds); }
             @Override public DealFeed.Fetch gog() { return feed.gog(); }
+            @Override public DealFeed.Fetch xbox(Optional<String> next) { return feed.xbox(next); }
+            @Override public DealFeed.Fetch playstation() { return feed.playstation(); }
+            @Override public DealFeed.Fetch playstationGame(String productId) { return feed.playstationGame(productId); }
+            @Override public DealFeed.Fetch nintendo() { return feed.nintendo(); }
+            @Override public boolean consoles() { return config.consoles(); }
+            @Override public Optional<DealRefresh.SteamScore> steamRating(String title, Optional<String> publisher) {
+                return switch (steamRatings.forTitle(title, publisher)) {
+                    case org.bunnys.bunnynexus.ratings.SteamRatings.Found found ->
+                            Optional.of(new DealRefresh.SteamScore(found.rating().percent(), (int) Math.min(Integer.MAX_VALUE, found.rating().reviews())));
+                    default -> Optional.empty();
+                };
+            }
         }, repository, clock, this::snapshot, published -> {
             // Each refresh records its prices; deals at the lowest price tracked for at least two weeks get a badge.
             var marked = published.withLowest(lowest(() -> DealPrices.update(prices, published.deals(), clock.instant())));
@@ -103,6 +120,7 @@ public final class DealSystem {
         if (system == null) return;
         system.executor.shutdownNow();
         system.feed.close();
+        system.steamRatings.close();
     }
 
     /** The last good refresh; {@link DealSnapshot#EMPTY} before the first. */

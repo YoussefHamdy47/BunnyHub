@@ -38,7 +38,7 @@ public class GuildWelcome extends BunnyEvent {
         return Card.builder()
                 .title("Thanks for adding BunnyNexus")
                 .text("Free games from Epic, Steam, GOG and more, posted the moment they go live. "
-                        + "Plus a live Deals Board for big Steam and GOG sales, and study timers.")
+                        + "Plus a live Deals Board for big PC and console sales, and study timers.")
                 .text(CommandLinks.render("**Admins:** `/free-games setup` creates the channels and ping roles in one click.\n"
                         + "**Everyone:** `/free-games list` shows what's free now, `/deals` the best sales, `/help` everything else."))
                 .buttons(Button.link(SUPPORT, "Support server"))

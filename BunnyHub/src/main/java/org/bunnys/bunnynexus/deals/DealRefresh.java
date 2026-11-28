@@ -23,7 +23,26 @@ final class DealRefresh {
         DealFeed.Fetch steamSearch(String order);
         DealFeed.Fetch steamItems(List<Long> appIds);
         DealFeed.Fetch gog();
+        /** The console stores; a source without them (older tests) reads Steam and GOG only. */
+        default DealFeed.Fetch xbox(Optional<String> next) { return new DealFeed.Failed("not read", Optional.empty()); }
+        default DealFeed.Fetch playstation() { return new DealFeed.Failed("not read", Optional.empty()); }
+        default DealFeed.Fetch playstationGame(String productId) { return new DealFeed.Failed("not read", Optional.empty()); }
+        default DealFeed.Fetch nintendo() { return new DealFeed.Failed("not read", Optional.empty()); }
+        /** Steam players' rating of a game by its title: percent positive and review count. Empty: not on Steam, or unknown. */
+        default Optional<SteamScore> steamRating(String title, Optional<String> publisher) { return Optional.empty(); }
+        /** False for sources without the console stores, so their absence is not logged as a failure. */
+        default boolean consoles() { return false; }
     }
+
+    record SteamScore(int percent, int reviews) {}
+
+    /** Ratings read from a game's page (PlayStation) or Steam (Nintendo) are kept this long before being read again. */
+    static final Duration RATING_KEPT = Duration.ofDays(3);
+    /** New game pages and Steam lookups per refresh, so one refresh stays a few requests per store. */
+    static final int NEW_RATINGS_PER_REFRESH = 20;
+    private record Rated<T>(Optional<T> rating, Instant at) {}
+    private final Map<String, Rated<DealConsoleIntake.PlayStationRating>> playstationRatings = new HashMap<>();
+    private final Map<String, Rated<SteamScore>> nintendoRatings = new HashMap<>();
 
     /** What a refresh writes; {@link DealRepository} in production. */
     interface Store {
@@ -57,11 +76,16 @@ final class DealRefresh {
         Instant now = clock.instant();
         var steam = steam();
         var gog = read("GOG", source.gog(), DealIntake::gog);
-        if (steam.isEmpty() && gog.isEmpty()) return failed();
+        Optional<List<Deal>> xbox = Optional.empty(), playstation = Optional.empty(), nintendo = Optional.empty();
+        if (source.consoles()) { xbox = xbox(); playstation = playstation(now); nintendo = nintendo(now); }
+        if (steam.isEmpty() && gog.isEmpty() && xbox.isEmpty() && playstation.isEmpty() && nintendo.isEmpty()) return failed();
         var before = previous.get();
         List<Deal> rows = new ArrayList<>();
         rows.addAll(steam.orElseGet(() -> kept(before, DealStore.STEAM, now)));
         rows.addAll(gog.orElseGet(() -> kept(before, DealStore.GOG, now)));
+        rows.addAll(xbox.orElseGet(() -> kept(before, DealStore.XBOX, now)));
+        rows.addAll(playstation.orElseGet(() -> kept(before, DealStore.PLAYSTATION, now)));
+        rows.addAll(nintendo.orElseGet(() -> kept(before, DealStore.NINTENDO, now)));
         var snapshot = new DealSnapshot(DealRules.rank(rows), now, rows.size());
         store.saveSnapshot(snapshot);
         publish.accept(snapshot);
@@ -87,6 +111,71 @@ final class DealRefresh {
         if (!searched) return Optional.empty();
         if (ids.isEmpty()) return Optional.of(List.of());
         return read("Steam items", source.steamItems(List.copyOf(ids)), DealIntake::steamItems);
+    }
+
+    /** The most popular Xbox console games on sale, {@link DealFeed#XBOX_PAGES} pages. Empty when the first page failed. */
+    private Optional<List<Deal>> xbox() {
+        List<Deal> deals = new ArrayList<>();
+        Optional<String> next = Optional.empty();
+        for (int page = 0; page < DealFeed.XBOX_PAGES; page++) {
+            var read = read("Xbox", source.xbox(next), DealConsoleIntake::xbox);
+            if (read.isEmpty()) return page == 0 ? Optional.empty() : Optional.of(deals);
+            deals.addAll(read.get().deals());
+            next = read.get().next();
+            if (next.isEmpty()) break;
+        }
+        return Optional.of(deals);
+    }
+
+    /**
+     * PlayStation's best-selling deals. Only games that already pass the discount bar get their store page read, for
+     * the star rating and sale end; a page is read again after {@link #RATING_KEPT}.
+     */
+    private Optional<List<Deal>> playstation(Instant now) {
+        var rows = read("PlayStation", source.playstation(), DealConsoleIntake::playstation);
+        if (rows.isEmpty()) return Optional.empty();
+        playstationRatings.values().removeIf(r -> r.at().plus(RATING_KEPT).isBefore(now));
+        List<Deal> deals = new ArrayList<>();
+        int fresh = 0;
+        for (var row : rows.get()) {
+            if (row.percentOff() < DealRules.MIN_PERCENT_OFF) continue;
+            var known = playstationRatings.get(row.productId());
+            if (known == null) {
+                if (fresh++ >= NEW_RATINGS_PER_REFRESH) continue; // The rest wait for the next refresh.
+                var page = source.playstationGame(row.productId());
+                if (!(page instanceof DealFeed.Ok ok)) continue; // Asked again next refresh.
+                known = new Rated<>(DealConsoleIntake.playstationRating(ok.body()), now);
+                playstationRatings.put(row.productId(), known);
+            }
+            known.rating().ifPresent(r -> deals.add(row.withRating(r)));
+        }
+        return Optional.of(deals);
+    }
+
+    /** Nintendo's featured deals, rated by Steam players of the same game (looked up once per {@link #RATING_KEPT}). */
+    private Optional<List<Deal>> nintendo(Instant now) {
+        var rows = read("Nintendo", source.nintendo(), DealConsoleIntake::nintendo);
+        if (rows.isEmpty()) return Optional.empty();
+        nintendoRatings.values().removeIf(r -> r.at().plus(RATING_KEPT).isBefore(now));
+        List<Deal> deals = new ArrayList<>();
+        int fresh = 0;
+        for (var row : rows.get()) {
+            if (row.percentOff() < DealRules.MIN_PERCENT_OFF) continue;
+            var known = nintendoRatings.get(row.nsuid());
+            if (known == null) {
+                if (fresh++ >= NEW_RATINGS_PER_REFRESH) continue;
+                known = new Rated<>(source.steamRating(steamTitle(row.title()), row.publisher()), now);
+                nintendoRatings.put(row.nsuid(), known);
+            }
+            known.rating().ifPresent(r -> deals.add(row.withRating(r.percent(), r.reviews())));
+        }
+        return Optional.of(deals);
+    }
+
+    /** The eShop's title without its marks and Switch edition suffix, as Steam lists the game. */
+    static String steamTitle(String eshop) {
+        return eshop.replaceAll("[®™©]", "").replaceAll("(?i)\\s*[–-]\\s*Nintendo Switch(?:™)?\\s*2?\\s*Edition.*$", "")
+                .replaceAll("(?i)\\s+for Nintendo Switch$", "").replaceAll("\\s+", " ").strip();
     }
 
     /** A store's deals from the previous refresh, while that one is fresh. */

@@ -1,0 +1,773 @@
+{
+ "channels": {
+  "BROWSE_CHANNELID=_FILTERS=": {
+   "products": [
+    {
+     "productId": "9P8RQH67TTT1"
+    },
+    {
+     "productId": "9NNFX161JGRJ"
+    },
+    {
+     "productId": "9P36PB4N42GW"
+    },
+    {
+     "productId": "BRQ2SCZCTXF2"
+    },
+    {
+     "productId": "9N2ZDN7NWQKV"
+    },
+    {
+     "productId": "9PH339L3Z99C"
+    },
+    {
+     "productId": "9N0KRV3ZL4GQ"
+    },
+    {
+     "productId": "BX3M8L83BBRW"
+    },
+    {
+     "productId": "BPKDQSSFQ9WV"
+    },
+    {
+     "productId": "C1SDBNRFXT1D"
+    },
+    {
+     "productId": "BNKDKQXMXRR2"
+    },
+    {
+     "productId": "9P9G5WX8C0VH"
+    },
+    {
+     "productId": "9MXMJFNZMVWD"
+    },
+    {
+     "productId": "BTC0L0BW6LWC"
+    },
+    {
+     "productId": "9P5B3ZVDK19D"
+    },
+    {
+     "productId": "9NQGGN01771Z"
+    },
+    {
+     "productId": "9P83GXG3SMZM"
+    },
+    {
+     "productId": "9NXVC0482QS5"
+    },
+    {
+     "productId": "9NBLGGH4PBBM"
+    },
+    {
+     "productId": "9MT8PTGVHX2P"
+    },
+    {
+     "productId": "BPN08ZDRPSFK"
+    },
+    {
+     "productId": "BWTTW53M5B98"
+    },
+    {
+     "productId": "BPL68T0XK96W"
+    },
+    {
+     "productId": "9NKX70BBCDRN"
+    },
+    {
+     "productId": "9NG07QJNK38J"
+    }
+   ],
+   "totalItems": 1780,
+   "encodedCT": "eyJIYXNNb3JlIjp0cnVlfQ=="
+  }
+ },
+ "productSummaries": [
+  {
+   "productId": "9P8RQH67TTT1",
+   "productKind": "Game",
+   "title": "Grand Theft Auto V (Xbox One & Xbox Series X|S)",
+   "averageRating": 4.2,
+   "ratingCount": 123450,
+   "publisherName": "Rockstar Games",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 50.012505,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 19.99,
+      "msrp": 39.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9NNFX161JGRJ",
+   "productKind": "Game",
+   "title": "EA SPORTS FC™ 27 Standard Edition XBOX One & XBOX Series X|S",
+   "averageRating": 2.8,
+   "ratingCount": 1043,
+   "publisherName": "Electronic Arts",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 50.00714,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 34.99,
+      "msrp": 69.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9P36PB4N42GW",
+   "productKind": "Game",
+   "title": "Call of Duty®: Modern Warfare® 4",
+   "averageRating": 2.7,
+   "ratingCount": 147,
+   "publisherName": "Activision Publishing Inc.",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 15.002137,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/01/2026 07:59:59",
+      "listPrice": 59.49,
+      "msrp": 69.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "BRQ2SCZCTXF2",
+   "productKind": "Game",
+   "title": "Grand Theft Auto IV",
+   "averageRating": 4.5,
+   "ratingCount": 4021,
+   "publisherName": "Rockstar Games",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0001",
+      "discountPercentage": 65.03252,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 6.99,
+      "msrp": 19.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9N2ZDN7NWQKV",
+   "productKind": "Game",
+   "title": "Red Dead Redemption 2",
+   "averageRating": 4.4,
+   "ratingCount": 33761,
+   "publisherName": "Rockstar Games",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 75.012505,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 14.99,
+      "msrp": 59.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9PH339L3Z99C",
+   "productKind": "Game",
+   "title": "Red Dead Redemption 2: Ultimate Edition",
+   "averageRating": 4.3,
+   "ratingCount": 29874,
+   "publisherName": "Rockstar Games",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 80.008,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 19.99,
+      "msrp": 99.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9N0KRV3ZL4GQ",
+   "productKind": "Game",
+   "title": "Dead Island 2 Ultimate Edition",
+   "averageRating": 4,
+   "ratingCount": 6887,
+   "publisherName": "Deep Silver",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 90.01286,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 6.99,
+      "msrp": 69.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "BX3M8L83BBRW",
+   "productKind": "Game",
+   "title": "Cyberpunk 2077",
+   "averageRating": 4.2,
+   "ratingCount": 25783,
+   "publisherName": "CD PROJEKT RED",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0001",
+      "discountPercentage": 70.01167,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 17.99,
+      "msrp": 59.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "BPKDQSSFQ9WV",
+   "productKind": "Game",
+   "title": "Gears of War 3",
+   "averageRating": 4.7,
+   "ratingCount": 3916,
+   "publisherName": "Microsoft Studios",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0001",
+      "discountPercentage": 75.062546,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 2.99,
+      "msrp": 11.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "C1SDBNRFXT1D",
+   "productKind": "Game",
+   "title": "Gears of War 2",
+   "averageRating": 4.6,
+   "ratingCount": 2382,
+   "publisherName": "Microsoft Game Studios",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0001",
+      "discountPercentage": 75.062546,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 2.99,
+      "msrp": 11.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "BNKDKQXMXRR2",
+   "productKind": "Game",
+   "title": "Skate 3",
+   "averageRating": 4.6,
+   "ratingCount": 5877,
+   "publisherName": "Electronic Arts",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0001",
+      "discountPercentage": 90.04502,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 1.99,
+      "msrp": 19.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9P9G5WX8C0VH",
+   "productKind": "Game",
+   "title": "Cyberpunk 2077: Ultimate Edition",
+   "averageRating": 4.2,
+   "ratingCount": 26596,
+   "publisherName": "CD PROJEKT RED",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 60.0075,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 31.99,
+      "msrp": 79.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9MXMJFNZMVWD",
+   "productKind": "Game",
+   "title": "Grand Theft Auto: The Trilogy – The Definitive Edition",
+   "averageRating": 3.1,
+   "ratingCount": 7640,
+   "publisherName": "Rockstar Games",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 67.01117,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 19.79,
+      "msrp": 59.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "BTC0L0BW6LWC",
+   "productKind": "Game",
+   "title": "Mortal Kombat 11",
+   "averageRating": 3.7,
+   "ratingCount": 6929,
+   "publisherName": "Warner Bros. Games",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0001",
+      "discountPercentage": 90.018005,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 4.99,
+      "msrp": 49.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9P5B3ZVDK19D",
+   "productKind": "Game",
+   "title": "Red Dead Redemption",
+   "averageRating": 4.7,
+   "ratingCount": 1424,
+   "publisherName": "Rockstar Games",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 60.01201,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 19.99,
+      "msrp": 49.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9NQGGN01771Z",
+   "productKind": "Game",
+   "title": "Poppy Playtime: Chapter 1",
+   "averageRating": 4.7,
+   "ratingCount": 1603,
+   "publisherName": "Mob Entertainment",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 80.16032,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 0.99,
+      "msrp": 4.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9P83GXG3SMZM",
+   "productKind": "Game",
+   "title": "FINAL FANTASY VII REBIRTH Digital Deluxe Edition",
+   "averageRating": 4.2,
+   "ratingCount": 436,
+   "publisherName": "SQUARE ENIX",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 85.012146,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 10.49,
+      "msrp": 69.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9NXVC0482QS5",
+   "productKind": "Game",
+   "title": "It Takes Two - Digital Version",
+   "averageRating": 4.8,
+   "ratingCount": 6593,
+   "publisherName": "Electronic Arts",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 80.020004,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 7.99,
+      "msrp": 39.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9NBLGGH4PBBM",
+   "productKind": "Game",
+   "title": "Gears of War 4",
+   "averageRating": 4.3,
+   "ratingCount": 32834,
+   "publisherName": "Microsoft Studios",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 75.03752,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 4.99,
+      "msrp": 19.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9MT8PTGVHX2P",
+   "productKind": "Game",
+   "title": "Halo: The Master Chief Collection",
+   "averageRating": 4.3,
+   "ratingCount": 32964,
+   "publisherName": "Microsoft Studios",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 75.01876,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 9.99,
+      "msrp": 39.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "BPN08ZDRPSFK",
+   "productKind": "Game",
+   "title": "Gears of War",
+   "averageRating": 4.7,
+   "ratingCount": 2265,
+   "publisherName": "Microsoft",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0001",
+      "discountPercentage": 75.062546,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 2.99,
+      "msrp": 11.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "BWTTW53M5B98",
+   "productKind": "Game",
+   "title": "Battlefield™ 1",
+   "averageRating": 4.2,
+   "ratingCount": 17107,
+   "publisherName": "Electronic Arts",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0001",
+      "discountPercentage": 95.04752,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 0.99,
+      "msrp": 19.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "BPL68T0XK96W",
+   "productKind": "Game",
+   "title": "Battlefield™ 1 Revolution",
+   "averageRating": 4.2,
+   "ratingCount": 18170,
+   "publisherName": "Electronic Arts",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0001",
+      "discountPercentage": 95.02376,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 1.99,
+      "msrp": 39.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9NKX70BBCDRN",
+   "productKind": "Game",
+   "title": "Forza Horizon 5 Standard Edition",
+   "averageRating": 3.6,
+   "ratingCount": 33789,
+   "publisherName": "Xbox Game Studios",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 60.010002,
+      "availabilityActions": [
+       "Details",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "01/07/2027 09:59:59",
+      "listPrice": 23.99,
+      "msrp": 59.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  },
+  {
+   "productId": "9NG07QJNK38J",
+   "productKind": "Game",
+   "title": "Among Us",
+   "averageRating": 3.8,
+   "ratingCount": 15654,
+   "publisherName": "Innersloth",
+   "specificPrices": {
+    "purchaseable": [
+     {
+      "skuId": "0010",
+      "discountPercentage": 40.08016,
+      "availabilityActions": [
+       "Details",
+       "Fulfill",
+       "Purchase",
+       "Browse",
+       "Curate",
+       "Redeem"
+      ],
+      "endDateUtc": "12/03/2026 09:59:59",
+      "listPrice": 2.99,
+      "msrp": 4.99,
+      "currency": "USD"
+     }
+    ]
+   }
+  }
+ ]
+}

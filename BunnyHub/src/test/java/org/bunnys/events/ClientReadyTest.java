@@ -14,8 +14,8 @@ class ClientReadyTest {
     @Test void theStatusSaysWhatTheBotDoesAndFitsDiscordsLimit() {
         var lines = ClientReady.statusLines(58);
         assertEquals(3, lines.size());
-        assertTrue(lines.contains("58 good Steam and GOG deals right now · /deals"));
-        assertTrue(ClientReady.statusLines(0).contains("Big Steam and GOG sales · /deals"), "no count before the first refresh");
+        assertTrue(lines.contains("58 good game deals right now · /deals"));
+        assertTrue(ClientReady.statusLines(0).contains("Big PC and console sales · /deals"), "no count before the first refresh");
         assertTrue(lines.stream().allMatch(l -> l.length() <= 128));
     }
 

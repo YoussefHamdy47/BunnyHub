@@ -87,6 +87,18 @@ class DealRepositoryIT {
         assertTrue(repository.board(guild).orElseThrow().messageId().isEmpty(), "a late post for the old channel is ignored");
     }
 
+    @Test void theStyleIsKeptAndSwitchingItKeepsTheGamesAlreadyShown() {
+        repository.setBoard(guild, channel, DealRepository.Ping.NONE, admin, now);
+        assertEquals(DealRepository.Style.BOARD, repository.board(guild).orElseThrow().style(), "boards saved before styles are boards");
+        repository.posted(guild, channel, "300000000000000001", List.of("1", "2"), "k1", now, false);
+        var before = repository.setBoard(guild, channel, DealRepository.Ping.NONE, DealRepository.Style.POSTS, admin, now).orElseThrow();
+        assertEquals(DealRepository.Style.BOARD, before.style());
+        var posts = repository.board(guild).orElseThrow();
+        assertEquals(DealRepository.Style.POSTS, posts.style());
+        assertTrue(posts.messageId().isEmpty() && posts.postedAt().isEmpty(), "posts start with their opening post");
+        assertEquals(List.of("1", "2"), posts.shownGames(), "games the channel saw are not announced again");
+    }
+
     @Test void aFailedDayCountsOnceAndTheThirdTurnsTheBoardOff() {
         repository.setBoard(guild, channel, DealRepository.Ping.NONE, admin, now);
         repository.posted(guild, channel, "300000000000000001", List.of("1"), "k1", now, false);

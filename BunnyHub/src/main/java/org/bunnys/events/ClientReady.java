@@ -83,7 +83,7 @@ public class ClientReady extends BunnyEvent {
         var lines = new java.util.ArrayList<>(java.util.List.of(
                 "Free games from Epic, Steam, GOG and more · /free-games",
                 "Set up free-game alerts with /free-games setup"));
-        lines.add(deals > 0 ? deals + " good Steam and GOG deals right now · /deals" : "Big Steam and GOG sales · /deals");
+        lines.add(deals > 0 ? deals + " good game deals right now · /deals" : "Big PC and console sales · /deals");
         return lines;
     }
 

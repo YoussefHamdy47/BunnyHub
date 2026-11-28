@@ -157,7 +157,7 @@ class FreebieExistingSetupTest {
         roles.put(all, EnumSet.copyOf(FreebieSection.MAJOR_PC.stores()));
         var card = FreebieServerSetup.rolePanelCard(roles, Optional.of(deals));
         assertTrue(card.plainText().contains("Free Game and Deal Pings"));
-        assertTrue(card.plainText().contains("**Game deals**\n<:steam:705062577817780315> <:GOG:1572185523924115587> 75% off"));
+        assertTrue(card.plainText().contains("**Game deals**\n<:steam:705062577817780315> <:GOG:1572185523924115587> <:PlayStation:1572185535043215361> <:Xbox:1572185536851091466> <:Switch:1572185538616631337> 75% off"));
         assertTrue(card.plainText().contains("<:Epic:824679104220626954> <:steam:705062577817780315>"), "launcher emojis, not names");
         var ids = net.dv8tion.jda.api.components.tree.MessageComponentTree.of(card.components())
                 .findAll(net.dv8tion.jda.api.components.buttons.Button.class).stream().map(b -> b.getCustomId()).toList();

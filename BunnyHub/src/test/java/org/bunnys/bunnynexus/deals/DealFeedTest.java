@@ -35,7 +35,8 @@ class DealFeedTest {
         assertThrows(UnknownHostException.class, () -> DealFeed.lookup("localhost"));
         assertThrows(UnknownHostException.class, () -> DealFeed.lookup("www.cheapshark.com"));
         assertThrows(UnknownHostException.class, () -> DealFeed.lookup("store.steampowered.com.evil.example"));
-        assertEquals(java.util.Set.of("store.steampowered.com", "api.steampowered.com", "catalog.gog.com"), DealFeed.HOSTS);
+        assertEquals(java.util.Set.of("store.steampowered.com", "api.steampowered.com", "catalog.gog.com", "emerald.xboxservices.com",
+                "web.np.playstation.com", "store.playstation.com", "www.nintendo.com"), DealFeed.HOSTS);
     }
 
     @Test void theRequestsAreTheDocumentedOnes() {

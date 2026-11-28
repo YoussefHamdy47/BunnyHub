@@ -42,11 +42,12 @@ public class DealBoardModal extends BunnyModal {
         if (stores.size() == DealStore.values().length) stores.clear(); // every launcher
         int hours = values(event, DealBoardSetup.EVERY_FIELD).stream().findFirst().filter(v -> v.matches("[0-9]{1,2}"))
                 .map(Integer::parseInt).orElse(DealRepository.Ping.DEFAULT_HOURS);
+        var style = values(event, DealBoardSetup.STYLE_FIELD).stream().findFirst().map(DealRepository.Style::byId).orElse(DealRepository.Style.BOARD);
 
         String notice;
         if (channel == null) {
             var before = deals.repository().turnOff(guild.getId(), event.getUser().getId(), deals.now());
-            before.filter(b -> b.messageId().isPresent())
+            before.filter(b -> b.messageId().isPresent() && b.style() == DealRepository.Style.BOARD) // posts stay
                     .ifPresent(b -> deals.removeBoardMessage(guild.getId(), b.channelId(), b.messageId().get()));
             DealBoardSetup.refreshRolePanel(guild);
             notice = "Deals Board turned off.";
@@ -55,7 +56,7 @@ public class DealBoardModal extends BunnyModal {
             var problem = FreebieSettingsCommands.validate(guild, channel, role);
             if (problem.isPresent()) notice = "⚠️ " + problem.get();
             else {
-                DealBoardSetup.save(guild, channel, role.map(r -> r.getId()), stores, hours, event.getUser().getId(), deals);
+                DealBoardSetup.save(guild, channel, role.map(r -> r.getId()), stores, hours, style, event.getUser().getId(), deals);
                 notice = "Deals Board on in " + channel.getAsMention() + ". It appears there in a moment.";
             }
         }

@@ -21,8 +21,9 @@ public record Deal(String id, DealStore store, String title, URI link, long sale
         Objects.requireNonNull(link); Objects.requireNonNull(endsAt);
     }
 
-    /** "86% positive" on Steam, "rated 4.7/5" on GOG. */
+    /** "86% positive" on Steam, "rated 4.7/5" in stores that rate in stars, "86% positive on Steam" for Nintendo games. */
     public String ratingText() {
-        return store == DealStore.GOG ? "rated " + rating / 10 + "." + rating % 10 + "/5" : rating + "% positive";
+        if (store.stars) return "rated " + rating / 10 + "." + rating % 10 + "/5";
+        return rating + "% positive" + (store == DealStore.NINTENDO ? " on Steam" : "");
     }
 }

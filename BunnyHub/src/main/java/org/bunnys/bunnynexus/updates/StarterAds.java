@@ -29,7 +29,7 @@ final class StarterAds {
                         Ad.Audience.ALL, true, now),
                 // Newer, so a server without a board sees it first.
                 new Ad("deals-board", Optional.of("New: Deals Board"),
-                        "One message with the best Steam and GOG sales, kept up to date: 75% off or more on well-reviewed games, "
+                        "One message with the best PC and console sales, kept up to date: 75% off or more on well-reviewed games, "
                                 + "cheapest first.\nAdmins can add it in one click: {/free-games setup} → **Create Deals Board**.",
                         Optional.empty(), Optional.empty(), Ad.Audience.NO_DEALS_BOARD, true, now.plusSeconds(1)));
     }

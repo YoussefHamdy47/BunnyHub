@@ -49,6 +49,12 @@ public class FreebieDashboardButtons extends BunnyButton {
                 event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieLauncherPings.view(event.getGuild(), saved, null))).queue();
             }
             case FreebieDashboard.HELP -> event.reply(org.bunnys.handler.cards.Card.fromEmbed(FreebieGuide.embed(system.config().autoSend())).message()).setEphemeral(true).queue();
+            // From the welcome screen: the full dashboard, even with nothing set up yet.
+            case FreebieDashboard.ADVANCED -> {
+                event.deferEdit().complete();
+                var saved = system.subscriptions().forGuild(args[2]);
+                event.getHook().editOriginal(FreebieDashboard.asEdit(FreebieDashboard.advanced(event.getGuild(), saved, null))).queue();
+            }
             case FreebieDashboard.HOME -> {
                 event.deferEdit().complete();
                 var saved = system.subscriptions().forGuild(args[2]);
