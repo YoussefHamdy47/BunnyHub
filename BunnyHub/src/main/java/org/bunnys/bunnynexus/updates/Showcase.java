@@ -85,7 +85,10 @@ public final class Showcase {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception failure) {
-                BunnyLog.warning("[Showcase] A message failed | " + FailureDiagnostics.describe(failure));
+                // Discord's own code and meaning (no message content), e.g. "50035 Invalid Form Body".
+                String why = failure.getCause() instanceof net.dv8tion.jda.api.exceptions.ErrorResponseException error
+                        ? error.getErrorCode() + " " + error.getMeaning() : failure.getClass().getSimpleName();
+                BunnyLog.warning("[Showcase] Message " + (posted + 1) + " failed: " + why);
             }
         }
         return posted;

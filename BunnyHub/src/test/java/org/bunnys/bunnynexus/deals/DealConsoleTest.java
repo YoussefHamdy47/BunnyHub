@@ -75,12 +75,13 @@ class DealConsoleTest {
 
     /** Steam and GOG from the 2026-11-23 captures, the consoles from 2026-11-27; counts game page reads. */
     static final class Source implements DealRefresh.Source {
-        int playstationPages, steamLookups;
+        int playstationPages, steamLookups, xboxPages;
         @Override public DealFeed.Fetch steamSearch(String order) { return new DealFeed.Failed("off", Optional.empty()); }
         @Override public DealFeed.Fetch steamItems(List<Long> appIds) { return new DealFeed.Failed("off", Optional.empty()); }
         @Override public DealFeed.Fetch gog() { return new DealFeed.Failed("off", Optional.empty()); }
         @Override public boolean consoles() { return true; }
         @Override public DealFeed.Fetch xbox(Optional<String> next) {
+            xboxPages++;
             return next.isPresent() ? new DealFeed.Failed("HTTP 500", Optional.empty()) : new DealFeed.Ok(resource("xbox-browse.json"));
         }
         @Override public DealFeed.Fetch playstation() { return new DealFeed.Ok(resource("playstation-deals.json")); }
@@ -109,5 +110,26 @@ class DealConsoleTest {
         refresh.run();
         assertEquals(pages, source.playstationPages, "game pages are not read again within three days");
         assertEquals(lookups, source.steamLookups, "nor Steam asked again");
+    }
+
+    @Test void consolesAreReadEveryNineHoursAndTheirDealsKeptInBetween() {
+        var source = new Source();
+        List<DealSnapshot> published = new ArrayList<>();
+        Instant[] at = {now};
+        var clock = new Clock() {
+            @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+            @Override public Clock withZone(ZoneId zone) { return this; }
+            @Override public Instant instant() { return at[0]; }
+        };
+        var refresh = new DealRefresh(source, snapshot -> {}, clock, () -> published.isEmpty() ? DealSnapshot.EMPTY : published.getLast(), published::add);
+        refresh.run();
+        int xbox = source.xboxPages;
+        at[0] = now.plus(Duration.ofHours(3));
+        refresh.run();
+        assertEquals(xbox, source.xboxPages, "not read again after 3 hours");
+        assertTrue(published.getLast().deals().stream().anyMatch(d -> d.id().equals("xbox:9N2ZDN7NWQKV")), "its deals are kept");
+        at[0] = now.plus(Duration.ofHours(9));
+        refresh.run();
+        assertTrue(source.xboxPages > xbox, "read again after 9 hours");
     }
 }

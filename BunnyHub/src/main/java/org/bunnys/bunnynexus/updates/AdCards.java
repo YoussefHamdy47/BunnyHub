@@ -36,10 +36,12 @@ public final class AdCards {
         if (!ad.links().isEmpty()) {
             List<Button> buttons = new ArrayList<>();
             for (Ad.Link link : ad.links()) {
-                Button button = Button.link(link.url().toString(), link.label());
-                buttons.add(link.emoji().map(e -> button.withEmoji(Emoji.fromFormatted(e))).orElse(button));
+                // A template shown unfilled (owner previews) still has {deal.url}-style links, which Discord refuses.
+                if (!Ad.https(link.url())) continue;
+                Button button = Button.link(link.url(), link.label());
+                buttons.add(link.emoji().filter(e -> !e.contains("{")).map(e -> button.withEmoji(Emoji.fromFormatted(e))).orElse(button));
             }
-            parts.add(ActionRow.of(buttons));
+            if (!buttons.isEmpty()) parts.add(ActionRow.of(buttons));
         }
         parts.add(Separator.createDivider(Separator.Spacing.SMALL));
         parts.add(TextDisplay.of(FROM));

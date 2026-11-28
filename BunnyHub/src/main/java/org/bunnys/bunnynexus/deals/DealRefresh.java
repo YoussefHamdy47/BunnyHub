@@ -77,7 +77,12 @@ final class DealRefresh {
         var steam = steam();
         var gog = read("GOG", source.gog(), DealIntake::gog);
         Optional<List<Deal>> xbox = Optional.empty(), playstation = Optional.empty(), nintendo = Optional.empty();
-        if (source.consoles()) { xbox = xbox(); playstation = playstation(now); nintendo = nintendo(now); }
+        // Console sales run for days and their pages are large (about 1 MB a check), so the consoles are read every
+        // CONSOLES_EVERY; in between, their deals from the last read are kept.
+        if (source.consoles() && (lastConsoles == null || !now.isBefore(lastConsoles.plus(CONSOLES_EVERY)))) {
+            xbox = xbox(); playstation = playstation(now); nintendo = nintendo(now);
+            if (xbox.isPresent() || playstation.isPresent() || nintendo.isPresent()) lastConsoles = now;
+        }
         if (steam.isEmpty() && gog.isEmpty() && xbox.isEmpty() && playstation.isEmpty() && nintendo.isEmpty()) return failed();
         var before = previous.get();
         List<Deal> rows = new ArrayList<>();
@@ -178,10 +183,15 @@ final class DealRefresh {
                 .replaceAll("(?i)\\s+for Nintendo Switch$", "").replaceAll("\\s+", " ").strip();
     }
 
-    /** A store's deals from the previous refresh, while that one is fresh. */
+    /** A store's deals from the previous refresh, while that one is fresh; a sale that has ended is dropped. */
     private static List<Deal> kept(DealSnapshot before, DealStore store, Instant now) {
-        return before.stale(now) ? List.of() : before.forStore(Optional.of(store));
+        return before.stale(now) ? List.of() : before.forStore(Optional.of(store)).stream()
+                .filter(d -> d.endsAt().map(now::isBefore).orElse(true)).toList();
     }
+
+    /** How often the console stores are read; Steam and GOG are read every {@link #EVERY}. */
+    static final Duration CONSOLES_EVERY = Duration.ofHours(9);
+    private Instant lastConsoles;
 
     private interface Reader<T> { T read(byte[] body) throws DealIntake.Invalid; }
 
