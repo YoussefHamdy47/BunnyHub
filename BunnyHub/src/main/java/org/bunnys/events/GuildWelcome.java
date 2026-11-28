@@ -34,15 +34,36 @@ public class GuildWelcome extends BunnyEvent {
                 failure -> BunnyLog.info("[Welcome] Not posted in " + guild.getId() + ": " + failure.getClass().getSimpleName())));
     }
 
-    static Card card() {
-        return Card.builder()
+    static Card card() { return card(freeNow()); }
+
+    /** The welcome card as a server gets it now, for the owner's showcase. */
+    public static Card showcaseCard() { return card(); }
+
+    /**
+     * The first impression: what the bot does, the one-click setup, and proof it works (games free right now). No ad:
+     * the admin just added the bot. The buttons lead to help and to a vote.
+     */
+    static Card card(List<String> freeNow) {
+        var card = Card.builder()
                 .title("Thanks for adding BunnyNexus")
-                .text("Free games from Epic, Steam, GOG and more, posted the moment they go live. "
-                        + "Plus a live Deals Board for big PC and console sales, and study timers.")
-                .text(CommandLinks.render("**Admins:** `/free-games setup` creates the channels and ping roles in one click.\n"
-                        + "**Everyone:** `/free-games list` shows what's free now, `/deals` the best sales, `/help` everything else."))
-                .buttons(Button.link(SUPPORT, "Support server"))
+                .text("Free games from Epic, Steam, GOG, PlayStation, Xbox and mobile, posted the moment they go live. "
+                        + "Plus big PC and console deals, and study timers.")
+                .text(CommandLinks.render("**Admins:** `/free-games setup` → **Set Up Everything** does it all in one click.\n"
+                        + "**Everyone:** `/free-games list` shows what's free now, `/deals` the best sales, `/help` everything else."));
+        if (!freeNow.isEmpty()) card.text("**Free right now:** " + String.join(" · ", freeNow));
+        return card.buttons(Button.link(SUPPORT, "Support Server"), Button.link(org.bunnys.bunnynexus.freebies.FreebieInvite.VOTE, "Vote on Top.gg"))
                 .build();
+    }
+
+    /** Up to three games free right now, as links, to show the bot works before anything is set up. */
+    static List<String> freeNow() {
+        try {
+            return org.bunnys.bunnynexus.freebies.FreebieSystem.current().map(s -> s.liveNow(Optional.empty())).orElse(List.of()).stream()
+                    .filter(o -> !o.store().news()).limit(3)
+                    .map(o -> "[" + net.dv8tion.jda.api.utils.MarkdownSanitizer.escape(o.title().replaceFirst("\\s+Giveaway$", "")
+                            .replace('[', '(').replace(']', ')')) + "](" + o.claimUrl() + ")")
+                    .toList();
+        } catch (RuntimeException unavailable) { return List.of(); }
     }
 
     /** The system channel when the bot can post there, otherwise the highest public text channel it can post in. */

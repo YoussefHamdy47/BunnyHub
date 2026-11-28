@@ -284,6 +284,12 @@ public final class FreebieRepository {
                 .map(FreebieOffer::read).into(new ArrayList<>());
     }
 
+    /** Giveaways the owner approved (or sent automatically) found since {@code since}, newest first. Projected to what ads count. */
+    public List<FreebieOffer> givenAwaySince(Instant since, int limit) {
+        return offers.find(and(in("state", "APPROVED", "COMPLETED", "EXPIRED"), gte("discoveredAt", Date.from(since))))
+                .sort(Sorts.descending("discoveredAt")).limit(limit).map(FreebieOffer::read).into(new ArrayList<>());
+    }
+
     /** The raw offer document, for enrichment facts; empty for unknown and purged offers. */
     Optional<Document> offerDocument(String id) {
         return Optional.ofNullable(offers.find(and(eq("_id", id), ne("state", FreebieRetention.PURGED))).first());

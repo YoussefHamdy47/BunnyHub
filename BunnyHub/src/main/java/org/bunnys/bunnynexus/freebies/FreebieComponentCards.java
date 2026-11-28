@@ -210,7 +210,7 @@ final class FreebieComponentCards {
     private static Container single(Member m, boolean checkout, Instant now, Detail detail) {
         var offer = m.offer();
         List<ContainerChildComponent> parts = new ArrayList<>();
-        offer.image().ifPresent(i -> parts.add(MediaGallery.of(MediaGalleryItem.fromUrl(i.toString()))));
+        offer.image().ifPresent(i -> parts.add(MediaGallery.of(art(offer, i))));
         if (m.status() != Status.LIVE) {
             parts.add(TextDisplay.of("## " + FreebieLifecycleMessages.ENDED_PREFIX + text(title(offer.title()), 200) + "\n**"
                     + (m.status() == Status.WITHDRAWN ? FreebieLifecycleMessages.WITHDRAWN_TEXT : FreebieLifecycleMessages.ENDED_TEXT) + "**"));
@@ -246,8 +246,8 @@ final class FreebieComponentCards {
 
     private static Container several(List<Member> members, boolean checkout, Instant now, Detail detail) {
         List<ContainerChildComponent> parts = new ArrayList<>();
-        var art = members.stream().filter(m -> m.status() == Status.LIVE).map(m -> m.offer().image()).flatMap(Optional::stream)
-                .limit(MAX_ART).map(i -> MediaGalleryItem.fromUrl(i.toString())).toList();
+        var art = members.stream().filter(m -> m.status() == Status.LIVE).map(m -> m.offer().image().map(i -> art(m.offer(), i)))
+                .flatMap(Optional::stream).limit(MAX_ART).toList();
         if (!art.isEmpty()) parts.add(MediaGallery.of(art));
         long live = members.stream().filter(m -> m.status() == Status.LIVE).count();
         var stores = members.stream().map(m -> m.offer().store()).distinct().toList();
@@ -291,6 +291,19 @@ final class FreebieComponentCards {
         });
         parts.add(TextDisplay.of(SUBTEXT + members.getFirst().footer() + (live > 0 ? FreebieInvite.line() : "")));
         return Container.of(parts);
+    }
+
+    /** "Horror" as a word in the title or the store's description (owner request 2026-11-28). */
+    private static final Pattern HORROR = Pattern.compile("(?i)\\bhorror\\b");
+
+    /** A horror game, whose art is hidden behind Discord's spoiler blur so nobody gets a scary picture unasked. */
+    static boolean horror(FreebieOffer offer) {
+        return HORROR.matcher(offer.title()).find() || HORROR.matcher(offer.description() == null ? "" : offer.description()).find();
+    }
+
+    /** A game's art; blurred until tapped when it is a horror game. */
+    static MediaGalleryItem art(FreebieOffer offer, java.net.URI image) {
+        return MediaGalleryItem.fromUrl(image.toString()).withSpoiler(horror(offer));
     }
 
     static String price(FreebieOffer offer) {

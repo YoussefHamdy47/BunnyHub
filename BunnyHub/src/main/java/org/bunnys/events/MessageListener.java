@@ -103,10 +103,17 @@ public class MessageListener extends BunnyEvent {
         // A bare ping is a question, not a command - answer it with the help pointer.
         if (remainder.isEmpty()) {
             if (!mayNotify(event.getAuthor().getId())) return;
-            event.getMessage().reply(org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.notice("Hey there",
-                            org.bunnys.handler.commands.CommandLinks.render("Run `/help` or `@") + event.getJDA().getSelfUser().getName()
-                                    + " help` to see everything I can do.")).message())
-                    .mentionRepliedUser(false).queue(null, e -> {});
+            var hello = org.bunnys.handler.cards.Card.fromEmbed(SystemEmbeds.notice("Hey there",
+                    org.bunnys.handler.commands.CommandLinks.render("Run `/help` or `@") + event.getJDA().getSelfUser().getName()
+                            + " help` to see everything I can do."
+                            + org.bunnys.bunnynexus.freebies.FreebieInvite.subtext().map(s -> "\n" + s).orElse(""))).message();
+            String user = event.getAuthor().getId();
+            var guild = event.isFromGuild() ? java.util.Optional.of(event.getGuild().getId()) : java.util.Optional.<String>empty();
+            // The ad check reads the database, so it runs off the gateway thread; at most one per person every few days.
+            java.util.concurrent.CompletableFuture.supplyAsync(() -> org.bunnys.bunnynexus.updates.ProductUpdates.userAd(user, guild))
+                    .exceptionally(failure -> java.util.Optional.empty())
+                    .thenAccept(ad -> event.getMessage().reply(org.bunnys.bunnynexus.updates.AdCards.attach(hello, ad))
+                            .setAllowedMentions(java.util.List.of()).mentionRepliedUser(false).queue(null, e -> {}));
             return;
         }
 

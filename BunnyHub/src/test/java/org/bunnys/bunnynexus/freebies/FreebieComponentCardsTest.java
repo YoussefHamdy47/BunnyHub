@@ -119,6 +119,23 @@ class FreebieComponentCardsTest {
         assertTrue(children(endedCard, MediaGallery.class).isEmpty(), "no art without a live game");
     }
 
+    @Test void horrorGameArtIsHiddenBehindASpoiler() {
+        var plain = epic("a", "Game a");
+        var scary = new FreebieOffer(plain.id(), plain.sourceId(), plain.store(), plain.platforms(), "Dread Hollow",
+                "A psychological Horror adventure in a cursed village.", plain.instructions(), plain.worth(), plain.image(),
+                plain.claimUrl(), plain.pageUrl(), plain.endsAt(), plain.discoveredAt(), plain.state(), plain.reviewMessageId(),
+                plain.reviewChannelId(), plain.decidedBy(), plain.fanoutDone(), plain.gone(), plain.revision());
+        assertTrue(FreebieComponentCards.horror(scary));
+        assertFalse(FreebieComponentCards.horror(plain));
+        assertFalse(FreebieComponentCards.horror(epic("b", "Horrorscope Tycoon")), "the word, not part of one");
+        assertTrue(FreebieComponentCards.art(scary, scary.image().orElseThrow()).isSpoiler());
+        assertFalse(FreebieComponentCards.art(plain, plain.image().orElseThrow()).isSpoiler());
+        var member = new FreebieAnnouncementCards.Member(scary, FreebieFacts.NONE, "epic:a|" + CHANNEL, LIVE);
+        var top = new ArrayList<MessageTopLevelComponent>(FreebieComponentCards.create(List.of(member), List.of(), false, now).getComponents());
+        var gallery = (MediaGallery) ((Container) top.getFirst()).getComponents().getFirst();
+        assertTrue(gallery.getItems().getFirst().isSpoiler(), "a single horror game's card");
+    }
+
     @Test void aSteamRatingShowsUnderTheDealWhenOneWasFound() {
         var rated = new FreebieFacts(Optional.empty(), Optional.empty(), Optional.empty(), List.of(), Optional.empty(), true,
                 Optional.of(new org.bunnys.bunnynexus.ratings.GameRating(1607680, 78, 4265, "Mostly Positive")));

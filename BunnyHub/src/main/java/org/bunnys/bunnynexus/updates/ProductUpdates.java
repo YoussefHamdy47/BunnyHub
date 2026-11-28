@@ -51,12 +51,13 @@ public final class ProductUpdates {
         if (instance != null || client.getMongoManager() == null || !client.getMongoManager().isConnected()) return;
         var db = org.bunnys.handler.database.DB.getDatabase();
         instance = new ProductUpdates(new UpdatePrefs(db), new AdStore(db), client::getJDA, Clock.systemUTC());
+        instance.users = new UpdatePrefs(db, USER_COLLECTION);
         org.bunnys.bunnynexus.freebies.FreebiePromos.use(instance::adFor);
         try {
             // Services start once Discord is ready, so the bot's own id is known for the invite button.
             var jda = client.getJDA();
-            if (jda != null && instance.ads.seedOnce(StarterAds.all(jda.getSelfUser().getApplicationId(), Instant.now())))
-                BunnyLog.info("[Updates] Added the starter ads (get-bunnynexus, deals-board).");
+            int written = jda == null ? 0 : instance.ads.seed(StarterAds.all(jda.getSelfUser().getApplicationId(), Instant.now()));
+            if (written > 0) BunnyLog.info("[Updates] Added or updated " + written + " of the bot's own ads.");
         } catch (RuntimeException failure) {
             BunnyLog.warning("[Updates] Starter ads not added | " + FailureDiagnostics.describe(failure));
         }
@@ -98,13 +99,90 @@ public final class ProductUpdates {
      * Cheapest checks first: no active ads costs nothing, a server not yet due costs one read, and the board is only
      * read when an ad's audience depends on it. The claim is atomic, so parallel alerts never double up.
      */
-    Optional<net.dv8tion.jda.api.components.container.Container> adFor(String guildId, Instant now) {
+    Optional<net.dv8tion.jda.api.components.container.Container> adFor(String guildId, Instant now) { return adFor(guildId, now, List.of()); }
+
+    private final AdContexts contexts = new AdContexts();
+
+    /**
+     * For the owner's showcase: every active ad as this server would see it now, filled with live data (live ads that
+     * have nothing to say right now come back unfilled, flagged false), and the ad this alert would carry if the server
+     * were due one. Nothing is counted. Blocking.
+     */
+    public record Showcase(List<Map.Entry<Ad, Boolean>> ads, Optional<Ad> forAlert) {}
+
+    public Showcase showcase(String guildId, List<org.bunnys.bunnynexus.freebies.FreebieOffer> page) {
+        Instant now = clock.instant();
+        var context = contexts.build(guildId, page, now);
+        List<Map.Entry<Ad, Boolean>> all = new ArrayList<>();
+        for (Ad ad : ads.active()) {
+            var filled = AdTemplate.render(ad, context);
+            all.add(Map.entry(filled.orElse(ad), filled.isPresent()));
+        }
+        return new Showcase(all, UpdateAudience.ad(ads.active(), uses(guildId), UpdateAudience.PromoState.NONE, now, context));
+    }
+
+    /** Each person's ad history for private command replies, by user id. */
+    static final String USER_COLLECTION = "UserAdPrefs";
+    /** Private replies: at most one ad per person this often, and each ad at most this many times per person. */
+    public static final Duration USER_EVERY = Duration.ofDays(3);
+    public static final int USER_TIMES = 3;
+    private volatile UpdatePrefs users;
+
+    /**
+     * An ad for a private reply to {@code userId} ({@code /free-games list}, {@code /deals}, a mention), counted as
+     * shown, or nothing when this person saw one in the last {@link #USER_EVERY}. Server-only ads (a Deals Board pitch)
+     * are judged by the server the command ran in; in DMs only ads for every server qualify. Blocking.
+     */
+    public Optional<net.dv8tion.jda.api.components.container.Container> adForUser(String userId, Optional<String> guildId) {
+        var people = users;
+        if (people == null) return Optional.empty();
+        Instant now = clock.instant();
+        var active = ads.active();
+        if (active.isEmpty()) return Optional.empty();
+        var state = people.promoState(userId);
+        if (state.lastAt().filter(last -> last.plus(USER_EVERY).isAfter(now)).isPresent()) return Optional.empty();
+        Set<ProductUpdate.Feature> uses = guildId.map(ProductUpdates::uses).orElse(EnumSet.of(ProductUpdate.Feature.DEALS_BOARD));
+        var context = active.stream().anyMatch(Ad::live) ? contexts.build(guildId.orElse(""), List.of(), now) : AdContext.NONE;
+        var capped = new UpdateAudience.PromoState(state.lastAt(), cap(state.shown()));
+        var ad = UpdateAudience.ad(active, uses, capped, now, context);
+        if (ad.isEmpty() || !people.claimPromo(userId, ad.get().id(), now, USER_EVERY, USER_TIMES)) return Optional.empty();
+        return ad.map(AdCards::card);
+    }
+
+    /** Counts at {@link #USER_TIMES} read as used up, since the selection itself allows {@link UpdateAudience#PROMO_TIMES}. */
+    static Map<String, Integer> cap(Map<String, Integer> shown) {
+        Map<String, Integer> capped = new HashMap<>();
+        shown.forEach((id, n) -> capped.put(id, n >= USER_TIMES ? UpdateAudience.PROMO_TIMES : n));
+        return capped;
+    }
+
+    /** As {@link #adForUser}, from anywhere: empty while product updates are not running. */
+    public static Optional<net.dv8tion.jda.api.components.container.Container> userAd(String userId, Optional<String> guildId) {
+        try { return current().flatMap(u -> u.adForUser(userId, guildId)); }
+        catch (RuntimeException failure) {
+            BunnyLog.warning("[Updates] Ad skipped for a reply | " + FailureDiagnostics.describe(failure));
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * The ad as a server would see it right now, for the owner's preview: live ads filled from today's deals and free
+     * games. Empty when a live ad has nothing to say at the moment. Blocking.
+     */
+    public Optional<Ad> filled(Ad ad, String guildId) {
+        return AdTemplate.render(ad, ad.live() ? contexts.build(guildId, List.of(), clock.instant()) : AdContext.NONE);
+    }
+
+    /** As above, for an alert carrying these games: live ads may talk about them, or about what else is free or on sale. */
+    Optional<net.dv8tion.jda.api.components.container.Container> adFor(String guildId, Instant now,
+                                                                        List<org.bunnys.bunnynexus.freebies.FreebieOffer> page) {
         var active = ads.active();
         if (active.isEmpty()) return Optional.empty();
         var state = prefs.promoState(guildId);
         if (state.lastAt().filter(last -> last.plus(UpdateAudience.PROMO_EVERY).isAfter(now)).isPresent()) return Optional.empty();
         boolean needsBoard = active.stream().anyMatch(a -> a.audience() != Ad.Audience.ALL);
-        var ad = UpdateAudience.ad(active, needsBoard ? uses(guildId) : Set.of(), state, now);
+        var context = active.stream().anyMatch(Ad::live) ? contexts.build(guildId, page, now) : AdContext.NONE;
+        var ad = UpdateAudience.ad(active, needsBoard ? uses(guildId) : Set.of(), state, now, context);
         if (ad.isEmpty() || !prefs.claimPromo(guildId, ad.get().id(), now, UpdateAudience.PROMO_EVERY, UpdateAudience.PROMO_TIMES))
             return Optional.empty();
         return ad.map(AdCards::card);

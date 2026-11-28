@@ -639,6 +639,23 @@ public final class FreebieSystem {
         return repository.liveApproved(store, clock.instant(), FreebieMessages.MAX_LIVE_LISTED);
     }
 
+    /**
+     * A free-game alert for these offers exactly as a channel gets it (Components V2, no pings), with {@code ad} under
+     * it: for the owner's showcase. Nothing is recorded or sent.
+     */
+    public net.dv8tion.jda.api.utils.messages.MessageCreateData showcaseAlert(List<FreebieOffer> offers,
+                                                                              Optional<net.dv8tion.jda.api.components.container.Container> ad) {
+        var members = offers.stream().map(o -> new FreebieAnnouncementCards.Member(o, repository.facts(o.id()), "showcase|" + o.id(),
+                FreebieAnnouncementCards.Status.LIVE)).toList();
+        return FreebieComponentCards.create(members, List.of(), features.checkout(), clock.instant(), ad, Optional.empty());
+    }
+
+    /** Games given away since {@code since} (approved, sent or ended), newest first, at most {@code limit}: for the ads' monthly total. */
+    public List<FreebieOffer> givenAwaySince(Instant since, int limit) { return repository.givenAwaySince(since, limit); }
+
+    /** A launcher's emoji, for ads that name a free game. */
+    public static String emoji(FreebieStore store) { return FreebieCards.emoji(store); }
+
     /** Games live for a channel's launchers, and how many of them were newly queued there. */
     public record CatchUp(int live, int queued) {}
 

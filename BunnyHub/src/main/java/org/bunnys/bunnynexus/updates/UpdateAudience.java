@@ -73,13 +73,30 @@ public final class UpdateAudience {
      * saw an ad in the last {@link #PROMO_EVERY}. Admins cannot turn ads off; the spacing keeps them rare.
      */
     public static Optional<Ad> ad(List<Ad> active, Set<ProductUpdate.Feature> uses, PromoState state, Instant now) {
+        return ad(active, uses, state, now, AdContext.NONE);
+    }
+
+    /**
+     * As above, for this moment: an ad for big games only with a game worth {@link Ad.When#BIG_GAME_CENTS} in the alert,
+     * and a live ad only when its placeholders can be filled now ({@link AdTemplate}). Highest priority first, then the
+     * one this server has seen least, then the newest. Returns the ad already filled in.
+     */
+    public static Optional<Ad> ad(List<Ad> active, Set<ProductUpdate.Feature> uses, PromoState state, Instant now, AdContext context) {
         if (state.lastAt().filter(last -> last.plus(PROMO_EVERY).isAfter(now)).isPresent()) return Optional.empty();
+        boolean bigGame = context.game().map(g -> g.worthCents() >= Ad.When.BIG_GAME_CENTS).orElse(false);
         Ad best = null;
         int bestShown = Integer.MAX_VALUE;
         for (Ad ad : active) {
             int shown = state.shown().getOrDefault(ad.id(), 0);
             if (!ad.on() || !ad.audience().matches(uses) || shown >= PROMO_TIMES) continue;
-            if (shown < bestShown) { best = ad; bestShown = shown; }
+            if (ad.when() == Ad.When.BIG_GAME && !bigGame) continue;
+            var filled = AdTemplate.render(ad, context);
+            if (filled.isEmpty()) continue;
+            if (best == null || ad.priority() > best.priority()
+                    || ad.priority() == best.priority() && (shown < bestShown || shown == bestShown && ad.createdAt().isAfter(best.createdAt()))) {
+                best = filled.get();
+                bestShown = shown;
+            }
         }
         return Optional.ofNullable(best);
     }

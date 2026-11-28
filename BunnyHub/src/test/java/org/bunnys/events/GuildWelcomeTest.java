@@ -60,7 +60,20 @@ class GuildWelcomeTest {
         var card = GuildWelcome.card();
         String text = card.plainText();
         assertTrue(text.contains("Thanks for adding BunnyNexus") && text.contains("/free-games setup") && text.contains("/deals"));
-        assertEquals(List.of(GuildWelcome.SUPPORT), MessageComponentTree.of(card.components()).findAll(Button.class).stream().map(Button::getUrl).toList());
+        assertEquals(List.of(GuildWelcome.SUPPORT, "https://top.gg/bot/795361755223556116/vote"),
+                MessageComponentTree.of(card.components()).findAll(Button.class).stream().map(Button::getUrl).toList());
         assertTrue(card.message().getMentionedRoles().isEmpty() && card.message().getMentionedUsers().isEmpty());
+        assertFalse(text.contains("Free right now"), "no live games known: no line");
+        var withGames = GuildWelcome.card(List.of("[Hades](https://store.epicgames.com/p/hades)")).plainText();
+        assertTrue(withGames.contains("**Free right now:** [Hades](https://store.epicgames.com/p/hades)"), withGames);
+    }
+
+    @Test void attachingAnAdKeepsTheReplyWithinDiscordsLimits() {
+        var reply = GuildWelcome.card().message();
+        var ad = org.bunnys.bunnynexus.updates.AdCards.card(new org.bunnys.bunnynexus.updates.Ad("x1", Optional.of("Title"), "Text",
+                Optional.empty(), Optional.empty(), org.bunnys.bunnynexus.updates.Ad.Audience.ALL, true, java.time.Instant.EPOCH));
+        var with = org.bunnys.bunnynexus.updates.AdCards.attach(reply, Optional.of(ad));
+        assertEquals(reply.getComponents().size() + 1, with.getComponents().size());
+        assertSame(reply, org.bunnys.bunnynexus.updates.AdCards.attach(reply, Optional.empty()), "no ad: the reply as it was");
     }
 }

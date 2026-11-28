@@ -22,6 +22,9 @@ public final class UpdatePrefs {
 
     public UpdatePrefs(MongoDatabase db) { prefs = db.getCollection(COLLECTION); }
 
+    /** The same records in another collection: {@link ProductUpdates#USER_COLLECTION} keeps each person's ad history by user id. */
+    UpdatePrefs(MongoDatabase db, String collection) { prefs = db.getCollection(collection); }
+
     public UpdateAudience.Prefs get(String guildId) {
         return read(prefs.find(eq("_id", guildId)).first());
     }

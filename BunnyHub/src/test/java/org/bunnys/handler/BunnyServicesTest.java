@@ -23,7 +23,7 @@ class BunnyServicesTest {
 
     @Test void discoversTheBotsServicesByConvention() {
         var types = BunnyServices.discover(ClassScanner.of("org.bunnys.services"), "org.bunnys.services").stream().map(Object::getClass).toList();
-        assertEquals(List.of(org.bunnys.services.BumpReminderService.class, org.bunnys.services.ConsoleNewsService.class, FreeGameAlerts.class, org.bunnys.services.GameDeals.class, MailBridgeService.class, MemoryReport.class, org.bunnys.services.ProductUpdateService.class, org.bunnys.services.RatingStars.class, StudyMenus.class, org.bunnys.services.TopggStats.class), types);
+        assertEquals(List.of(org.bunnys.services.BumpReminderService.class, org.bunnys.services.ConsoleNewsService.class, FreeGameAlerts.class, org.bunnys.services.GameDeals.class, MailBridgeService.class, MemoryReport.class, org.bunnys.services.ProductUpdateService.class, org.bunnys.services.RatingStars.class, org.bunnys.services.ShowcaseService.class, StudyMenus.class, org.bunnys.services.TopggStats.class), types);
     }
 
     @Test void aFailedStartIsSkippedAndStopsRunInReverseOrder() {
@@ -78,7 +78,7 @@ class BunnyServicesTest {
 
     @Test void scannerMatchesWholePackagesOnly() {
         var scanner = ClassScanner.of("org.bunnys");
-        assertEquals(10, scanner.find(BunnyService.class, "org.bunnys.services").size());
+        assertEquals(11, scanner.find(BunnyService.class, "org.bunnys.services").size());
         assertTrue(scanner.find(BunnyService.class, "org.bunnys.serv").isEmpty(), "a name prefix is not a package");
         assertTrue(scanner.find(BunnyService.class, "org.bunnys.commands").isEmpty(), "wrong kind in a package");
     }

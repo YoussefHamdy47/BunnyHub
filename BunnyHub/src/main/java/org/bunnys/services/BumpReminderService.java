@@ -36,9 +36,9 @@ public final class BumpReminderService implements BunnyService {
         var state = client.getMongoManager().getCollection(Document.class, "BumpReminders");
         var id = Filters.eq("_id", "owner");
         executor = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().name("BunnyBump").daemon().factory());
-        reminders = new BumpReminders(data -> dm(client, owner, data),
+        reminders = new BumpReminders(data -> dm(client, owner, data, state),
                 () -> Optional.ofNullable(state.find(id).first()).map(d -> d.getDate("lastSent")).map(Date::toInstant),
-                at -> state.replaceOne(id, new Document("_id", "owner").append("lastSent", Date.from(at)), new ReplaceOptions().upsert(true)),
+                at -> state.updateOne(id, com.mongodb.client.model.Updates.set("lastSent", Date.from(at)), new com.mongodb.client.model.UpdateOptions().upsert(true)),
                 executor, Clock.systemUTC());
         startWhenConnected(client, 0);
     }
@@ -53,10 +53,22 @@ public final class BumpReminderService implements BunnyService {
         }, 10, TimeUnit.SECONDS);
     }
 
-    private static CompletableFuture<Void> dm(BunnyHub client, String owner, MessageCreateData data) {
+    /**
+     * Sends the reminder, then deletes the one before it (owner request 2026-11-28), so the DMs hold only the current
+     * reminder. The previous message's id is kept in the same document; deleting is best effort.
+     */
+    private static CompletableFuture<Void> dm(BunnyHub client, String owner, MessageCreateData data,
+                                              com.mongodb.client.MongoCollection<Document> state) {
         JDA jda = client.getJDA();
         if (jda == null) return CompletableFuture.failedFuture(new IllegalStateException("not connected"));
-        return jda.openPrivateChannelById(owner).flatMap(channel -> channel.sendMessage(data)).submit().thenApply(sent -> null);
+        var id = Filters.eq("_id", "owner");
+        return jda.openPrivateChannelById(owner).flatMap(channel -> channel.sendMessage(data)).submit().thenApply(sent -> {
+            String previous = Optional.ofNullable(state.find(id).first()).map(d -> d.getString("lastMessageId")).orElse(null);
+            state.updateOne(id, com.mongodb.client.model.Updates.set("lastMessageId", sent.getId()), new com.mongodb.client.model.UpdateOptions().upsert(true));
+            if (previous != null && !previous.equals(sent.getId()))
+                sent.getChannel().deleteMessageById(previous).queue(null, gone -> {}); // Already deleted by hand: fine.
+            return null;
+        });
     }
 
     @Override public synchronized void shutdown() {

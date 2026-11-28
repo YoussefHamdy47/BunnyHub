@@ -115,8 +115,8 @@ public final class DealCards {
                 + (notice.pingRole().isEmpty() && !names.isEmpty() ? "\n**New:** " + names : "")).divider();
         var shown = boardDeals(snapshot);
         if (shown.isEmpty()) card.text("No deals pass the bar right now. This board updates every few hours.");
-        String footer = REGIONAL + "\n-# Updated <t:" + snapshot.fetchedAt().getEpochSecond() + ":R> · " + CREDIT
-                + " · The buttons open every deal, only for you";
+        String footer = links(REGIONAL + "\n-# Updated <t:" + snapshot.fetchedAt().getEpochSecond() + ":R> · " + CREDIT
+                + " · The buttons open every deal, only for you");
         List<Button> launchers = new ArrayList<>();
         if (!shown.isEmpty()) launchers.add(Button.primary(PREFIX + ":store:" + ALL, "See All " + all + " Deals"));
         for (var entry : shown.entrySet()) {
@@ -165,14 +165,19 @@ public final class DealCards {
         card.text("### " + (first ? "Good deals right now" : listed.size() == 1 ? "New deal" : listed.size() + " new deals") + "\n" + SUBTITLE).divider();
         for (Deal deal : listed) section(card, deal, snapshot.lowest(deal));
         int all = snapshot.deals().size();
-        card.divider().text(REGIONAL + "\n-# Prices checked <t:" + snapshot.fetchedAt().getEpochSecond() + ":R> · " + CREDIT
-                + (first ? " · New deals get a post of their own here" : ""));
+        card.divider().text(links(REGIONAL + "\n-# Prices checked <t:" + snapshot.fetchedAt().getEpochSecond() + ":R> · " + CREDIT
+                + (first ? " · New deals get a post of their own here" : "")));
         List<Button> buttons = new ArrayList<>();
         if (all > 0) buttons.add(Button.primary(PREFIX + ":store:" + ALL, "See All " + all + " Deals"));
         role.ifPresent(r -> buttons.add(Button.secondary(org.bunnys.bunnynexus.freebies.FreebieSubscriptions.ROLE_BUTTON + ":" + r,
                 org.bunnys.bunnynexus.freebies.FreebieSubscriptions.DEALS_ROLE_BUTTON_LABEL)));
         if (!buttons.isEmpty()) card.buttons(buttons);
         return card.build();
+    }
+
+    /** A public card's footer with "Add BunnyNexus · Join our server" under it, once the bot is ready. */
+    static String links(String footer) {
+        return footer + org.bunnys.bunnynexus.freebies.FreebieInvite.subtext().map(s -> "\n" + s).orElse("");
     }
 
     /** "[Title](link) · **$1.99** ~~$39.99~~ · 95% off · 96% positive (120K reviews) · ends <t:…:R>". */

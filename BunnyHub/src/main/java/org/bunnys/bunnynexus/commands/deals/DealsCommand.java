@@ -44,7 +44,8 @@ public final class DealsCommand {
                     return;
                 }
             }
-            ctx.replyMessage(DealCards.list(system.snapshot(), store, 0));
+            ctx.replyMessage(org.bunnys.bunnynexus.updates.AdCards.attach(DealCards.list(system.snapshot(), store, 0),
+                    org.bunnys.bunnynexus.updates.ProductUpdates.userAd(ctx.getUser().getId(), Optional.ofNullable(ctx.getGuild()).map(g -> g.getId()))));
         }
     }
 

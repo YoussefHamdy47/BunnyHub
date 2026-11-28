@@ -50,7 +50,9 @@ public final class FreeGamesCommand {
                     return;
                 }
             }
-            ctx.replyMessage(FreebieMessages.liveList(system.liveNow(store), store, system.upcoming()));
+            // A rare ad for this person, at most one every few days ({@link org.bunnys.bunnynexus.updates.ProductUpdates#USER_EVERY}).
+            ctx.replyMessage(org.bunnys.bunnynexus.updates.AdCards.attach(FreebieMessages.liveList(system.liveNow(store), store, system.upcoming()),
+                    org.bunnys.bunnynexus.updates.ProductUpdates.userAd(ctx.getUser().getId(), Optional.ofNullable(ctx.getGuild()).map(g -> g.getId()))));
         }
     }
 
