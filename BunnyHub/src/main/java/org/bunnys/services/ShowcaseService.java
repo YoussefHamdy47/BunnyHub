@@ -19,7 +19,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Posts the {@link Showcase} into {@code SHOWCASE_CHANNEL_ID} once per deployed build (Railway's
+ * Posts the {@link Showcase} into {@code SHOWCASE_CHANNEL_ID} once per deployment (Railway's
  * {@code RAILWAY_GIT_COMMIT_SHA}), two minutes after start so deals and free games are loaded. Without the variable
  * nothing happens. The builds already shown are kept in {@code ShowcasePosts}, so a restart never posts twice.
  */
@@ -45,7 +45,8 @@ public final class ShowcaseService implements BunnyService {
                 String key = channelId.strip() + ":" + build;
                 // Claim this build first, so two starts of the same build never both post.
                 var claim = posts.updateOne(Filters.eq("_id", key), Updates.setOnInsert("at", new Date()), new UpdateOptions().upsert(true));
-                if (claim.getUpsertedId() == null) return;
+                if (claim.getUpsertedId() == null) { BunnyLog.info("[Showcase] Already posted for build " + build + "; skipped."); return; }
+                BunnyLog.info("[Showcase] Posting in " + channelId + " for build " + build + ".");
                 int posted = Showcase.post(channel, Showcase.messages(channel.getGuild().getId(), build));
                 BunnyLog.info("[Showcase] Posted " + posted + " messages in " + channelId + " for build " + build + ".");
             } catch (RuntimeException failure) {
@@ -56,8 +57,12 @@ public final class ShowcaseService implements BunnyService {
 
     /** The deployed commit's short hash, or "local". */
     static String version() {
-        String sha = System.getenv("RAILWAY_GIT_COMMIT_SHA");
-        return sha == null || sha.isBlank() ? "local" : sha.substring(0, Math.min(7, sha.length()));
+        // Railway does not always pass the commit (seen 2026-11-28); its deployment id is always there.
+        for (String name : new String[]{"RAILWAY_GIT_COMMIT_SHA", "RAILWAY_DEPLOYMENT_ID"}) {
+            String value = System.getenv(name);
+            if (value != null && !value.isBlank()) return value.strip().substring(0, Math.min(8, value.strip().length()));
+        }
+        return "local";
     }
 
     @Override public void shutdown() { if (executor != null) executor.shutdownNow(); }
