@@ -164,16 +164,36 @@ class FreebieDashboardTest {
         assertEquals(FreebieDashboard.QUICK_MODAL_PREFIX + ":" + GUILD, form.getId());
         var labels = form.getComponents().stream().map(c -> (Label) c).toList();
         assertEquals(4, labels.size());
-        assertEquals(Set.of("m"), ticked(labels.get(1).getChild().asStringSelectMenu().getOptions()), "major PC by default");
+        assertEquals(Set.of("m", "i"), ticked(labels.get(1).getChild().asStringSelectMenu().getOptions()), "every PC game by default");
         assertEquals(Set.of("y"), ticked(labels.get(3).getChild().asStringSelectMenu().getOptions()));
     }
 
-    @Test void dashboardLeadsWithQuickSetupAndHelp() {
+    @Test void aNewServerSeesThreeChoicesWithOneClickFirst() {
+        var guild = guild();
+        var self = mock(net.dv8tion.jda.api.entities.SelfMember.class);
+        when(guild.getSelfMember()).thenReturn(self);
+        when(self.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_ROLES, net.dv8tion.jda.api.Permission.MANAGE_CHANNEL)).thenReturn(true);
+        var welcome = FreebieDashboard.dashboard(guild, List.of(), null);
+        assertEquals(1, welcome.rows().size());
+        var row = welcome.rows().getFirst().getButtons();
+        assertEquals(List.of("Set Up Everything", "Use My Own Channel", "Choose Myself", "Help"), row.stream().map(b -> b.getLabel()).toList());
+        assertEquals(FreebieDashboard.RUN_PREFIX + ":all:" + GUILD, row.getFirst().getCustomId());
+        assertEquals(net.dv8tion.jda.api.components.buttons.ButtonStyle.SUCCESS, row.getFirst().getStyle());
+        assertFalse(row.getFirst().isDisabled());
+        assertTrue(welcome.embed().getDescription().contains("`#free-games`"));
+
+        when(self.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_ROLES, net.dv8tion.jda.api.Permission.MANAGE_CHANNEL)).thenReturn(false);
+        var limited = FreebieDashboard.dashboard(guild, List.of(), null);
+        assertTrue(limited.rows().getFirst().getButtons().getFirst().isDisabled(), "without Manage Roles and Channels it can't create anything");
+        assertTrue(limited.embed().getDescription().contains("**Manage Roles** and **Manage Channels**"));
+    }
+
+    @Test void chooseMyselfLeadsWithUseMyOwnChannelAndHelp() {
         var guild = guild();
         when(guild.getSelfMember()).thenReturn(mock(net.dv8tion.jda.api.entities.SelfMember.class));
-        var empty = FreebieDashboard.dashboard(guild, List.of(), null);
+        var empty = FreebieDashboard.advanced(guild, List.of(), null);
         var row = empty.rows().get(1).getButtons();
-        assertEquals(List.of("Quick setup", "Create channels for me", "Launcher pings", "Post role picker", "Help"),
+        assertEquals(List.of("Use My Own Channel", "Create Channels for Me", "Launcher Pings", "Post Role Picker", "Help"),
                 row.stream().map(b -> b.getLabel()).toList());
         assertEquals(net.dv8tion.jda.api.components.buttons.ButtonStyle.PRIMARY, row.getFirst().getStyle());
         assertTrue(row.get(2).isDisabled(), "no launchers to ping yet");

@@ -25,12 +25,12 @@ public final class FreebieLauncherPings {
     /** Every enabled launcher with its ping, and a picker to change one. */
     public static Reply view(Guild guild, List<Subscription> saved, String notice) {
         var pings = FreebieDashboard.launcherPings(saved);
-        var embed = Embeds.of(null, "Launcher pings").setTimestamp(null);
+        var embed = Embeds.of(null, "Launcher Pings").setTimestamp(null);
         StringBuilder text = new StringBuilder();
         if (notice != null && !notice.isBlank()) text.append(notice).append("\n\n");
         text.append("Give each launcher its own ping, like @Epic for Epic Games Store only. "
                 + "Members can opt in to these roles from the role picker.\n\n");
-        if (pings.isEmpty()) text.append("No launchers are on yet. Use **Quick setup** first.");
+        if (pings.isEmpty()) text.append("No launchers are on yet. Use **Use My Own Channel** first.");
         for (var entry : pings.entrySet())
             text.append("**").append(entry.getKey().label()).append("** · ").append(FreebieDashboard.mentions(entry.getValue())).append("\n");
         embed.setDescription(text.length() <= 4000 ? text.toString() : text.substring(0, 3999) + "…");

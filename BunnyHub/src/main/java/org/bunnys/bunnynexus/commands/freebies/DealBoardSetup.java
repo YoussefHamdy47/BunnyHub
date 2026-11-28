@@ -24,13 +24,13 @@ import java.util.*;
 
 /**
  * The deals board in {@code /free-games setup} (docs/deals/05): a dashboard line, a button
- * ({@code freebie_dash:deals:<guild>:<channel|->:<role|->:<launcher mask>:<hours>}), a form ({@code deals_board:<guild>})
+ * ({@code freebie_dash:deals:<guild>:<channel|->:<role|->:<launcher mask>:<hours>:<style>}), a form ({@code deals_board:<guild>})
  * with channel, ping role, launchers that ping and ping cooldown, and the auto-setup action that creates #deals and
  * @Deals. Shown only while the deals system runs.
  */
 public final class DealBoardSetup {
     public static final String ACTION = "deals", AUTO_ACTION = "dealsauto", MODAL_PREFIX = "deals_board",
-            CHANNEL_FIELD = "channel", ROLE_FIELD = "role", LAUNCHERS_FIELD = "launchers", EVERY_FIELD = "every";
+            CHANNEL_FIELD = "channel", ROLE_FIELD = "role", LAUNCHERS_FIELD = "launchers", EVERY_FIELD = "every", STYLE_FIELD = "style";
     static final String CHANNEL_NAME = "deals", ROLE_NAME = "Deals";
 
     private DealBoardSetup() {}
@@ -41,10 +41,10 @@ public final class DealBoardSetup {
     }
 
     static String describe(Guild guild, Optional<DealRepository.Board> board) {
-        if (board.isEmpty()) return "Off\n-# One message with the best deals per launcher, kept up to date. Auto-setup can create it.";
+        if (board.isEmpty()) return "Off\n-# The best deals on PC and console, posted as new ones arrive or kept as one board. Auto-setup can create it.";
         var b = board.get();
         if (!b.on()) return "Off" + b.offReason().filter(r -> !r.equals("turned off")).map(r -> ": **" + r + "**").orElse("")
-                + "\n-# One message with the best deals per launcher, kept up to date.";
+                + "\n-# The best deals on PC and console, posted as new ones arrive or kept as one board.";
         var channel = guild.getChannelById(StandardGuildMessageChannel.class, b.channelId());
         boolean ok = channel != null && guild.getSelfMember().hasPermission(channel, DealSystem.BOARD_PERMISSIONS);
         var ping = b.ping();
@@ -52,7 +52,9 @@ public final class DealBoardSetup {
                 : String.join(", ", ping.stores().stream().map(s -> s.label).toList())) + ", at most every " + ping.everyHours() + " hours")
                 .orElse("nobody");
         return "<#" + b.channelId() + ">" + (ok ? "" : channel == null ? " • **channel was deleted**" : " • **I can't post here**")
-                + "\n**Pings** · " + pings + "\n-# Edited quietly as prices change; reposted when new deals arrive.";
+                + "\n**Pings** · " + pings + (b.style() == DealRepository.Style.POSTS
+                ? "\n-# New deals get a post of their own, at most every " + DealSystem.POST_GAP_HOURS + " hours."
+                : "\n-# One board, edited quietly as prices change; reposted when new deals arrive.");
     }
 
     /** The current settings ride in the button id so the form opens without a database read. */
@@ -62,7 +64,8 @@ public final class DealBoardSetup {
         var ping = on.map(DealRepository.Board::ping).orElse(DealRepository.Ping.NONE);
         String role = ping.roleId().filter(r -> guild.getRoleById(r) != null).orElse(FreebieDashboard.NONE);
         return Button.of(on.isPresent() ? ButtonStyle.SUCCESS : ButtonStyle.SECONDARY, String.join(":", FreebieDashboard.NAV_PREFIX,
-                ACTION, guild.getId(), channel, role, Integer.toHexString(mask(ping.stores())), String.valueOf(ping.everyHours())), "Deals Board");
+                ACTION, guild.getId(), channel, role, Integer.toHexString(mask(ping.stores())), String.valueOf(ping.everyHours()),
+                on.map(DealRepository.Board::style).orElse(DealRepository.Style.POSTS).id), "Deals Board");
     }
 
     static int mask(Set<DealStore> stores) {
@@ -86,8 +89,12 @@ public final class DealBoardSetup {
         for (DealStore store : DealStore.values()) launchers.addOption(store.label, store.choice);
         var every = StringSelectMenu.create(EVERY_FIELD).setRequiredRange(1, 1);
         for (int hours : DealRepository.Ping.CHOICES) every.addOption("At most every " + hours + " hours", String.valueOf(hours));
+        var style = StringSelectMenu.create(STYLE_FIELD).setRequiredRange(1, 1);
+        for (var s : DealRepository.Style.values()) style.addOption(s.label, s.id);
+        // New boards post; a saved board keeps its style.
+        style.setDefaultValues((args.length == 8 ? DealRepository.Style.byId(args[7]) : DealRepository.Style.POSTS).id);
         int hours = DealRepository.Ping.DEFAULT_HOURS;
-        if (args.length == 7) {
+        if (args.length == 7 || args.length == 8) {
             if (args[3].matches("[0-9]{17,20}")) channel.setDefaultValues(DefaultValue.channel(args[3]));
             if (args[4].matches("[0-9]{17,20}")) role.setDefaultValues(DefaultValue.role(args[4]));
             try {
@@ -99,9 +106,10 @@ public final class DealBoardSetup {
         every.setDefaultValues(String.valueOf(DealRepository.Ping.CHOICES.contains(hours) ? hours : DealRepository.Ping.DEFAULT_HOURS));
         return Modal.create(MODAL_PREFIX + ":" + args[2], "Deals Board")
                 .addComponents(Label.of("Channel", "A quiet channel works best. Leave empty to turn the board off.", channel.build()),
+                        Label.of("Style", "Posts: new deals get their own message. Board: one message kept up to date.", style.build()),
                         Label.of("Role to ping for new deals", "Optional. The first post never pings.", role.build()),
                         Label.of("Launchers that ping", "Leave empty for every launcher", launchers.build()),
-                        Label.of("Ping cooldown", "New deals still repost the board; only the ping waits", every.build()))
+                        Label.of("Ping cooldown", "New deals still post; only the ping waits", every.build()))
                 .build();
     }
 
@@ -128,10 +136,11 @@ public final class DealBoardSetup {
                         .complete());
         Role role = guild.getRolesByName(ROLE_NAME, false).stream().filter(r -> FreebieServerSetup.selfAssignable(r, self)).findFirst()
                 .orElseGet(() -> guild.createRole().setName(ROLE_NAME).setMentionable(true).setPermissions(0L).complete());
-        boolean pickerUpdated = save(guild, channel, Optional.of(role.getId()), Set.of(), DealRepository.Ping.DEFAULT_HOURS, actor.getId(), deals);
+        boolean pickerUpdated = save(guild, channel, Optional.of(role.getId()), Set.of(), DealRepository.Ping.DEFAULT_HOURS,
+                DealRepository.Style.POSTS, actor.getId(), deals);
         return "✅ Deals Board on in " + channel.getAsMention() + ", pinging " + role.getAsMention() + " at most once a day. "
                 + (pickerUpdated ? "The role picker now has a **Game deals** button so members can opt in."
-                : "Use **Post role picker** so members can opt in.");
+                : "Use **Post Role Picker** so members can opt in.");
     }
 
     /** The category holding this server's free-game alert channels (the one most of them share). */
@@ -151,9 +160,11 @@ public final class DealBoardSetup {
      * picker so its deals button matches the new ping role. True when there was a picker to update.
      */
     public static boolean save(Guild guild, StandardGuildMessageChannel channel, Optional<String> role, Set<DealStore> stores, int hours,
-                     String userId, DealSystem deals) {
-        var before = deals.repository().setBoard(guild.getId(), channel.getId(), new DealRepository.Ping(role, stores, hours), userId, deals.now());
-        before.filter(b -> b.messageId().isPresent() && !b.channelId().equals(channel.getId()))
+                     DealRepository.Style style, String userId, DealSystem deals) {
+        var before = deals.repository().setBoard(guild.getId(), channel.getId(), new DealRepository.Ping(role, stores, hours), style, userId, deals.now());
+        // An old board message goes when the board moves or becomes posts; posts are never deleted.
+        before.filter(b -> b.messageId().isPresent() && b.style() == DealRepository.Style.BOARD
+                        && (!b.channelId().equals(channel.getId()) || style != DealRepository.Style.BOARD))
                 .ifPresent(b -> deals.removeBoardMessage(guild.getId(), b.channelId(), b.messageId().get()));
         deals.boardChanged(guild.getId());
         return refreshRolePanel(guild);

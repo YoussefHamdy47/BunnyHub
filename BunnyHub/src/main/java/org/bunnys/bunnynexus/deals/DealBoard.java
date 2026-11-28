@@ -105,12 +105,19 @@ final class DealBoard {
 
     Action update(DealRepository.Board board, DealSnapshot snapshot) { return update(board, View.of(snapshot)); }
 
+    /**
+     * Posts style: the least time between two posts, so a busy sale day is a few messages, not one per refresh. New
+     * deals that arrive sooner wait (they are not marked shown) and go out together in the next post.
+     */
+    static final Duration POST_GAP = Duration.ofHours(6);
+
     Action update(DealRepository.Board board, View view) {
         Instant now = clock.instant();
         DealSnapshot snapshot = view.snapshot();
         List<Deal> shown = view.shown();
         Optional<String> role = board.ping().roleId();
         String key = view.key(role);
+        if (board.style() == DealRepository.Style.POSTS) return posts(board, snapshot, shown, key, now);
         if (board.messageId().isEmpty()) return post(board, snapshot, DealCards.Notice.NONE, shown, key, now, false);
         List<Deal> fresh = shown.stream().filter(d -> !board.shownGames().contains(d.id())).toList();
         if (!fresh.isEmpty()) {
@@ -125,6 +132,24 @@ final class DealBoard {
         if (result.failure().isPresent()) return failed(board, result.failure().get(), now);
         store.edited(board.guildId(), board.messageId().get(), key);
         return Action.EDITED;
+    }
+
+    /**
+     * Posts style. The first post shows the best deals now, without a ping. After that, only deals the channel was
+     * never shown get a post: at most one per {@link #POST_GAP}, pinging under the same rules and cooldown as a board.
+     * Earlier posts stay as they are.
+     */
+    private Action posts(DealRepository.Board board, DealSnapshot snapshot, List<Deal> shown, String key, Instant now) {
+        boolean first = board.postedAt().isEmpty();
+        List<Deal> fresh = first ? shown : shown.stream().filter(d -> !board.shownGames().contains(d.id())).toList();
+        if (fresh.isEmpty()) return Action.NOTHING;
+        if (!first && board.postedAt().get().plus(POST_GAP).isAfter(now)) return Action.NOTHING;
+        boolean ping = !first && mayPing(board, fresh, now);
+        var message = DealCards.post(snapshot, fresh, first, ping ? board.ping().roleId() : Optional.empty(), board.ping().roleId());
+        var result = discord.post(board.guildId(), board.channelId(), message);
+        if (result.messageId().isEmpty()) return failed(board, result.failure().orElse("Discord refused the post"), now);
+        store.posted(board.guildId(), board.channelId(), result.messageId().get(), remember(board.shownGames(), shown), key, now, ping);
+        return ping ? Action.PINGED : Action.POSTED;
     }
 
     /** A role is set, it covers a launcher of one of the new deals, and its cooldown has passed. */

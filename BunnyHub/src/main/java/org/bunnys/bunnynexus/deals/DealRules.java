@@ -15,6 +15,8 @@ final class DealRules {
     static final int MIN_STEAM_RATING = 85, MIN_STEAM_REVIEWS = 1000;
     /** GOG: stars in tenths (43 = 4.3 of 5) and review count; GOG has far fewer reviews than Steam. */
     static final int MIN_GOG_RATING = 43, MIN_GOG_REVIEWS = 100;
+    /** PlayStation and Xbox: stars in tenths and how many players rated; both stores have many ratings. */
+    static final int MIN_CONSOLE_RATING = 43, MIN_PLAYSTATION_RATINGS = 1000, MIN_XBOX_RATINGS = 500;
 
     private DealRules() {}
 
@@ -23,6 +25,10 @@ final class DealRules {
         return switch (deal.store()) {
             case STEAM -> deal.rating() >= MIN_STEAM_RATING && deal.reviews() >= MIN_STEAM_REVIEWS;
             case GOG -> deal.rating() >= MIN_GOG_RATING && deal.reviews() >= MIN_GOG_REVIEWS;
+            case PLAYSTATION -> deal.rating() >= MIN_CONSOLE_RATING && deal.reviews() >= MIN_PLAYSTATION_RATINGS;
+            case XBOX -> deal.rating() >= MIN_CONSOLE_RATING && deal.reviews() >= MIN_XBOX_RATINGS;
+            // Rated by Steam players of the same game.
+            case NINTENDO -> deal.rating() >= MIN_STEAM_RATING && deal.reviews() >= MIN_STEAM_REVIEWS;
         };
     }
 
@@ -50,7 +56,7 @@ final class DealRules {
      * 2 reviews scores about 0.34, 4.7 stars from 100,000 about 0.94. Same scale for both stores.
      */
     static double score(Deal deal) {
-        double positive = deal.rating() / (deal.store() == DealStore.STEAM ? 100.0 : 50.0);
+        double positive = deal.rating() / (deal.store().stars ? 50.0 : 100.0);
         double n = deal.reviews();
         if (n <= 0) return 0;
         double z = 1.96, z2 = z * z;

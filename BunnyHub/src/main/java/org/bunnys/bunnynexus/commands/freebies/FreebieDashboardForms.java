@@ -97,17 +97,17 @@ public final class FreebieDashboardForms {
             sections.addOption(section.label(), String.valueOf(section.code()),
                     String.join(", ", section.stores().stream().filter(s -> !s.news()).map(FreebieStore::label).toList())
                             + (section.stores().stream().anyMatch(FreebieStore::news) ? " · PS Plus & Game Pass news" : ""));
-        sections.setDefaultValues(String.valueOf(FreebieSection.MAJOR_PC.code()));
+        sections.setDefaultValues(String.valueOf(FreebieSection.MAJOR_PC.code()), String.valueOf(FreebieSection.OTHER_PC.code()));
         var role = EntitySelectMenu.create(FreebieDashboard.ROLE_FIELD, SelectTarget.ROLE).setRequiredRange(0, 1).setRequired(false)
                 .setPlaceholder("No ping");
         var post = StringSelectMenu.create(FreebieDashboard.POST_FIELD).setRequiredRange(1, 1)
                 .addOption("Yes, post them now", String.valueOf(FreebieCatchUp.ON.code()))
                 .addOption("No, only new games", String.valueOf(FreebieCatchUp.OFF.code()))
                 .setDefaultValues(String.valueOf(FreebieCatchUp.ON.code()));
-        return Modal.create(FreebieDashboard.QUICK_MODAL_PREFIX + ":" + guildId, "Quick setup")
+        return Modal.create(FreebieDashboard.QUICK_MODAL_PREFIX + ":" + guildId, "Use My Own Channel")
                 .addComponents(Label.of("Channel", "Where free games are posted", channel.build()),
                         Label.of("What to post", "You can fine-tune each launcher later", sections.build()),
-                        Label.of("Role to ping", "Optional. Per-launcher pings are under Launcher pings", role.build()),
+                        Label.of("Role to ping", "Optional. Per-launcher pings are under Launcher Pings", role.build()),
                         Label.of("Games that are free right now", "Post them in the channel straight away?", post.build()))
                 .build();
     }

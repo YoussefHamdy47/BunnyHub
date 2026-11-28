@@ -21,8 +21,8 @@ public final class DealCards {
     /** Under every heading: what "good" means, and the order. */
     static final String SUBTITLE = "-# 75% off or more · most loved first (high ratings from lots of players), then biggest discount, then lowest price";
     /** Above every footer: the stores price by region, so a reader elsewhere may see another price or currency. */
-    static final String REGIONAL = "-# Prices are US store prices in USD. Steam and GOG price by region, so yours may be different.";
-    static final String CREDIT = "Prices from Steam and GOG";
+    static final String REGIONAL = "-# Prices are US store prices in USD. Stores price by region, so yours may be different.";
+    static final String CREDIT = "Prices from each store";
 
     private DealCards() {}
 
@@ -70,7 +70,7 @@ public final class DealCards {
     /** Games per launcher on the board. */
     public static final int PER_LAUNCHER = 4;
     /** Launchers in board order. */
-    static final List<DealStore> BOARD_ORDER = List.of(DealStore.STEAM, DealStore.GOG);
+    static final List<DealStore> BOARD_ORDER = List.of(DealStore.values());
 
     /** Why a board is (re)posted: the new deals it names, and the role pinged for them, if any. */
     public record Notice(Optional<String> pingRole, List<Deal> newDeals) {
@@ -146,6 +146,35 @@ public final class DealCards {
         return card.build();
     }
 
+    /**
+     * A post of the posts style: these deals as sections with their own store button, then the button that opens every
+     * deal privately and the role button. {@code first}: the opening post ("Good deals right now"); later ones say how
+     * many deals are new. {@code ping}: the role mentioned above the card, only when this post may ping.
+     */
+    public static MessageCreateData post(DealSnapshot snapshot, List<Deal> deals, boolean first, Optional<String> ping, Optional<String> role) {
+        return postCard(snapshot, deals, first, ping, role).message();
+    }
+
+    /** Most deals one post lists; Discord allows 40 components and each deal is a section (3). */
+    static final int PER_POST = 8;
+
+    static Card postCard(DealSnapshot snapshot, List<Deal> deals, boolean first, Optional<String> ping, Optional<String> role) {
+        var card = Card.builder();
+        var listed = deals.subList(0, Math.min(PER_POST, deals.size()));
+        ping.ifPresent(r -> card.above("<@&" + r + "> " + (listed.size() == 1 ? "A new deal" : listed.size() + " new deals")).mentionRoles(r));
+        card.text("### " + (first ? "Good deals right now" : listed.size() == 1 ? "New deal" : listed.size() + " new deals") + "\n" + SUBTITLE).divider();
+        for (Deal deal : listed) section(card, deal, snapshot.lowest(deal));
+        int all = snapshot.deals().size();
+        card.divider().text(REGIONAL + "\n-# Prices checked <t:" + snapshot.fetchedAt().getEpochSecond() + ":R> · " + CREDIT
+                + (first ? " · New deals get a post of their own here" : ""));
+        List<Button> buttons = new ArrayList<>();
+        if (all > 0) buttons.add(Button.primary(PREFIX + ":store:" + ALL, "See All " + all + " Deals"));
+        role.ifPresent(r -> buttons.add(Button.secondary(org.bunnys.bunnynexus.freebies.FreebieSubscriptions.ROLE_BUTTON + ":" + r,
+                org.bunnys.bunnynexus.freebies.FreebieSubscriptions.DEALS_ROLE_BUTTON_LABEL)));
+        if (!buttons.isEmpty()) card.buttons(buttons);
+        return card.build();
+    }
+
     /** "[Title](link) · **$1.99** ~~$39.99~~ · 95% off · 96% positive (120K reviews) · ends <t:…:R>". */
     static String compactLine(Deal deal) { return compactLine(deal, false); }
 
@@ -170,7 +199,7 @@ public final class DealCards {
 
     /** Steam's percent positive or GOG's stars, out of 5. */
     static double stars(Deal deal) {
-        return deal.store() == DealStore.GOG ? deal.rating() / 10.0 : org.bunnys.bunnynexus.ratings.Stars.fromPercent(deal.rating());
+        return deal.store().stars ? deal.rating() / 10.0 : org.bunnys.bunnynexus.ratings.Stars.fromPercent(deal.rating());
     }
 
     /** 950, 1.2K, 12K, 120K, 1.3M: short enough for a deal line. */

@@ -23,13 +23,13 @@ public final class FreebieGuide {
                                 + org.bunnys.handler.commands.CommandLinks.render("`/free-games dms` Get free games by DM for the sections you pick, or stop them."), false)
                 .addField("Set up your server (needs Manage Server)",
                         org.bunnys.handler.commands.CommandLinks.render("1. Run `/free-games setup`.\n")
-                                + "2. Click **Quick setup**, pick a channel and what to post. That's it.\n"
-                                + "Prefer separate channels? **Create channels for me** makes them, with a ping role each.", false)
+                                + "2. Click **Set Up Everything**. That's it: a channel, ping roles, a role picker and the games free right now.\n"
+                                + "Rather use a channel you already have? Click **Use My Own Channel** and pick it.", false)
                 .addField("Make it yours",
                         "**Sections** (Major PC, Indie, Console, Mobile): click one to change its channel, launchers, "
                                 + "ping or ending-soon reminder. Untick every launcher to turn it off.\n"
-                                + "**Launcher pings**: a different role per launcher, like @Epic for Epic only and @Steam for Steam only.\n"
-                                + "**Post role picker**: posts buttons so members can opt in to the ping roles themselves.", false)
+                                + "**Launcher Pings**: a different role per launcher, like @Epic for Epic only and @Steam for Steam only.\n"
+                                + "**Post Role Picker**: posts buttons so members can opt in to the ping roles themselves.", false)
                 .addField("How games are checked", checked, false)
                 .setTimestamp(null).build();
     }

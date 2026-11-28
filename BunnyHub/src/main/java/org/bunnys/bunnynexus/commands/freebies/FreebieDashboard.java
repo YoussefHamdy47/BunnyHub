@@ -35,7 +35,7 @@ public final class FreebieDashboard {
             AUTO_SELECT_PREFIX = "freebie_autosel", SECTION_MODAL_PREFIX = "freebie_section";
     public static final String OPEN_SECTION = "s", AUTO = "auto", HOME = "home", ONE_CHANNEL = "one",
             CHANNEL_PER_SECTION = "split", ROLE_PANEL = "panel", QUICK = "quick", PINGS = "pings", HELP = "help",
-            UPDATES = "updates";
+            UPDATES = "updates", EVERYTHING = "all", ADVANCED = "more";
     /** Launcher pings: the picker ({@code freebie_ping:<guild>}) and its form ({@code freebie_pingform:<guild>:<launcher>}). */
     public static final String PING_SELECT_PREFIX = "freebie_ping", PING_MODAL_PREFIX = "freebie_pingform",
             QUICK_MODAL_PREFIX = "freebie_quick";
@@ -106,15 +106,45 @@ public final class FreebieDashboard {
 
     // ------------------------------------------------------------------ main view
 
+    /** A server with nothing set up sees {@link #welcome}; every other server sees the full dashboard. */
     public static Reply dashboard(Guild guild, List<Subscription> saved, String notice) {
+        return saved.isEmpty() ? welcome(guild, notice) : advanced(guild, saved, notice);
+    }
+
+    /**
+     * The first screen: three plain choices. "Set Up Everything" is one click (channel, roles, role picker, current
+     * games and the Deals Board); "Use My Own Channel" is one short form; "Choose Myself" opens the full dashboard.
+     */
+    public static Reply welcome(Guild guild, String notice) {
+        String id = guild.getId();
+        boolean deals = org.bunnys.bunnynexus.deals.DealSystem.current().isPresent();
+        boolean canCreate = guild.getSelfMember().hasPermission(Permission.MANAGE_ROLES, Permission.MANAGE_CHANNEL);
+        var text = new StringBuilder(notice == null || notice.isBlank() ? "" : notice + "\n\n")
+                .append("Get a ping here whenever a game goes free to keep. Pick one:\n\n")
+                .append("**Set Up Everything** · one click. I create a **Free Games** category with a read-only `#free-games` channel, ")
+                .append("a ping role for each kind of game (PC, indie, console, mobile) and a role picker so members choose their own pings")
+                .append(deals ? ", plus `#deals` for big discounts" : "").append(". Games that are free right now are posted straight away.\n")
+                .append("**Use My Own Channel** · pick a channel and, if you like, a role to ping.\n")
+                .append("**Choose Myself** · set a channel, launchers and pings for each kind of game.");
+        if (!canCreate) text.append("\n\n-# I need **Manage Roles** and **Manage Channels** to set everything up. Give me those, or use your own channel.");
+        var embed = Embeds.of(null, "Free-game alerts").setTimestamp(null).setDescription(text.toString());
+        return new Reply(embed.build(), List.of(ActionRow.of(
+                Button.success(RUN_PREFIX + ":" + EVERYTHING + ":" + id, "Set Up Everything").withDisabled(!canCreate),
+                Button.primary(NAV_PREFIX + ":" + QUICK + ":" + id, "Use My Own Channel"),
+                Button.secondary(NAV_PREFIX + ":" + ADVANCED + ":" + id, "Choose Myself"),
+                Button.secondary(NAV_PREFIX + ":" + HELP + ":" + id, "Help"))));
+    }
+
+    /** The full dashboard: every section, the Deals Board and the tools. */
+    public static Reply advanced(Guild guild, List<Subscription> saved, String notice) {
         var states = states(saved);
         long active = states.values().stream().filter(SectionState::on).count();
         var embed = Embeds.of(null, "Free-game alerts").setTimestamp(null);
         embed.setDescription((notice == null || notice.isBlank() ? "" : notice + "\n\n")
-                + (saved.isEmpty() ? "New here? **Auto-setup** creates the channels and ping roles for you.\n"
+                + (saved.isEmpty() ? "Nothing is set up yet. **Create Channels for Me** does it all for you.\n"
                         : "**" + active + " of " + FreebieSection.values().length + " sections on.** ")
                 + "Click a section to change its channel, launchers or ping. Untick every launcher to turn it off.\n"
-                + "-# Quick setup: one channel in one step. Launcher pings: a different role per launcher, like @Epic.");
+                + "-# Use My Own Channel: everything in one channel you pick. Launcher Pings: a different role per launcher, like @Epic.");
         var pings = launcherPings(saved);
         for (var state : states.values()) embed.addField(state.section().label(), describe(guild, state, pings), false);
         var dealBoard = DealBoardSetup.state(guild);
@@ -134,13 +164,13 @@ public final class FreebieDashboard {
         if (dealBoard.isPresent() && dealBoard.get().filter(org.bunnys.bunnynexus.deals.DealRepository.Board::on).isEmpty())
             extras.add(Button.primary(RUN_PREFIX + ":" + DealBoardSetup.AUTO_ACTION + ":" + id, "Create Deals Board"));
         updatesOff.ifPresent(off -> extras.add(Button.secondary(RUN_PREFIX + ":" + UPDATES + ":" + id + ":" + (off ? "on" : "off"),
-                off ? "Turn product updates on" : "Turn product updates off")));
+                off ? "Turn Product Updates On" : "Turn Product Updates Off")));
         List<ActionRow> rows = new ArrayList<>(List.of(ActionRow.of(sections), ActionRow.of(
-                (saved.isEmpty() ? Button.primary(NAV_PREFIX + ":" + QUICK + ":" + id, "Quick setup")
-                        : Button.secondary(NAV_PREFIX + ":" + QUICK + ":" + id, "Quick setup")),
-                Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + id, "Create channels for me"),
-                Button.secondary(NAV_PREFIX + ":" + PINGS + ":" + id, "Launcher pings").withDisabled(saved.isEmpty()),
-                Button.secondary(RUN_PREFIX + ":" + ROLE_PANEL + ":" + id, "Post role picker"),
+                (saved.isEmpty() ? Button.primary(NAV_PREFIX + ":" + QUICK + ":" + id, "Use My Own Channel")
+                        : Button.secondary(NAV_PREFIX + ":" + QUICK + ":" + id, "Use My Own Channel")),
+                Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + id, "Create Channels for Me"),
+                Button.secondary(NAV_PREFIX + ":" + PINGS + ":" + id, "Launcher Pings").withDisabled(saved.isEmpty()),
+                Button.secondary(RUN_PREFIX + ":" + ROLE_PANEL + ":" + id, "Post Role Picker"),
                 Button.secondary(NAV_PREFIX + ":" + HELP + ":" + id, "Help"))));
         if (!extras.isEmpty()) rows.add(ActionRow.of(extras));
         return new Reply(embed.build(), rows);
@@ -236,8 +266,8 @@ public final class FreebieDashboard {
         picker.setDefaultValues(chosen.stream().map(s -> String.valueOf(s.code())).toList());
         String codes = FreebieCatchUp.token(chosen, post);
         List<Button> buttons = new ArrayList<>(List.of(
-                Button.success(RUN_PREFIX + ":" + ONE_CHANNEL + ":" + guildId + ":" + codes, "One channel for everything"),
-                Button.primary(RUN_PREFIX + ":" + CHANNEL_PER_SECTION + ":" + guildId + ":" + codes, "A channel per section"),
+                Button.success(RUN_PREFIX + ":" + ONE_CHANNEL + ":" + guildId + ":" + codes, "One Channel for Everything"),
+                Button.primary(RUN_PREFIX + ":" + CHANNEL_PER_SECTION + ":" + guildId + ":" + codes, "A Channel per Section"),
                 Button.secondary(NAV_PREFIX + ":" + AUTO + ":" + guildId + ":" + FreebieCatchUp.token(chosen, post.next()), post.toggle())));
         // Deals have their own channel and role: #deals and @Deals, created separately from the free-game sections.
         if (org.bunnys.bunnynexus.deals.DealSystem.current().isPresent())

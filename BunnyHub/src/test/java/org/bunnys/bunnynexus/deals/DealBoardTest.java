@@ -23,23 +23,24 @@ class DealBoardTest {
         @Override public void posted(String guild, String channel, String message, List<String> shown, String key, Instant now, boolean pinged) {
             var b = boards.get(guild);
             boards.put(guild, new DealRepository.Board(guild, channel, true, Optional.of(message), shown, Optional.of(key), Optional.of(now), 0,
-                    Optional.empty(), b.ping(), pinged ? Optional.of(now) : b.lastPingAt()));
+                    Optional.empty(), b.ping(), pinged ? Optional.of(now) : b.lastPingAt(), b.style()));
         }
         @Override public void edited(String guild, String message, String key) {
             var b = boards.get(guild);
             boards.put(guild, new DealRepository.Board(guild, b.channelId(), b.on(), b.messageId(), b.shownGames(), Optional.of(key), b.postedAt(),
-                    0, b.offReason(), b.ping(), b.lastPingAt()));
+                    0, b.offReason(), b.ping(), b.lastPingAt(), b.style()));
         }
         @Override public int markFailed(String guild, String day, String reason) {
             var b = boards.get(guild);
             int failures = b.failures() + 1;
             boards.put(guild, new DealRepository.Board(guild, b.channelId(), failures < 3, b.messageId(), b.shownGames(), b.contentKey(),
-                    b.postedAt(), failures, failures < 3 ? Optional.empty() : Optional.of(reason), b.ping(), b.lastPingAt()));
+                    b.postedAt(), failures, failures < 3 ? Optional.empty() : Optional.of(reason), b.ping(), b.lastPingAt(), b.style()));
             return failures;
         }
-        void add(String guild, DealRepository.Ping ping) {
+        void add(String guild, DealRepository.Ping ping) { add(guild, ping, DealRepository.Style.BOARD); }
+        void add(String guild, DealRepository.Ping ping, DealRepository.Style style) {
             boards.put(guild, new DealRepository.Board(guild, "2" + guild, true, Optional.empty(), List.of(), Optional.empty(), Optional.empty(),
-                    0, Optional.empty(), ping, Optional.empty()));
+                    0, Optional.empty(), ping, Optional.empty(), style));
         }
     }
 
@@ -93,6 +94,53 @@ class DealBoardTest {
         var deal = DealFixtures.deal(launcher.choice + ":" + gameId, launcher, 9, 1999);
         deals.addFirst(new Deal(deal.id(), launcher, "New Game " + gameId, deal.link(), 9, 1999, 99, launcher == DealStore.STEAM ? 100 : 50, 10000000, Optional.empty()));
         return at(deals);
+    }
+
+    // ---- Posts style ------------------------------------------------------------------------------------------------
+
+    void postsOnly(DealRepository.Ping ping) {
+        store.boards.clear();
+        store.add("1", ping, DealRepository.Style.POSTS);
+    }
+
+    @Test void postsStyleOpensWithTheBestDealsAndNeverEditsOrDeletes() {
+        postsOnly(new DealRepository.Ping(Optional.of(ROLE), Set.of(), 24));
+        board().updateAll(snapshot);
+        assertEquals(List.of("post 1"), discord.calls);
+        assertTrue(discord.posts.getFirst().contains("Good deals right now"));
+        assertTrue(discord.posts.getFirst().contains("mentions []"), "the first post never pings");
+        discord.calls.clear();
+        board().updateAll(pricesChanged());
+        assertTrue(discord.calls.isEmpty(), "new prices alone: no edit, no post");
+    }
+
+    @Test void newDealsGetTheirOwnPostAtMostEverySixHoursAndPingUnderTheCooldown() {
+        postsOnly(new DealRepository.Ping(Optional.of(ROLE), Set.of(), 24));
+        board().updateAll(snapshot);
+        discord.calls.clear(); discord.posts.clear();
+
+        now = now.plus(Duration.ofHours(3));
+        board().updateAll(newGame("900001", DealStore.STEAM));
+        assertTrue(discord.calls.isEmpty(), "3 hours after the last post: the new deal waits");
+
+        now = now.plus(Duration.ofHours(3));
+        board().updateAll(newGame("900001", DealStore.STEAM));
+        assertEquals(List.of("post 1"), discord.calls, "a new post; the old one is not deleted");
+        assertTrue(discord.posts.getFirst().contains("<@&" + ROLE + "> A new deal"), discord.posts.getFirst());
+        assertTrue(discord.posts.getFirst().contains("New Game 900001"));
+        assertTrue(discord.posts.getFirst().contains("mentions [" + ROLE + "]"));
+        assertFalse(discord.posts.getFirst().contains("Good deals right now"));
+
+        discord.calls.clear(); discord.posts.clear();
+        now = now.plus(Duration.ofHours(6));
+        board().updateAll(newGame("900002", DealStore.STEAM));
+        assertEquals(List.of("post 1"), discord.calls);
+        assertTrue(discord.posts.getFirst().contains("mentions []"), "posted, but the 24 h ping cooldown holds the ping back");
+
+        discord.calls.clear();
+        now = now.plus(Duration.ofHours(6));
+        board().updateAll(newGame("900002", DealStore.STEAM));
+        assertTrue(discord.calls.isEmpty(), "a deal already posted is never posted again");
     }
 
     @Test void everyBoardIsReachedPageByPage() {

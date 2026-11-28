@@ -88,7 +88,7 @@ public final class FreebieAutoSetup {
         long needed = channelsAfterAutoSetup(subscriptions.forGuild(guild.getId()), sections, reused, created);
         if (needed > FreebieSubscriptions.MAX_CHANNELS_PER_GUILD)
             return "⚠️ That would use " + needed + " alert channels; a server can have " + FreebieSubscriptions.MAX_CHANNELS_PER_GUILD
-                    + ". Choose **One channel for everything**, use fewer existing channels or sections, or turn another section off first.";
+                    + ". Choose **One Channel for Everything**, use fewer existing channels or sections, or turn another section off first.";
         try {
             var before = subscriptions.forGuild(guild.getId());
             var placed = new LinkedHashMap<String, Set<FreebieStore>>();

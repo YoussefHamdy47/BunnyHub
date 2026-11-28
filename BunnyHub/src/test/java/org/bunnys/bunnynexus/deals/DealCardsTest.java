@@ -33,7 +33,7 @@ class DealCardsTest {
         var card = DealCards.listCard(DealFixtures.snapshot(), Optional.empty(), 0);
         String text = card.plainText();
         for (String part : List.of("58 good deals right now", "most loved first", "then biggest discount, then lowest price", "reviews)",
-                "Steam and GOG price by region, so yours may be different.", "Prices from Steam and GOG", "Page 1 of 8"))
+                "Stores price by region, so yours may be different.", "Prices from each store", "Page 1 of 8"))
             assertTrue(text.contains(part), part);
         assertFalse(text.contains("cheapest first"));
         assertTrue(text.contains(DealFixtures.snapshot().deals().getFirst().title()));
@@ -105,7 +105,7 @@ class DealCardsTest {
         var snapshot = DealFixtures.snapshot();
         var card = DealCards.boardCard(snapshot, DealCards.Notice.NONE);
         String text = card.plainText();
-        assertTrue(text.contains("Prices from Steam and GOG") && text.contains("price by region"));
+        assertTrue(text.contains("Prices from each store") && text.contains("price by region"));
         var shown = DealCards.boardDeals(snapshot);
         for (var store : List.of(DealStore.STEAM, DealStore.GOG)) {
             var top = snapshot.forStore(Optional.of(store)).getFirst();
