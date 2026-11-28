@@ -28,9 +28,38 @@ public final class FreebieInvite {
     /** The bot's invite link, once Discord reported the bot ready. */
     public static java.util.Optional<String> url() { return java.util.Optional.ofNullable(url); }
 
+    /** The community server, where people get help and vote; {@code COMMUNITY_URL} overrides it (default: the support server invite). */
+    public static final String DEFAULT_SERVER = "https://discord.gg/gGsdHYhTFv";
+    public static final String VOTE = "https://top.gg/bot/795361755223556116/vote";
+    private static volatile String server;
+
+    public static String serverUrl() {
+        String current = server;
+        if (current == null) {
+            String configured = org.bunnys.handler.utils.TokenLoader.getEnvQuietly("COMMUNITY_URL");
+            current = configured != null && configured.strip().startsWith("https://") ? configured.strip() : DEFAULT_SERVER;
+            server = current;
+        }
+        return current;
+    }
+
+    static void server(String url) { server = url; }
+
+    /** "[Add BunnyNexus](…) · [Join our server](…)": the links under every free-game and deal post. Empty before the bot is ready. */
+    public static String links() {
+        String current = url;
+        return current == null ? "" : "[" + LABEL + "](" + current + ") · [Join our server](" + serverUrl() + ")";
+    }
+
     /** A subtext line for under a card's footer, or nothing before the bot is ready. */
     static String line() {
-        String current = url;
-        return current == null ? "" : "\n" + FreebieComponentCards.SUBTEXT + "[" + LABEL + "](" + current + ")";
+        String links = links();
+        return links.isEmpty() ? "" : "\n" + FreebieComponentCards.SUBTEXT + links;
+    }
+
+    /** As {@link #line()}, for other cards: the subtext line itself, or empty. */
+    public static java.util.Optional<String> subtext() {
+        String links = links();
+        return links.isEmpty() ? java.util.Optional.empty() : java.util.Optional.of("-# " + links);
     }
 }

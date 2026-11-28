@@ -32,6 +32,9 @@ public final class AdStore {
                 .append("image", ad.image().map(URI::toString).orElse(null))
                 .append("linkLabel", ad.link().map(Ad.Link::label).orElse(null))
                 .append("linkUrl", ad.link().map(l -> l.url().toString()).orElse(null))
+                .append("buttons", ad.links().stream().map(l -> new Document("label", l.label()).append("url", l.url().toString())
+                        .append("emoji", l.emoji().orElse(null))).toList())
+                .append("emoji", ad.emoji().orElse(null)).append("when", ad.when().name()).append("priority", ad.priority())
                 .append("audience", ad.audience().name()).append("on", ad.on())
                 .append("createdAt", Date.from(get(ad.id()).map(Ad::createdAt).orElse(ad.createdAt())));
         ads.replaceOne(eq("_id", ad.id()), doc, new ReplaceOptions().upsert(true));
@@ -68,6 +71,33 @@ public final class AdStore {
         return true;
     }
 
+    /** The starter ads added before versions were kept: version 1 of each, already in the database. */
+    static final Set<String> FIRST_STARTERS = Set.of("get-bunnynexus", "deals-board");
+
+    /**
+     * Adds each starter ad at its version: a new one is added, a newer version replaces the saved ad (keeping whether it
+     * is paused), and one the owner deleted at its current version stays deleted. Returns how many were written.
+     */
+    public int seed(Map<Ad, Integer> starters) {
+        Document marker = ads.find(eq("_id", SEEDED)).first();
+        boolean fresh = marker == null;
+        Document versions = marker == null ? new Document() : Objects.requireNonNullElse(marker.get("versions", Document.class), new Document());
+        if (!fresh && !marker.containsKey("versions")) FIRST_STARTERS.forEach(id -> versions.put(id, 1));
+        int written = 0;
+        for (var entry : starters.entrySet()) {
+            Ad ad = entry.getKey();
+            int version = entry.getValue();
+            if (versions.getInteger(ad.id(), 0) >= version) continue;
+            boolean on = get(ad.id()).map(Ad::on).orElse(ad.on());
+            save(ad.withOn(on));
+            versions.put(ad.id(), version);
+            written++;
+        }
+        ads.updateOne(eq("_id", SEEDED), Updates.combine(Updates.set("versions", versions), Updates.setOnInsert("at", new Date())),
+                new com.mongodb.client.model.UpdateOptions().upsert(true));
+        return written;
+    }
+
     public boolean setOn(String id, boolean on) {
         boolean found = ads.updateOne(eq("_id", id), Updates.set("on", on)).getMatchedCount() > 0;
         active = null;
@@ -82,13 +112,21 @@ public final class AdStore {
 
     private static Optional<Ad> read(Document doc) {
         try {
-            String label = doc.getString("linkLabel"), url = doc.getString("linkUrl");
-            Optional<Ad.Link> link = label != null && url != null ? Optional.of(new Ad.Link(label, URI.create(url))) : Optional.empty();
+            List<Ad.Link> links = new ArrayList<>();
+            if (doc.containsKey("buttons")) {
+                for (Document b : doc.getList("buttons", Document.class))
+                    links.add(new Ad.Link(b.getString("label"), b.getString("url"), Optional.ofNullable(b.getString("emoji"))));
+            } else {
+                // Saved before buttons were a list: at most one, without an emoji.
+                String label = doc.getString("linkLabel"), url = doc.getString("linkUrl");
+                if (label != null && url != null) links.add(new Ad.Link(label, URI.create(url)));
+            }
             Date created = doc.getDate("createdAt");
             return Optional.of(new Ad(doc.getString("_id"), Optional.ofNullable(doc.getString("title")), doc.getString("text"),
-                    Optional.ofNullable(doc.getString("image")).map(URI::create), link,
+                    Optional.ofNullable(doc.getString("image")).map(URI::create), links,
                     Ad.Audience.valueOf(doc.getString("audience")), Boolean.TRUE.equals(doc.getBoolean("on")),
-                    created == null ? Instant.EPOCH : created.toInstant()));
+                    created == null ? Instant.EPOCH : created.toInstant(), Optional.ofNullable(doc.getString("emoji")),
+                    doc.getString("when") == null ? Ad.When.ANY : Ad.When.valueOf(doc.getString("when")), doc.getInteger("priority", 0)));
         } catch (RuntimeException unreadable) { return Optional.empty(); }
     }
 }

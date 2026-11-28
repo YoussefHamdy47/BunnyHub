@@ -14,6 +14,8 @@ import org.bunnys.handler.commands.context.CommandContext;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -53,25 +55,45 @@ public final class AdCommands {
             addOption(new OptionData(OptionType.STRING, "text", "What the ad says; \\n for a new line, {/free-games setup} for a command link", true).setMaxLength(Ad.MAX_TEXT));
             addOption(new OptionData(OptionType.STRING, "title", "A heading above the text", false).setMaxLength(Ad.MAX_TITLE));
             addOption(new OptionData(OptionType.STRING, "image", "An https link to a picture shown on top", false).setMaxLength(500));
-            addOption(new OptionData(OptionType.STRING, "button-label", "Text on a link button", false).setMaxLength(Ad.MAX_LABEL));
-            addOption(new OptionData(OptionType.STRING, "button-link", "Where the button goes (https)", false).setMaxLength(500));
+            addOption(new OptionData(OptionType.STRING, "emoji", "One emoji before the title, like 🎮", false).setMaxLength(64));
+            for (int i = 1; i <= Ad.MAX_LINKS; i++) {
+                String n = i == 1 ? "button" : "button" + i;
+                addOption(new OptionData(OptionType.STRING, n + "-label", "Text on link button " + i, false).setMaxLength(Ad.MAX_LABEL));
+                addOption(new OptionData(OptionType.STRING, n + "-link", "Where button " + i + " goes (https)", false).setMaxLength(500));
+                addOption(new OptionData(OptionType.STRING, n + "-emoji", "An emoji on button " + i, false).setMaxLength(64));
+            }
             var audience = new OptionData(OptionType.STRING, "audience", "Who sees it (default: every server)", false);
             for (Ad.Audience a : Ad.Audience.values()) audience.addChoice(a.label, a.name());
             addOption(audience);
+            var when = new OptionData(OptionType.STRING, "when", "The moment it is for (default: any free-game alert)", false);
+            for (Ad.When w : Ad.When.values()) when.addChoice(w.label, w.name());
+            addOption(when);
+            addOption(new OptionData(OptionType.INTEGER, "priority", "Higher shows first when several ads fit (default 0; the bot's live ads use 15-30)", false)
+                    .setRequiredRange(0, 100));
         }
 
         @Override void run(CommandContext ctx, ProductUpdates updates) {
             String id = ctx.getString("id"), text = lines(ctx.getString("text")), title = blank(ctx.getString("title")),
-                    image = blank(ctx.getString("image")), label = blank(ctx.getString("button-label")), url = blank(ctx.getString("button-link"));
-            var problem = Ad.problem(id, title, text, image, label, url);
+                    image = blank(ctx.getString("image")), emoji = blank(ctx.getString("emoji"));
+            List<String[]> buttons = new ArrayList<>();
+            for (int i = 1; i <= Ad.MAX_LINKS; i++) {
+                String n = i == 1 ? "button" : "button" + i;
+                String label = blank(ctx.getString(n + "-label")), url = blank(ctx.getString(n + "-link"));
+                if (label != null || url != null) buttons.add(new String[]{label, url, blank(ctx.getString(n + "-emoji"))});
+            }
+            var problem = Ad.problems(id, title, text, image, emoji, buttons);
             if (problem.isPresent()) { reply(ctx, problem.get()); return; }
             var audience = Optional.ofNullable(ctx.getString("audience")).map(Ad.Audience::valueOf).orElse(Ad.Audience.ALL);
+            var when = Optional.ofNullable(ctx.getString("when")).map(Ad.When::valueOf).orElse(Ad.When.ANY);
+            int priority = Optional.ofNullable(ctx.getInt("priority")).orElse(0);
             var ad = new Ad(id, Optional.ofNullable(title), text, Optional.ofNullable(image).map(i -> URI.create(i.strip())),
-                    label == null ? Optional.empty() : Optional.of(new Ad.Link(label, URI.create(url.strip()))), audience, true, Instant.now());
+                    buttons.stream().map(b -> new Ad.Link(b[0], b[1].strip(), Optional.ofNullable(b[2]))).toList(),
+                    audience, true, Instant.now(), Optional.ofNullable(emoji), when, priority);
             updates.ads().save(ad);
-            ctx.replyMessage(AdCards.preview(ad, "Saved **" + id + "** for " + audience.label.toLowerCase() + ". It shows under free-game alerts, "
-                    + "at most one ad per server every " + UpdateAudience.PROMO_EVERY.toDays() + " days and each ad at most "
-                    + UpdateAudience.PROMO_TIMES + " times per server. This is how it looks:"), true);
+            String note = "Saved **" + id + "** for " + audience.label.toLowerCase() + " · " + when.label.toLowerCase() + " · priority " + priority
+                    + ". At most one ad per server every " + UpdateAudience.PROMO_EVERY.toDays() + " days, each ad at most "
+                    + UpdateAudience.PROMO_TIMES + " times per server.";
+            show(ctx, updates, ad, note);
         }
 
         private static String blank(String value) { return value == null || value.isBlank() ? null : value.strip(); }
@@ -87,8 +109,9 @@ public final class AdCommands {
             var text = new StringBuilder();
             for (Ad ad : all)
                 text.append(ad.on() ? "**On** · " : "Paused · ").append("`").append(ad.id()).append("` ")
-                        .append(ad.title().orElse(ad.text().lines().findFirst().orElse(""))).append("\n-# ").append(ad.audience().label)
-                        .append(ad.image().isPresent() ? " · image" : "").append(ad.link().map(l -> " · button \"" + l.label() + "\"").orElse(""))
+                        .append(ad.emoji().map(e -> e + " ").orElse("")).append(ad.title().orElse(ad.text().lines().findFirst().orElse("")))
+                        .append("\n-# ").append(ad.audience().label).append(ad.image().isPresent() ? " · image" : "")
+                        .append(ad.links().isEmpty() ? "" : " · buttons: " + String.join(", ", ad.links().stream().map(Ad.Link::label).toList()))
                         .append("\n");
             ctx.replyCard(Card.builder().title("Ads").text(text.toString().strip()).build(), true);
         }
@@ -98,9 +121,19 @@ public final class AdCommands {
         Preview() { setName("ad-preview"); setDescription("Show an ad the way servers see it"); addOption(id("The ad's id")); }
 
         @Override void run(CommandContext ctx, ProductUpdates updates) {
-            updates.ads().get(ctx.getString("id")).ifPresentOrElse(ad -> ctx.replyMessage(AdCards.preview(ad), true),
+            updates.ads().get(ctx.getString("id")).ifPresentOrElse(ad -> show(ctx, updates, ad, null),
                     () -> reply(ctx, "No ad with that id."));
         }
+    }
+
+    /** A live ad filled with what is on sale or free right now; when nothing fits now, says so and shows the template. */
+    static void show(CommandContext ctx, ProductUpdates updates, Ad ad, String note) {
+        var filled = updates.filled(ad, ctx.getGuild() == null ? "" : ctx.getGuild().getId());
+        String status = !ad.live() ? "" : filled.isPresent() ? "Live ad: filled with what is happening right now."
+                : "Live ad: nothing fits it right now (no matching deal, free game or total), so servers don't see it yet. The template:";
+        String text = String.join("\n", java.util.stream.Stream.of(note, status).filter(s -> s != null && !s.isEmpty()).toList());
+        var shown = filled.orElse(ad);
+        ctx.replyMessage(text.isEmpty() ? AdCards.preview(shown) : AdCards.preview(shown, text), true);
     }
 
     private static final class Pause extends Owner {

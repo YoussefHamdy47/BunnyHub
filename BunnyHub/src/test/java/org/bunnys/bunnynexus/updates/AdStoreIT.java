@@ -45,13 +45,34 @@ class AdStoreIT {
         assertFalse(store.setOn("nope", true));
     }
 
-    @Test void theStarterAdsAreAddedOnceAndStayDeleted() {
+    @Test void theBotsAdsAreAddedByVersionAndStayDeleted() {
         var store = new AdStore(db);
-        var starters = StarterAds.all("795361755223556116", Instant.parse("2026-11-25T12:00:00Z"));
-        assertTrue(store.seedOnce(starters));
-        assertEquals(List.of("deals-board", "get-bunnynexus"), store.active().stream().map(Ad::id).toList(), "the deals ad goes first");
-        store.remove("deals-board");
-        assertFalse(store.seedOnce(starters), "never added twice");
-        assertEquals(List.of("get-bunnynexus"), store.all().stream().map(Ad::id).toList(), "the marker is not an ad");
+        var starters = StarterAds.all("795361755223556116", Instant.parse("2026-11-28T12:00:00Z"));
+        assertEquals(7, store.seed(starters));
+        assertEquals(7, store.active().size());
+        var deal = store.get("deal-spotlight").orElseThrow();
+        assertEquals(Optional.of("{deal.emoji}"), deal.emoji(), "placeholders are stored as written");
+        assertEquals(30, deal.priority());
+        assertEquals("{deal.url}", deal.links().getFirst().url());
+        assertEquals(Ad.When.BIG_GAME, store.get("big-game").orElseThrow().when());
+        store.remove("join-community");
+        store.setOn("deals-board", false);
+        assertEquals(0, store.seed(starters), "nothing new");
+        assertTrue(store.get("join-community").isEmpty(), "a deleted ad stays deleted");
+        assertFalse(store.get("deals-board").orElseThrow().on(), "a paused ad stays paused");
+    }
+
+    @Test void adsFromBeforeVersionsAreUpdatedOnceAndKeepTheirPause() {
+        var store = new AdStore(db);
+        var old = Instant.parse("2026-11-25T12:00:00Z");
+        store.seedOnce(List.of(new Ad("get-bunnynexus", Optional.of("Get BunnyNexus"), "Old text.", Optional.empty(),
+                Optional.of(new Ad.Link("Add BunnyNexus", URI.create("https://example.com"))), Ad.Audience.ALL, true, old)));
+        store.setOn("get-bunnynexus", false);
+        assertEquals(7, store.seed(StarterAds.all("795361755223556116", Instant.parse("2026-11-28T12:00:00Z"))),
+                "version 2 replaces the first two; the five new ones are added");
+        var updated = store.get("get-bunnynexus").orElseThrow();
+        assertEquals(Optional.of(org.bunnys.utils.AppDesign.Emojis.VERIFY), updated.emoji());
+        assertFalse(updated.on(), "still paused");
+        assertEquals(old, updated.createdAt(), "keeps its place in the rotation");
     }
 }

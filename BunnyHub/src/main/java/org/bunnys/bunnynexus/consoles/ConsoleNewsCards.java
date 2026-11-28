@@ -59,7 +59,7 @@ final class ConsoleNewsCards {
         List<Button> buttons = new ArrayList<>(List.of(Button.link(post.link().toString(), "Read on PlayStation Blog")));
         role.ifPresent(r -> buttons.add(roleButton(r)));
         boolean rated = post.details().stream().anyMatch(g -> g.rating().isPresent());
-        card.divider().text("-# " + keep + (rated ? " Ratings are from Steam players." : "") + " From the PlayStation Blog.").buttons(buttons);
+        card.divider().text(links("-# " + keep + (rated ? " Ratings are from Steam players." : "") + " From the PlayStation Blog.")).buttons(buttons);
         return card.build();
     }
 
@@ -99,7 +99,7 @@ final class ConsoleNewsCards {
         if (!images.isEmpty()) card.gallery(images);
         List<Button> buttons = new ArrayList<>(List.of(Button.link(GAME_PASS_PAGE, "Browse Game Pass")));
         role.ifPresent(r -> buttons.add(roleButton(r)));
-        card.divider().text(rated ? footer : footer.replace(" Ratings are from Microsoft Store players.", "")).buttons(buttons);
+        card.divider().text(links(rated ? footer : footer.replace(" Ratings are from Microsoft Store players.", ""))).buttons(buttons);
         return card.build();
     }
 
@@ -128,7 +128,7 @@ final class ConsoleNewsCards {
         weekend.image().ifPresent(card::image);
         List<Button> buttons = new ArrayList<>(List.of(Button.link(weekend.link().toString(), "See This Weekend's Games")));
         role.ifPresent(r -> buttons.add(roleButton(r)));
-        card.divider().text("-# From Pure Xbox").buttons(buttons);
+        card.divider().text(links("-# From Pure Xbox")).buttons(buttons);
         return card.build();
     }
 
@@ -149,8 +149,13 @@ final class ConsoleNewsCards {
         if (!images.isEmpty()) card.gallery(images);
         List<Button> buttons = new ArrayList<>(List.of(Button.link("https://" + ConsoleItem.HOST + "/", "More on GamerPower")));
         role.ifPresent(r -> buttons.add(roleButton(r)));
-        card.divider().text("-# From GamerPower").buttons(buttons);
+        card.divider().text(links("-# From GamerPower")).buttons(buttons);
         return card.build();
+    }
+
+    /** The footer with "Add BunnyNexus · Join our server" under it, once the bot is ready. */
+    static String links(String footer) {
+        return footer + org.bunnys.bunnynexus.freebies.FreebieInvite.subtext().map(s -> "\n" + s).orElse("");
     }
 
     private static Button roleButton(String role) {
