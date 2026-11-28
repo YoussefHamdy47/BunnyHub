@@ -129,7 +129,7 @@ public final class DealBoardSetup {
         Category category = alertCategory(guild).orElseGet(() -> categories.isEmpty()
                 ? guild.createCategory(FreebieServerSetup.CATEGORY_NAME).complete() : categories.getFirst());
         TextChannel channel = category.getTextChannels().stream().filter(c -> c.getName().equals(CHANNEL_NAME)).findFirst()
-                .orElseGet(() -> category.createTextChannel(CHANNEL_NAME).setTopic("Big discounts on well-reviewed PC games, kept up to date.")
+                .orElseGet(() -> category.createTextChannel(CHANNEL_NAME).setTopic("Big discounts on well-reviewed PC and console games, kept up to date.")
                         .addPermissionOverride(guild.getPublicRole(), EnumSet.noneOf(Permission.class), EnumSet.of(Permission.MESSAGE_SEND))
                         .addMemberPermissionOverride(self.getIdLong(), EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_SEND,
                                 Permission.MESSAGE_EMBED_LINKS, Permission.MESSAGE_HISTORY), EnumSet.noneOf(Permission.class))

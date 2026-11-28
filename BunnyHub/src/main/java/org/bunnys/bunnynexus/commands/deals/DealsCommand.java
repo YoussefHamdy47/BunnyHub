@@ -24,7 +24,7 @@ public final class DealsCommand {
     public static final class ListDeals extends BunnySubcommand {
         public ListDeals() {
             setName("list");
-            setDescription("Big discounts on well-reviewed PC games right now.");
+            setDescription("Big discounts on well-reviewed PC and console games right now.");
             setExample("/deals list store:steam");
             var store = new OptionData(OptionType.STRING, "store", "Only show one store", false);
             for (DealStore s : DealStore.values()) store.addChoice(s.label, s.choice);

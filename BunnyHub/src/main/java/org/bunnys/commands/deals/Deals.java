@@ -16,7 +16,7 @@ public final class Deals extends BunnyCommand {
         setName("deals");
         setInstallTypes(IntegrationType.GUILD_INSTALL, IntegrationType.USER_INSTALL);
         setCategory("Free Games");
-        setDescription("Big discounts on well-reviewed PC games, updated every few hours.");
+        setDescription("Big discounts on well-reviewed PC and console games, updated every few hours.");
         addAliases("deal", "offers");
         setDeferBeforeDispatch(true);
         setCooldown(5);
