@@ -1,7 +1,25 @@
+<div align="center">
+
 # BunnyNexus
 
-A Discord bot for study tracking, free-game alerts and server moderation, built on the **BunnyHub** command
-framework. Java 21, JDA 6 and MongoDB.
+**Free games the moment they go live, and big PC and console deals, right in your Discord server.**
+
+[![Servers](https://top.gg/api/widget/servers/795361755223556116.svg)](https://top.gg/bot/795361755223556116)
+[![Votes](https://top.gg/api/widget/upvotes/795361755223556116.svg)](https://top.gg/bot/795361755223556116/vote)
+[![Status](https://top.gg/api/widget/status/795361755223556116.svg)](https://top.gg/bot/795361755223556116)
+
+[**Add to Discord**](https://discord.com/oauth2/authorize?client_id=795361755223556116&permissions=268520464&scope=bot+applications.commands)
+&nbsp;·&nbsp; [**Vote on Top.gg**](https://top.gg/bot/795361755223556116/vote)
+&nbsp;·&nbsp; [**Support server**](https://disboard.org/server/704781378113241159)
+
+<a href="https://top.gg/bot/795361755223556116">
+  <img src="https://top.gg/api/widget/795361755223556116.svg" alt="BunnyNexus on Top.gg" width="420">
+</a>
+
+</div>
+
+A Discord bot for free-game alerts, game deals, study tracking and server moderation, built on the **BunnyHub**
+command framework. Java 21, JDA 6 and MongoDB.
 
 ## Commands
 
