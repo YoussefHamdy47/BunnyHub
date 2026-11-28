@@ -42,10 +42,10 @@ public final class GamerPowerFeed implements FreebieFeed {
     private final Clock clock;
 
     public GamerPowerFeed() { this(Clock.systemUTC()); }
-    GamerPowerFeed(Clock clock) {
-        this.clock = clock;
-        client = FreebieHttp.client(GamerPowerFeed::publicOnly, TIMEOUT);
-    }
+    GamerPowerFeed(Clock clock) { this(clock, FreebieHttp.client(GamerPowerFeed::publicOnly, TIMEOUT)); }
+
+    /** With another HTTP client (tests). */
+    GamerPowerFeed(Clock clock, OkHttpClient client) { this.clock = clock; this.client = client; }
 
     private static List<InetAddress> publicOnly(String host) throws UnknownHostException {
         if (!GamerPowerIntake.ENDPOINT.getHost().equals(host)) throw new UnknownHostException("Unapproved provider host.");
@@ -62,18 +62,39 @@ public final class GamerPowerFeed implements FreebieFeed {
                     && (address.getAddress()[1] & 0xc0) == 64)); // carrier-grade NAT
     }
 
+    /**
+     * The last feed that decoded, and its {@code Last-Modified}. The next check asks "only if modified since": an
+     * unchanged feed answers 304 with no body (a few hundred bytes instead of about 21 KB compressed, every 10 minutes)
+     * and the kept body is decoded again with the current time, so expiry works exactly as on a full download.
+     * About 120 KB of memory. Discovery thread only.
+     */
+    private byte[] lastBody;
+    private String lastModified;
+
     public Fetch fetch() {
-        var request = new Request.Builder().url(GamerPowerIntake.ENDPOINT.toString())
-                .header("Accept", "application/json").header("User-Agent", "BunnyNexus-Freebies/2.0").get().build();
+        var builder = new Request.Builder().url(GamerPowerIntake.ENDPOINT.toString())
+                .header("Accept", "application/json").header("User-Agent", "BunnyNexus-Freebies/2.0").get();
+        if (lastBody != null && lastModified != null) builder.header("If-Modified-Since", lastModified);
+        var request = builder.build();
         try {
             return calls.execute(client, request, response -> {
                 int status = response.code();
+                if (status == 304 && lastBody != null) {
+                    var batch = intake.decode(200, lastBody, clock.instant());
+                    return new Fetch(Optional.of(batch), 200, Optional.empty(),
+                            batch.state() == GamerPowerIntake.State.FAILED ? "invalid feed: " + batch.problem() : "");
+                }
                 if (status == 429 || status == 503) return new Fetch(Optional.empty(), status,
                         retryAfter(response.header("Retry-After"), clock.instant()), "rate limited");
                 if (status != 200 && status != 201) return new Fetch(Optional.empty(), status, Optional.empty(), "HTTP " + status);
                 ResponseBody body = response.body();
                 byte[] bytes = body.byteStream().readNBytes(GamerPowerIntake.MAX_BYTES + 1);
                 var batch = intake.decode(status, bytes, clock.instant());
+                if (batch.state() != GamerPowerIntake.State.FAILED && bytes.length <= GamerPowerIntake.MAX_BYTES) {
+                    lastBody = bytes;
+                    String modified = response.header("Last-Modified");
+                    lastModified = modified != null && modified.length() <= 64 ? modified : null;
+                } else { lastBody = null; lastModified = null; }
                 return new Fetch(Optional.of(batch), status, Optional.empty(),
                         batch.state() == GamerPowerIntake.State.FAILED ? "invalid feed: " + batch.problem() : "");
             });
